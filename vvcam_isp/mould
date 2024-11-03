@@ -1,0 +1,77 @@
+
+include $(PWD)/../Param.mk
+TARGET := test_sample
+
+obj-m := $(TARGET).o
+
+$(TARGET)-objs += test_sample_driver.o
+$(TARGET)-objs += test_sample_event.o
+$(TARGET)-objs += test_sample_procfs.o
+$(TARGET)-objs += sample_ctrl/test_sample_ctrl.o
+
+# Define user_lib paths
+USER_LIB_SRC_DIR := $(PWD)/user_lib
+USER_LIB_SRC_FILES := $(shell find $(USER_LIB_SRC_DIR) -type f -name '*.c')
+USER_LIB_INC_FILES := $(shell find $(USER_LIB_SRC_DIR) -type f -name '*.h')
+USER_LIB_OBJ_FILES := $(patsubst $(USER_LIB_SRC_DIR)/%.c, $(USER_LIB_SRC_DIR)/%.o, $(USER_LIB_SRC_FILES))
+USER_LIB_OBJ_FILES := $(USER_LIB_SRC_FILES:$(USER_LIB_SRC_DIR)/%.c=$(PWD)/%.o)
+
+# Add user_lib object files to the target
+$(TARGET)-objs += $(USER_LIB_OBJ_FILES) 
+
+
+EXTRA_CFLAGS += -I$(PWD)
+EXTRA_CFLAGS += -I$(PWD)/../common/
+EXTRA_CFLAGS += -I$(PWD)/mbox/
+EXTRA_CFLAGS += -I$(PWD)/sample_ctrl/
+EXTRA_CFLAGS += -I$(PWD)/sample_ctrl/ae/aev2/
+EXTRA_CFLAGS += -I$(USER_LIB_SRC_DIR)/
+
+USER_INC:=$(PWD)/sample_ctrl/test_sample_ctrl.h
+#USER_INC += -I$(PWD)/user_lib/
+
+
+ifeq ($(sample_DG_V1), 1)
+$(TARGET)-objs += sample_ctrl/dg/dg_v1/test_sample_dg.o
+EXTRA_CFLAGS += -I$(PWD)/sample_ctrl/dg/dg_v1
+USER_INC += $(PWD)/sample_ctrl/dg/dg_v1/*.h
+endif
+
+ifeq ($(sample_CPD), 1)
+$(TARGET)-objs += sample_ctrl/cpd/cpd/test_sample_cpd.o
+EXTRA_CFLAGS += -I$(PWD)/sample_ctrl/cpd/cpd
+USER_INC += $(PWD)/sample_ctrl/cpd/cpd/*.h
+endif
+
+EXTRA_CFLAGS += -DDEBUG -O2
+
+PWD := $(shell pwd)
+
+all:
+	#@echo -e "\n\n\n\n\n\n\n\n\********************************************* \n User library source files: $(USER_LIB_SRC_FILES)"
+#	@echo -e  "\n\n\n\n\n\***********************************************\n User library object files: $(USER_LIB_OBJ_FILES)"
+#	@echo -e  "\n\n\n\n\n************************************************\n User library include : $(USER_LIB_INC_FILES)\n\n\n\n\n\n\n\n\n\n\*********************************************************************** "
+	make -C $(KERNEL_SRC) M=$(PWD) modules
+	@[ -e $(INSTALL_DIR)/lib ] || mkdir $(INSTALL_DIR)/lib -p
+	@[ -e $(INSTALL_DIR)/inlude ] || mkdir $(INSTALL_DIR)/include -p
+	@cp $(TARGET).ko $(INSTALL_DIR)/lib
+	@cp $(USER_INC) $(INSTALL_DIR)/include
+	@cp $(wildcard $(USER_LIB_SRC_DIR)/**/*.h) $(INSTALL_DIR)/include
+
+# Rule to compile user_lib source files into object files
+$(PWD)/%.o: $(USER_LIB_SRC_DIR)/%.c
+	$(CC) $(EXTRA_CFLAGS) -c  $@ $<
+
+
+# Build kernel module and user_lib
+$(TARGET).ko: $(USER_LIB_OBJ_FILES)
+	make -C $(KERNEL_SRC) M=$(PWD) modules
+
+modules_install:
+	make -C $(KERNEL_SRC) M=$(PWD) modules_install
+clean:
+	rm -rf $(USER_LIB_OBJ_FILES) $($(TARGET)-objs)
+	rm -rf $($(TARGET)-objs)
+	make -C $(KERNEL_SRC) M=$(PWD) clean
+	@rm $(INSTALL_DIR)/lib/$(TARGET).ko
+	@rm $(INSTALL_DIR)/include/*.h
