@@ -132,30 +132,30 @@ if [ -n "$5" ];then
 fi
 
 if [ "$param_server" = "true" ];then
-    insmod ./vb/vvcam_vb.ko resmem_cached=1
+    insmod ./vb/visp_vb.ko resmem_cached=1
 else
-    insmod ./vb/vvcam_vb.ko
+    insmod ./vb/visp_vb.ko
 fi
 
 if [ "$param_sensor_num" = "4sensor" ];then
-    insmod ./i2c/vvcam_i2c.ko devices_mask=0x0f
-    insmod ./mipi/vvcam_mipi.ko devices_mask=0x0f
+    insmod ./i2c/visp_i2c.ko devices_mask=0x0f
+    insmod ./mipi/visp_mipi.ko devices_mask=0x0f
 else
-    insmod ./i2c/vvcam_i2c.ko devices_mask=0x03
-    insmod ./mipi/vvcam_mipi.ko devices_mask=0x03
+    insmod ./i2c/visp_i2c.ko devices_mask=0x03
+    insmod ./mipi/visp_mipi.ko devices_mask=0x03
 fi
 
 if [ "$param_isp_num" = "2isp" ];then
-    insmod ./isp/vvcam_isp.ko devices_mask=0x03
+    insmod ./isp/visp.ko devices_mask=0x03
 else
-    insmod ./isp/vvcam_isp.ko
+    insmod ./isp/visp.ko
 fi
 
 if [ "$param_videoin" = "true" ];then
-    insmod ./videoin/vvcam_vi.ko
+    insmod ./videoin/visp_vi.ko
 fi
 
 if [ "$param_mss" = "true" ];then
-    insmod ./mi_subsystem/vvcam_mss.ko
+    insmod ./mi_subsystem/visp_mss.ko
 fi
 
