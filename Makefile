@@ -3,14 +3,17 @@ ifeq ($(VISP_PATH),)
 	export VISP_PATH
 endif
 
-include $(VISP_PATH)/isp_version/ISP8200_V2311.mk
+include $(PWD)/Param.mk
+#include $(VISP_PATH)/isp_version/ISP8200_V2311.mk
 
 SRC := $(shell pwd)
 
 obj-m += visp_mbox/
 obj-m += visp/
-obj-m += visp_mimo/
 obj-m += visp_video/
+obj-m += visp_mbox_mimo/
+obj-m += visp_mimo/
+obj-m += visp_mimo_video/
 
 all:
 	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules

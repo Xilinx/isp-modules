@@ -1,0 +1,1592 @@
+/******************************************************************************\
+|* Copyright (c) 2022 by VeriSilicon Holdings Co., Ltd. ("VeriSilicon")       *|
+|* All Rights Reserved.                                                       *|
+|*                                                                            *|
+|* The material in this file is confidential and contains trade secrets of    *|
+|* of VeriSilicon.  This is proprietary information owned or licensed by      *|
+|* VeriSilicon.  No part of this work may be disclosed, reproduced, copied,   *|
+|* transmitted, or used in any way for any purpose, without the express       *|
+|* written permission of VeriSilicon.                                         *|
+|*                                                                            *|
+\******************************************************************************/
+
+
+#include "cam_device_sensor_api.h"
+#include "cam_device_api.h"
+#include "cam_device.h"
+//#include "mailbox.h" //added by ranjith
+#include "sensor_cmd.h"
+#include "isi_iss.h"
+#include <linux/slab.h>
+#include <linux/string.h>
+#include "kmbox.h"
+#include "vvcam_isp_driver.h"
+
+#define SENSOR_NAME_LEN 20
+
+RESULT VsiCamDeviceSensorOpen
+(
+    struct vvcam_isp_dev *isp_dev,    
+    CamDeviceHandle_t hCamDevice,
+    uint32_t          modeIndex
+)
+{
+    RESULT result = RET_SUCCESS;
+    payload_packet *packet = NULL;
+    uint8_t *p_data = NULL; 
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    pCamDevCtx->cookie ++;
+
+    packet= kzalloc(sizeof(payload_packet), GFP_KERNEL);
+    if(!packet)
+    {
+    	pr_err("FAILED TO KZALLOC %s %d\n",__func__,__LINE__);
+    	return -ENOMEM;
+    } 
+
+    packet->cookie = pCamDevCtx->cookie;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    p_data = packet->payload;
+
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, &modeIndex, sizeof(uint32_t));
+    packet->payload_size += sizeof(uint32_t);
+
+    if(packet->payload_size > MAX_ITEM)
+    {
+        dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",packet->payload_size , MAX_ITEM);
+        kfree(packet);
+    	return RET_OUTOFRANGE;
+    }
+#if 1
+    mutex_lock(&isp_dev->mlock);
+    result = Send_Command(APU_2_RPU_MB_CMD_SENSOR_OPEN , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
+    if(0 != result) {
+        kfree(packet);
+        return result;
+    }
+    mbox_send_message(isp_dev->tx_chan,NULL);
+
+#endif
+
+    xlnx_mbox_apu_wait_for_ack(isp_dev);
+    mutex_unlock(&isp_dev->mlock);
+
+    kfree(packet);
+
+    return result;
+}
+
+RESULT VsiCamDeviceSensorDrvHandleRegister
+(
+    struct vvcam_isp_dev *isp_dev,    
+    CamDeviceHandle_t hCamDevice,
+	const CamDeviceSensorDrvCfg_t *pSensorDrv
+)
+{
+    RESULT result = RET_SUCCESS;
+    payload_packet *packet = NULL;
+    uint8_t *p_data = NULL;
+    IsiCamDrvConfigMbox_t* pcamcfg = NULL;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx || NULL == pSensorDrv) {
+        return (RET_WRONG_HANDLE);
+    }
+
+    pr_err("RKC %s %d \n",__func__,__LINE__);
+    pCamDevCtx->cookie ++;
+    //pCamDevCtx->cookie = 44;
+
+    packet= kzalloc(sizeof(payload_packet), GFP_KERNEL);
+    if(!packet)
+    {
+    	pr_err("FAILED TO KZALLOC %s %d\n",__func__,__LINE__);
+	    return -ENOMEM;
+    } 
+
+    packet->cookie       = pCamDevCtx->cookie;
+    packet->type         = CMD;
+    packet->payload_size = 0;
+
+    pcamcfg = (IsiCamDrvConfigMbox_t *)(pSensorDrv->sensorDrvHandle);
+
+	// printf("pSensorDrv->sensorDrvHandle: %x.\r\n", pSensorDrv->sensorDrvHandle);
+	dev_err(isp_dev->dev , "pSensorDrv->sensorDevId: %d.\r\n", pSensorDrv->sensorDevId);
+	dev_err(isp_dev->dev ,"pcamcfg->cameraDriverID: %x.\r\n", pcamcfg->cameraDriverID);
+	dev_err(isp_dev->dev ,"pcamcfg->pIsiGetSensorIss: %x.\r\n", pcamcfg->pIsiGetSensorIss);
+	pcamcfg->instanceId = pCamDevCtx->instanceId;    
+	p_data = packet->payload;
+
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, pSensorDrv->sensorDrvHandle, sizeof(IsiCamDrvConfigMbox_t));
+    p_data += sizeof(IsiCamDrvConfigMbox_t);
+    packet->payload_size += sizeof(IsiCamDrvConfigMbox_t);
+    pr_err("RKC %s %d \n",__func__,__LINE__);
+
+    memcpy(p_data, &pSensorDrv->sensorDevId, sizeof(uint32_t));
+    packet->payload_size +=  sizeof(uint32_t);
+/*
+    pcamcfg = (IsiCamDrvConfig_t *)p_data;
+    pr_err("%s %d cameraDriverID: %di pIsiGetSensorIss: %x\n",__func__,__LINE__,((IsiCamDrvConfig_t* )p_data)->cameraDriverID,((IsiCamDrvConfig_t* )p_data)->pIsiGetSensorIss);
+    pr_err("[APU]-sensorDrvHandle->cameraDriverID: %d.\r\n", pcamcfg->cameraDriverID);
+    pr_err("sensorDrvHandle->pIsiGetSensorIss: %x.\r\n", pcamcfg->pIsiGetSensorIss);
+    pr_err("sensorDrvHandle->i2cBusId: %d.\r\n", pcamcfg->i2cBusId);*/
+
+	if(packet->payload_size > MAX_ITEM)
+    {
+        dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",packet->payload_size , MAX_ITEM);
+        kfree(packet);
+    	return RET_OUTOFRANGE;
+    }
+#if 1
+    mutex_lock(&isp_dev->mlock);
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_REG,packet, packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
+    if(0 != result) {
+        kfree(packet);
+        return result;
+    }
+    pr_err("%s %d\n",__func__,__LINE__);
+    mbox_send_message(isp_dev->tx_chan,NULL);
+    pr_err("%s %d\n",__func__,__LINE__);
+
+#endif
+
+    pr_err("%s %d\n",__func__,__LINE__);
+    xlnx_mbox_apu_wait_for_ack(isp_dev);
+    pr_err("%s %d\n",__func__,__LINE__);
+    mutex_unlock(&isp_dev->mlock);
+
+    kfree(packet);
+    return result;
+}
+
+
+RESULT VsiCamDeviceSensorDrvHandleUnRegister
+(
+    struct vvcam_isp_dev *isp_dev,    
+    CamDeviceHandle_t hCamDevice
+)
+{
+    RESULT result = RET_SUCCESS;
+    payload_packet *packet = NULL;
+    uint8_t *p_data = NULL; 
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    pCamDevCtx->cookie ++;
+
+    packet= kzalloc(sizeof(payload_packet), GFP_KERNEL);
+    if(!packet)
+    {
+    	pr_err("FAILED TO KZALLOC %s %d\n",__func__,__LINE__);
+	    return -ENOMEM;
+    } 
+
+    packet->cookie = pCamDevCtx->cookie;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    p_data = packet->payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    if(packet->payload_size > MAX_ITEM)
+    {
+        dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",packet->payload_size , MAX_ITEM);
+        kfree(packet);
+    	return RET_OUTOFRANGE;
+    }
+
+#if 1
+    mutex_lock(&isp_dev->mlock);
+    result = Send_Command(APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_UNREG , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
+    if(0 != result) {
+        kfree(packet);
+        mutex_unlock(&isp_dev->mlock);
+        return result;
+    }
+    mbox_send_message(isp_dev->tx_chan,NULL);
+
+#endif
+
+    xlnx_mbox_apu_wait_for_ack(isp_dev);
+    mutex_unlock(&isp_dev->mlock);
+
+    kfree(packet);
+    return result;
+}
+
+RESULT VsiCamDeviceSensorClose
+(
+    struct vvcam_isp_dev *isp_dev,    
+    CamDeviceHandle_t hCamDevice
+)
+{
+    RESULT result = RET_SUCCESS;
+    payload_packet *packet=NULL;
+    uint8_t *p_data = NULL;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    pCamDevCtx->cookie ++;
+
+    packet= kmalloc(sizeof(payload_packet), GFP_KERNEL);
+    if(!packet)
+    {
+    	pr_err("FAILED TO KMALLOC %s %d\n",__func__,__LINE__);
+	return -ENOMEM;
+    } 
+    memset(packet, 0, sizeof(payload_packet));
+
+    packet->cookie = pCamDevCtx->cookie;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    p_data = packet->payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    if(packet->payload_size > MAX_ITEM)
+    {
+        dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",packet->payload_size , MAX_ITEM);
+        kfree(packet);
+    	return RET_OUTOFRANGE;
+    }
+#if 1
+    mutex_lock(&isp_dev->mlock);
+    result= Send_Command(APU_2_RPU_MB_CMD_SENSOR_CLOSE , packet,packet->payload_size + payload_extra_size  ,isp_dev->isp_rpu,MBOX_CORE_APU);
+    if(0 != result) {
+        kfree(packet);
+        return result;
+    }
+    mbox_send_message(isp_dev->tx_chan,NULL);
+
+#endif
+
+    xlnx_mbox_apu_wait_for_ack(isp_dev);
+    mutex_unlock(&isp_dev->mlock);
+
+    kfree(packet);
+	return result;
+}
+RESULT VsiCamDeviceSensorMapping
+(
+    struct vvcam_isp_dev *isp_dev,    
+    CamDeviceHandle_t   hCamDevice,
+    const char           *pSensorName,
+    CamDeviceSensorDrvHandle_t *pSensorDrvhandle
+)
+{
+    RESULT result = RET_SUCCESS;
+    uint8_t *p_data=NULL; 
+    payload_packet *packet=NULL;
+    uint8_t __result;
+    IsiCamDrvConfigMbox_t camcfg ;//= NULL;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pSensorName || NULL == pSensorDrvhandle) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    packet= kzalloc(sizeof(payload_packet), GFP_KERNEL);
+    if(!packet)
+    {
+    	pr_err("FAILED TO KZALLOC %s %d\n",__func__,__LINE__);
+	    return -ENOMEM;
+    } 
+
+    packet->cookie = pCamDevCtx->cookie;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    p_data = packet->payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, pSensorName, SENSOR_NAME_LEN);
+    p_data += SENSOR_NAME_LEN;
+    packet->payload_size += SENSOR_NAME_LEN;
+
+   // memcpy(p_data, pSensorDrvhandle, sizeof(uint32_t));
+    packet->payload_size += sizeof(IsiCamDrvConfigMbox_t);
+
+    if(packet->payload_size > MAX_ITEM)
+    {
+        dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",packet->payload_size , MAX_ITEM);
+        kfree(packet);
+        return RET_OUTOFRANGE;
+    }
+
+#if 1
+    mutex_lock(&isp_dev->mlock);
+    result = Send_Command(APU_2_RPU_MB_CMD_SENSOR_MAPPING, packet, packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+    if(0 != result) {
+    kfree(packet);
+        return result;
+    }
+    mbox_send_message(isp_dev->tx_chan, NULL);
+
+#endif
+	__result = xlnx_mbox_apu_wait_for_data(isp_dev, packet->payload);
+	if(__result)
+	{
+        kfree(packet);
+    	pr_err("FAiled in Sensor Mapping\n");
+	    return -1;
+	}
+	*pSensorDrvhandle = kzalloc(sizeof(IsiCamDrvConfigMbox_t), GFP_KERNEL);
+
+    if(*pSensorDrvhandle == NULL) {
+        kfree(packet);
+    	dev_err(isp_dev->dev,"APU Failed to allocate memory for sensor mapping.\n");
+    	return RET_OUTOFMEM;
+    }
+    memcpy(*pSensorDrvhandle, p_data, sizeof(IsiCamDrvConfigMbox_t));
+
+    mutex_unlock(&isp_dev->mlock);
+	//RKC - free above psensorDrvhanlde ?
+	kfree(packet);
+
+    //camcfg = **(IsiCamDrvConfigMbox_t **)pSensorDrvhandle;
+    camcfg = **(IsiCamDrvConfigMbox_t **)pSensorDrvhandle;
+	dev_err(isp_dev->dev , "APU mapping get cameraDriverID: %d.\r\n", camcfg.cameraDriverID);
+    dev_err(isp_dev->dev , "APU mapping get pIsiGetSensorIss: %d.\r\n", camcfg.pIsiGetSensorIss);
+    dev_err(isp_dev->dev , "APU mapping get cameraDevId: %d.\r\n", camcfg.cameraDevId);
+    dev_err(isp_dev->dev , "APU mapping get instanceId: %d.\r\n", camcfg.instanceId);
+
+	return result;
+}
+
+RESULT VsiCamDeviceSensorQuery
+(
+    struct vvcam_isp_dev *isp_dev,    
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorQuery_t *pQuery
+)
+{
+    RESULT result = RET_SUCCESS;
+    payload_packet *packet=NULL;
+    uint8_t *p_data=NULL; 
+    uint8_t __result; 
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pQuery) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    packet= kzalloc(sizeof(payload_packet), GFP_KERNEL);
+    if(!packet)
+    {
+    	pr_err("FAILED TO KMALLOC %s %d\n",__func__,__LINE__);
+	    return -ENOMEM;
+    } 
+
+    packet->cookie = pCamDevCtx->cookie;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    p_data = packet->payload;
+
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, pQuery, sizeof(CamDeviceSensorQuery_t));
+    packet->payload_size += sizeof(CamDeviceSensorQuery_t);
+
+    if(packet->payload_size > MAX_ITEM)
+    {
+        dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",packet->payload_size , MAX_ITEM);
+        kfree(packet);
+    	return RET_OUTOFRANGE;
+    }
+    mutex_lock(&isp_dev->mlock);
+    result = Send_Command(APU_2_RPU_MB_CMD_SENSOR_QUERY , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
+    if(0 != result) {
+        kfree(packet);
+        return result;
+    }
+    mbox_send_message(isp_dev->tx_chan,NULL);
+
+
+    __result = xlnx_mbox_apu_wait_for_data(isp_dev,packet->payload);
+	if(__result)
+    {
+        kfree(packet);
+        pr_err("FAILED TO QUERY SENSOR\n");
+        return -1;
+    }
+
+
+	memcpy(pQuery, p_data, sizeof(CamDeviceSensorQuery_t));
+    mutex_unlock(&isp_dev->mlock);
+    kfree(packet);
+	return result;
+}
+
+#if 0
+RESULT VsiCamDeviceSensorGetInfo
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorInfo_t *pSensorInfo
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pSensorInfo) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    //memcpy(p_data, pSensorInfo, sizeof(CamDeviceSensorInfo_t));
+    packet.payload_size += sizeof(CamDeviceSensorInfo_t);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_INFO, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+	    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pSensorInfo, p_data, sizeof(CamDeviceSensorInfo_t));
+
+	return result;
+}
+#endif
+
+
+
+RESULT VsiCamDeviceSensorSetTestPattern
+(
+	struct vvcam_isp_dev *isp_dev,
+    CamDeviceHandle_t hCamDevice,
+    const CamDeviceSensorTestPattern_t *pTestPattern
+)
+{
+    RESULT result = RET_SUCCESS;
+    payload_packet *packet = NULL;
+    uint8_t *p_data = NULL; 
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pTestPattern) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    packet= kzalloc(sizeof(payload_packet), GFP_KERNEL);
+    if(!packet)
+    {
+        pr_err("FAILED TO KMALLOC %s %d\n",__func__,__LINE__);
+        return -ENOMEM;
+    }
+
+    packet->cookie = pCamDevCtx->cookie;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    p_data = packet->payload;
+
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, pTestPattern, sizeof(CamDeviceSensorTestPattern_t));
+    packet->payload_size += sizeof(CamDeviceSensorTestPattern_t);
+
+    if(packet->payload_size > MAX_ITEM)
+    {
+        dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",packet->payload_size , MAX_ITEM);
+        kfree(packet);
+        return RET_OUTOFRANGE;
+    }
+#if 1
+    mutex_lock(&isp_dev->mlock);
+    result = Send_Command( APU_2_RPU_MB_CMD_SENSOR_SET_TP , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
+    if(0 != result) {
+        mutex_unlock(&isp_dev->mlock);
+        kfree(packet);
+        return result;
+    }
+    mbox_send_message(isp_dev->tx_chan,NULL);
+#endif
+
+    xlnx_mbox_apu_wait_for_ack(isp_dev);
+    mutex_unlock(&isp_dev->mlock);
+
+    kfree(packet);
+    return result;
+}
+
+
+
+
+#if 0
+
+RESULT VsiCamDeviceSensorSetRegister
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorRegister_t *pRegister
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pRegister) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pRegister, sizeof(CamDeviceSensorRegister_t));
+    packet.payload_size += sizeof(CamDeviceSensorRegister_t);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_SET_REG, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_ACK(packet.cookie);
+    if (result) {
+        result = RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorGetRegister
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorRegister_t *pRegister
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pRegister) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pRegister, sizeof(CamDeviceSensorRegister_t));
+    packet.payload_size += sizeof(CamDeviceSensorRegister_t);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_REG, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+	    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pRegister, p_data, sizeof(CamDeviceSensorRegister_t));
+
+	return result;
+}
+#endif
+
+RESULT VsiCamDeviceSensorSetFrameRate
+(
+    struct vvcam_isp_dev *isp_dev,
+    CamDeviceHandle_t hCamDevice,
+    uint32_t * /*float **/pFps
+)
+{
+    RESULT result = RET_SUCCESS;
+	payload_packet *packet = NULL;
+    uint8_t *p_data = NULL; 
+	
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pFps) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    packet= kmalloc(sizeof(payload_packet), GFP_KERNEL);
+    if(!packet)
+    {
+    	pr_err("FAILED TO KMALLOC %s %d\n",__func__,__LINE__);
+	    return -ENOMEM;
+    } 
+
+    memset(packet, 0, sizeof(payload_packet));
+
+    packet->cookie = pCamDevCtx->cookie;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    p_data = packet->payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, pFps, sizeof(/*float*/uint32_t));
+    packet->payload_size += sizeof(/*float*/uint32_t);
+
+    if(packet->payload_size > MAX_ITEM)
+    {
+        dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",packet->payload_size , MAX_ITEM);
+        kfree(packet);
+    	return RET_OUTOFRANGE;
+    }
+#if 1
+    mutex_lock(&isp_dev->mlock);
+    result = Send_Command(APU_2_RPU_MB_CMD_SENSOR_SET_FRAMERATE , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
+    if(0 != result) {
+        kfree(packet);
+        return result;
+    }
+    mbox_send_message(isp_dev->tx_chan,NULL);
+
+#endif
+
+    xlnx_mbox_apu_wait_for_ack(isp_dev);
+    mutex_unlock(&isp_dev->mlock);
+
+    kfree(packet);
+	
+	return result;
+}
+
+#if 0
+RESULT VsiCamDeviceSensorGetFrameRate
+(
+    CamDeviceHandle_t hCamDevice,
+    float *pFps
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pFps) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pFps, sizeof(float));
+    packet.payload_size += sizeof(float);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_FRAMERATE, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+	    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pFps, p_data, sizeof(float));
+
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorGetModeInfo
+(
+    CamDeviceHandle_t          hCamDevice,
+    CamDeviceSensorModeInfo_t *pMode
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pMode) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pMode, sizeof(CamDeviceSensorModeInfo_t));
+    packet.payload_size += sizeof(CamDeviceSensorModeInfo_t);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_MODE_INFO, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pMode, p_data, sizeof(CamDeviceSensorModeInfo_t));
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorGetStatus
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorStatus_t *pStatus
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pStatus) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pStatus, sizeof(uint32_t));
+    packet.payload_size += sizeof(uint32_t);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_STATUS, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pStatus, p_data, sizeof(CamDeviceSensorStatus_t));
+
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorSetGain
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorGain_t *pGain
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pGain) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pGain, sizeof(uint32_t));
+    packet.payload_size += sizeof(uint32_t);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_SET_GAIN, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_ACK(packet.cookie);
+    if (result) {
+        result = RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorGetGain
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorGain_t *pGain
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pGain) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pGain, sizeof(CamDeviceSensorGain_t));
+    packet.payload_size += sizeof(CamDeviceSensorGain_t);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_GAIN, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pGain, p_data, sizeof(CamDeviceSensorGain_t));
+
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorSetExposureControl
+(
+    CamDeviceHandle_t hCamDevice,
+	CamDeviceSensorExposureControl_t  *pExpCtrl
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pExpCtrl) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pExpCtrl, sizeof(CamDeviceSensorExposureControl_t));
+    packet.payload_size += sizeof(CamDeviceSensorExposureControl_t);
+
+	if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_SET_EXP_CTL, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_ACK(packet.cookie);
+    if (result) {
+        result = RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	return result;
+}
+
+RESULT VsiCamDeviceSensorGetExposureControl
+(
+   CamDeviceHandle_t                  hCamDevice,
+   CamDeviceSensorExposureControl_t  *pExpCtrl
+
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pExpCtrl) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pExpCtrl, sizeof(CamDeviceSensorExposureControl_t));
+    packet.payload_size += sizeof(float);
+
+    if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_EXP_CTL, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+	    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pExpCtrl, p_data, sizeof(CamDeviceSensorExposureControl_t));
+
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorSetFocusPositon
+(
+   CamDeviceHandle_t hCamDevice,
+   CamDeviceSensorFocusPos_t  *pFocusPos
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pFocusPos) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pFocusPos, sizeof(CamDeviceSensorFocusPos_t));
+    packet.payload_size += sizeof(CamDeviceSensorFocusPos_t);
+
+	if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_SetFocusPositon, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_ACK(packet.cookie);
+    if (result) {
+        result = RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	return result;
+}
+
+RESULT VsiCamDeviceSensorGetFocusPositon
+(
+   CamDeviceHandle_t hCamDevice,
+   CamDeviceSensorFocusPos_t  *pFocusPos,
+   CamDeviceSensorIntegerRange_t *pRangeLimit
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pFocusPos || NULL == pRangeLimit) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, pFocusPos, sizeof(CamDeviceSensorFocusPos_t));
+    p_data += sizeof(CamDeviceSensorFocusPos_t);
+    packet.payload_size += sizeof(CamDeviceSensorFocusPos_t);
+
+    memcpy(p_data, pRangeLimit, sizeof(CamDeviceSensorIntegerRange_t));
+    packet.payload_size += sizeof(CamDeviceSensorIntegerRange_t);
+
+	if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GetFocusPositon, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+	    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pRangeLimit, p_data, sizeof(CamDeviceSensorIntegerRange_t));
+
+	p_data -= sizeof(CamDeviceSensorFocusPos_t);
+	memcpy(pFocusPos, p_data, sizeof(CamDeviceSensorFocusPos_t));
+
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorSetStreaming
+(
+    CamDeviceHandle_t hCamDevice,
+    bool_t isEnable
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, &isEnable, sizeof(bool_t));
+    packet.payload_size += sizeof(bool_t);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_SET_STREAMING, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_ACK(packet.cookie);
+    if (result) {
+        result = RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorGetOtpInfo
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorOtpModuleInfo_t *pOtpModuleInfo
+)
+{
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pOtpModuleInfo) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pOtpModuleInfo, sizeof(CamDeviceSensorOtpModuleInfo_t));
+    packet.payload_size += sizeof(CamDeviceSensorOtpModuleInfo_t);
+
+        if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_OPT_INFO, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pOtpModuleInfo, p_data, sizeof(CamDeviceSensorOtpModuleInfo_t));
+
+	return result;
+}
+
+RESULT VsiCamDeviceSensorGetMetadataAttr
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorMetadataAttr_t *pMetaAttr
+){
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pMetaAttr) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pMetaAttr, sizeof(CamDeviceSensorMetadataAttr_t));
+    packet.payload_size += sizeof(CamDeviceSensorMetadataAttr_t);
+
+	if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_METADATA_ATTR, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pMetaAttr, p_data, sizeof(CamDeviceSensorMetadataAttr_t));
+
+	return result;
+}
+
+
+RESULT VsiCamDeviceSensorSetMetadataAttr
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorMetadataAttr_t metaAttr
+){
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, &metaAttr, sizeof(CamDeviceSensorMetadataAttr_t));
+    packet.payload_size += sizeof(CamDeviceSensorMetadataAttr_t);
+
+	if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_SET_METADATA_ATTR, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_ACK(packet.cookie);
+    if (result) {
+        result = RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	return result;
+}
+
+RESULT VsiCamDeviceSensorGetMetadataWin
+(
+    CamDeviceHandle_t hCamDevice,
+    CamDeviceSensorMetadataWin_t *pMetaWin
+){
+    RESULT result = RET_SUCCESS;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pMetaWin) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    payload_packet packet;
+    memset(&packet, 0, sizeof(payload_packet));
+
+    packet.cookie = pCamDevCtx->cookie;
+    packet.type = CMD;
+    packet.payload_size = 0;
+
+    uint8_t *p_data = packet.payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet.payload_size += sizeof(uint32_t);
+    memcpy(p_data, pMetaWin, sizeof(CamDeviceSensorMetadataWin_t));
+    packet.payload_size += sizeof(CamDeviceSensorMetadataWin_t);
+
+	if(packet.payload_size > MAX_ITEM)
+    	return RET_OUTOFRANGE;
+
+    os_lock_mutex(&mbox_lock);
+
+    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_GET_METADATA_WIN, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
+    if(0 != result) {
+        os_unlock_mutex(&mbox_lock);
+        return RET_FAILURE;
+    }
+    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
+    if (result) {
+	    os_unlock_mutex(&mbox_lock);
+	    return RET_FAILURE;
+    }
+
+    os_unlock_mutex(&mbox_lock);
+
+	memcpy(pMetaWin, p_data, sizeof(CamDeviceSensorMetadataWin_t));
+
+	return result;
+}
+
+#endif
+
+
+
+RESULT VsiCamDeviceSensorGetConnectPortInfo
+(
+    struct vvcam_isp_dev *isp_dev,    
+    CamDeviceHandle_t   hCamDevice,
+    CamDeviceMcmPortId_t  portId,
+    CamDeviceSensorConnectPortInfo_t *pPortInfo
+){
+    RESULT result = RET_SUCCESS;
+    uint8_t *p_data=NULL; 
+    payload_packet *packet=NULL;
+
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
+    if (NULL == pCamDevCtx) {
+        return (RET_WRONG_HANDLE);
+    }
+    if (NULL == pPortInfo) {
+        return (RET_NULL_POINTER);
+    }
+    pCamDevCtx->cookie ++;
+
+    packet= kmalloc(sizeof(payload_packet), GFP_KERNEL);
+    if(!packet)
+    {
+    	pr_err("FAILED TO KMALLOC %s %d\n",__func__,__LINE__);
+	    return -ENOMEM;
+    } 
+    memset(packet, 0, sizeof(payload_packet));
+
+    packet->cookie = pCamDevCtx->cookie;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    p_data = packet->payload;
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, &portId, sizeof(CamDeviceMcmPortId_t));
+    p_data += sizeof(CamDeviceMcmPortId_t);
+    packet->payload_size += sizeof(CamDeviceMcmPortId_t);
+
+    memcpy(p_data, pPortInfo, sizeof(CamDeviceSensorConnectPortInfo_t));
+    packet->payload_size += sizeof(CamDeviceSensorConnectPortInfo_t);
+
+    if(packet->payload_size > MAX_ITEM)
+    {
+        dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",packet->payload_size , MAX_ITEM);
+        kfree(packet);
+        return RET_OUTOFRANGE;
+    }
+
+#if 1
+    mutex_lock(&isp_dev->mlock);
+    result = Send_Command(APU_2_RPU_MB_CMD_SENSOR_GET_ConnectPortInfo , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
+    if(0 != result) {
+        kfree(packet);
+        return result;
+    }
+    mbox_send_message(isp_dev->tx_chan,NULL);
+
+#endif
+	result = xlnx_mbox_apu_wait_for_data(isp_dev,packet->payload);
+	if(result)
+	{
+        kfree(packet);
+	    pr_err("FAiled in APU_2_RPU_MB_CMD_SENSOR_GET_ConnectPortInfo\n");
+	    return -1;
+	}
+	mutex_unlock(&isp_dev->mlock);
+
+    memcpy(pPortInfo, p_data, sizeof(CamDeviceSensorConnectPortInfo_t));
+    pPortInfo->name[sizeof(pPortInfo->name)-1]='\0';
+
+    dev_err(isp_dev->dev, "%s %d \n",__func__,__LINE__);
+    dev_err(isp_dev->dev, "%s %d %d %s\n",__func__,__LINE__,pPortInfo->chipId,pPortInfo->name); 
+    dev_err(isp_dev->dev, "%s %d \n",__func__,__LINE__);
+    
+    kfree(packet);
+
+    return result;
+}
+                                    

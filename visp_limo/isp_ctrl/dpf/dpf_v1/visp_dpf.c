@@ -1,0 +1,503 @@
+/****************************************************************************
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2023-2024 VeriSilicon Holdings Co., Ltd.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ *
+ *****************************************************************************
+ *
+ * The GPL License (GPL)
+ *
+ * Copyright (c) 2023-2024 VeriSilicon Holdings Co., Ltd.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program;
+ *
+ *****************************************************************************
+ *
+ * Note: This software is released under dual MIT and GPL licenses. A
+ * recipient may use this file under the terms of either the MIT license or
+ * GPL License. If you wish to use only one license not the other, you can
+ * indicate your decision by deleting one of the above license notices in your
+ * version of this file.
+ *
+ *****************************************************************************/
+
+#include "visp_dpf.h"
+
+#include <media/v4l2-ioctl.h>
+
+#include "visp_ctrl.h"
+#include "visp_driver.h"
+#include "visp_event.h"
+
+static int visp_dpf_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	int ret = 0;
+	struct visp_dev *isp_dev =
+		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
+
+	switch (ctrl->id)
+	{
+		case VISP_CID_DPF_ENABLE:
+		case VISP_CID_DPF_RESET:
+		case VISP_CID_DPF_MODE:
+		case VISP_CID_DPF_AUTO_LEVEL:
+		case VISP_CID_DPF_AUTO_GAIN:
+		case VISP_CID_DPF_AUTO_GRADIENT:
+		case VISP_CID_DPF_AUTO_OFFSET:
+		case VISP_CID_DPF_AUTO_MIN:
+		case VISP_CID_DPF_AUTO_DIV:
+		case VISP_CID_DPF_AUTO_SIGMA_G:
+		case VISP_CID_DPF_AUTO_SIGMA_RB:
+		case VISP_CID_DPF_AUTO_NOISE_CURVE:
+		case VISP_CID_DPF_MANU_GAIN:
+		case VISP_CID_DPF_MANU_GRADIENT:
+		case VISP_CID_DPF_MANU_OFFSET:
+		case VISP_CID_DPF_MANU_MIN:
+		case VISP_CID_DPF_MANU_DIV:
+		case VISP_CID_DPF_MANU_SIGMA_G:
+		case VISP_CID_DPF_MANU_SIGMA_RB:
+		case VISP_CID_DPF_MANU_NOISE_CURVE:
+			ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+			break;
+
+		default:
+			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			return -EACCES;
+	}
+
+	return ret;
+}
+
+static int visp_dpf_g_ctrl(struct v4l2_ctrl *ctrl)
+{
+	int ret = 0;
+	struct visp_dev *isp_dev =
+		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
+
+	switch (ctrl->id)
+	{
+		case VISP_CID_DPF_ENABLE:
+		case VISP_CID_DPF_RESET:
+		case VISP_CID_DPF_MODE:
+		case VISP_CID_DPF_AUTO_LEVEL:
+		case VISP_CID_DPF_AUTO_GAIN:
+		case VISP_CID_DPF_AUTO_GRADIENT:
+		case VISP_CID_DPF_AUTO_OFFSET:
+		case VISP_CID_DPF_AUTO_MIN:
+		case VISP_CID_DPF_AUTO_DIV:
+		case VISP_CID_DPF_AUTO_SIGMA_G:
+		case VISP_CID_DPF_AUTO_SIGMA_RB:
+		case VISP_CID_DPF_AUTO_NOISE_CURVE:
+		case VISP_CID_DPF_MANU_GAIN:
+		case VISP_CID_DPF_MANU_GRADIENT:
+		case VISP_CID_DPF_MANU_OFFSET:
+		case VISP_CID_DPF_MANU_MIN:
+		case VISP_CID_DPF_MANU_DIV:
+		case VISP_CID_DPF_MANU_SIGMA_G:
+		case VISP_CID_DPF_MANU_SIGMA_RB:
+		case VISP_CID_DPF_MANU_NOISE_CURVE:
+		case VISP_CID_DPF_STAT_GAIN:
+		case VISP_CID_DPF_STAT_GRADIENT:
+		case VISP_CID_DPF_STAT_OFFSET:
+		case VISP_CID_DPF_STAT_MIN:
+		case VISP_CID_DPF_STAT_DIV:
+		case VISP_CID_DPF_STAT_SIGMA_G:
+		case VISP_CID_DPF_STAT_SIGMA_RB:
+		case VISP_CID_DPF_STAT_NOISE_CURVE:
+			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+			break;
+
+		default:
+			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			return -EACCES;
+	}
+
+	return ret;
+}
+
+static const struct v4l2_ctrl_ops visp_dpf_ctrl_ops = {
+	.s_ctrl = visp_dpf_s_ctrl,
+	.g_volatile_ctrl = visp_dpf_g_ctrl,
+};
+
+const struct v4l2_ctrl_config visp_dpf_ctrls[] = {
+	{
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_ENABLE,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_RESET,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_reset",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		/* 0: Manual 1: Auto */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_MODE,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_mode",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_AUTO_LEVEL,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_auto_level",
+		.step = 1,
+		.min = 1,
+		.max = 20,
+		.def = 1,
+		.dims = {1},
+	},
+	{
+		/* float 20x array */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_AUTO_GAIN,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_auto_gain",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20, 0, 0, 0},
+	},
+	{
+		/* float 20x array */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_AUTO_GRADIENT,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_auto_gradient",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20, 0, 0, 0},
+	},
+	{
+		/* float 20x array */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_AUTO_OFFSET,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_auto_offset",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20, 0, 0, 0},
+	},
+	{
+		/* float 20x array */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_AUTO_MIN,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_auto_min",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20, 0, 0, 0},
+	},
+	{
+		/* float 20x array */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_AUTO_DIV,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_auto_div",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20, 0, 0, 0},
+	},
+	{
+		/* float 20x array */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_AUTO_SIGMA_G,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_auto_sigma_g",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20, 0, 0, 0},
+	},
+	{
+		/* float 20x array */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_AUTO_SIGMA_RB,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_auto_sigma_rb",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20, 0, 0, 0},
+	},
+	{
+		/* float 20x17 array */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_AUTO_NOISE_CURVE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_auto_noise_curve",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20, 17, 0, 0},
+	},
+	{
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_MANU_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_manu_gain",
+		.step = 1,
+		.min = 10,
+		.max = 10000,
+		.def = 10,
+	},
+	{
+		/* float 0.1 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_MANU_GRADIENT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_manu_gradient",
+		.step = 1,
+		.min = 1,
+		.max = 1280,
+		.def = 1,
+	},
+	{
+		/* float 0.0 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_MANU_OFFSET,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_manu_offset",
+		.step = 1,
+		.min = 0,
+		.max = 1280,
+	},
+	{
+		/* float 1.0 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_MANU_MIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_manu_min",
+		.step = 1,
+		.min = 10,
+		.max = 1280,
+		.def = 10,
+	},
+	{
+		/* float 1.0 ~ 64.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_MANU_DIV,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_manu_div",
+		.step = 1,
+		.min = 10,
+		.max = 650,
+		.def = 10,
+	},
+	{
+		/* float 1.0 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_MANU_SIGMA_G,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_manu_sigma_g",
+		.step = 1,
+		.min = 10,
+		.max = 1280,
+		.def = 10,
+	},
+	{
+		/* float 1.0 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_MANU_SIGMA_RB,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_manu_sigma_rb",
+		.step = 1,
+		.min = 10,
+		.max = 1280,
+		.def = 10,
+	},
+	{
+		/* float 17x array 0.0 ~ 4095.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_MANU_NOISE_CURVE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_manu_noise_curve",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {17, 0, 0, 0},
+	},
+	{
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_STAT_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_stat_gain",
+		.step = 1,
+		.min = 10,
+		.max = 10000,
+		.def = 10,
+	},
+	{
+		/* float 0.1 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_STAT_GRADIENT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_stat_gradient",
+		.step = 1,
+		.min = 1,
+		.max = 1280,
+		.def = 1,
+	},
+	{
+		/* float 0.0 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_STAT_OFFSET,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_stat_offset",
+		.step = 1,
+		.min = 0,
+		.max = 1280,
+	},
+	{
+		/* float 1.0 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_STAT_MIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_stat_min",
+		.step = 1,
+		.min = 10,
+		.max = 1280,
+		.def = 10,
+	},
+	{
+		/* float 1.0 ~ 64.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_STAT_DIV,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_stat_div",
+		.step = 1,
+		.min = 10,
+		.max = 650,
+		.def = 10,
+	},
+	{
+		/* float 1.0 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_STAT_SIGMA_G,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_stat_sigma_g",
+		.step = 1,
+		.min = 10,
+		.max = 1280,
+		.def = 10,
+	},
+	{
+		/* float 1.0 ~ 128.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_STAT_SIGMA_RB,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_stat_sigma_rb",
+		.step = 1,
+		.min = 10,
+		.max = 1280,
+		.def = 10,
+	},
+	{
+		/* float 17x array 0.0 ~ 4095.0 */
+		.ops = &visp_dpf_ctrl_ops,
+		.id = VISP_CID_DPF_STAT_NOISE_CURVE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dpf_stat_noise_curve",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {17, 0, 0, 0},
+	},
+};
+
+int visp_dpf_ctrl_count(void)
+{
+	return ARRAY_SIZE(visp_dpf_ctrls);
+}
+
+int visp_dpf_ctrl_create(struct visp_dev *isp_dev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(visp_dpf_ctrls); i++)
+	{
+		v4l2_ctrl_new_custom(&isp_dev->ctrl_handler, &visp_dpf_ctrls[i], NULL);
+		if (isp_dev->ctrl_handler.error)
+		{
+			dev_err(isp_dev->dev, "reigster isp dpf ctrl %s failed %d.\n",
+					visp_dpf_ctrls[i].name, isp_dev->ctrl_handler.error);
+		}
+	}
+
+	return 0;
+}
