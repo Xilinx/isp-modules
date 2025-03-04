@@ -778,16 +778,13 @@ int MediaIspDeviceDqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 						MediaBuf *Buf, void *Enque_Buff_G,
 						OutputBuffer_t *OutputBuffer);
 
-int Read_DQ_Bufinfo(void *data, OutputBuffer_t *pMediaBuffer,
-					struct Chn_info *info);
-
 int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev)
 {
 	int RetVal = 0;
-	MediaBuf *Buf = NULL;
 	OutputBuffer_t *OutputBuffer = NULL;
 
 	struct Chn_info info;
+	uint8_t buf_index;
 	int pad = -1;
 
 	/* Validate inputs */
@@ -803,22 +800,14 @@ int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev)
 		return -EINVAL;
 	}
 
-	/* Allocate memory for the buffer */
-	OutputBuffer = kzalloc(sizeof(OutputBuffer_t), GFP_KERNEL);
-	if (!OutputBuffer)
-	{
-		dev_err(isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__, __LINE__);
-		return -ENOMEM;
-	}
-
 	/* Dequeue buffer from the ISP device*/
+	Read_DQ_Bufinfo(Packet_from_RPU, isp_dev, &info,&buf_index);
 
-	Read_DQ_Bufinfo(Packet_from_RPU, OutputBuffer, &info);
-
-	isp_dev->IspPorts[info.VtId]
-		.IspChns[info.path]
-		.CamDeviceBufs[OutputBuffer->index] = OutputBuffer;
-	//
+	OutputBuffer = isp_dev->IspPorts[info.VtId].IspChns[info.path].CamDeviceBufs[buf_index];
+	if (!OutputBuffer) {
+		dev_err(isp_dev->dev ,"Handle_Frameout_Buffer: Outputbuffer is NULL...!\n");
+		return -EINVAL;
+	}
 
 	/* Calculate the pad index */
 	pad = (info.VtId * MEDIA_ISP_PORT_PAD_COUNT) + (info.path + 1);
@@ -847,13 +836,13 @@ int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev)
 				OutputBuffer ? OutputBuffer->baseAddress : 0);
 		goto error_free_buf;
 	}
+	//dev_err(isp_dev->dev,"[RKC-ISPDRV] Received DQ BUFF : Isp : %d Port : %d Path : %d BufAddr : 0x%x\n",info.HwId,info.VtId, info.path, OutputBuffer->baseAddress);
 
 	/* Free allocated buffer after successful processing*/
 	return 0;
 
 error_free_buf:
 	/* Free buffer in case of any error*/
-	kfree(Buf);
 	return RetVal;
 }
 EXPORT_SYMBOL_GPL(Handle_Frameout_Buffer);

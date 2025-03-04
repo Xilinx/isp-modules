@@ -25,7 +25,9 @@ int MediaIspCalibGetSensorName(struct visp_dev *isp_dev, uint8_t Port, char *Sen
 int MediaIspCalibGetSensorMode(struct visp_dev *isp_dev, uint8_t Port, uint8_t *SensorMode);
 int MediaIspDeviceSensorOpen(struct visp_dev *isp_dev, uint8_t Port);
 int MediaIspDeviceCameraConnect(struct visp_dev *isp_dev, uint8_t Index);
-int Read_DQ_Bufinfo(void *data, OutputBuffer_t *pMediaBuffer, struct Chn_info *info);
+
+int Read_DQ_Bufinfo(void *data, struct visp_dev *isp_dev,
+                    struct Chn_info *info, uint8_t *buf_index);
 int MediaIspDeviceDqbuf(struct visp_dev *isp_dev, struct Chn_info *info, MediaBuf *Buf, void *Packet_from_RPU, OutputBuffer_t *OutputBuffer);
 int MediaIspCalibQuerySensor(struct visp_dev *isp_dev, uint8_t Port);
 int MediaIspCalibLoadIspConfig(struct visp_dev *isp_dev, uint8_t Port);

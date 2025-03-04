@@ -116,7 +116,14 @@ static int MediaIspDeviceDestroyBufPool(struct visp_dev *isp_dev, uint8_t Port,
 		}
 	}
 	VsiCamDeviceDeInitBufChain(isp_dev, IspPort->CamDeviceHandle, Chn);
+	if (Chn < MEDIA_ISP_CHN_MAX) {
+		// create isp buf pool by user allocated dma memory
 
+		for (int i = 0; i < isp_dev->IspPorts[Port].IspChns[Chn].NumBufs; i++) {
+		    OutputBuffer_t *pMediaBuffer = IspPort->IspChns[Chn].CamDeviceBufs[i];
+		kfree(pMediaBuffer);
+        }
+    }
 	return RetVal;
 }
 
@@ -277,6 +284,20 @@ static int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port,
 			BufPoolCfg.pBaseAddrList[i] =
 				IspPort->IspChns[Chn].Bufs[i].Planes[0].DmaAddr;
 			BufPoolCfg.pIplAddrList[i] = VSI_NULL;
+			dev_info(isp_dev->dev,"Buf[%d] = 0x%x size 0x%x", i, BufPoolCfg.pBaseAddrList[i],
+                BufSize);
+			IspPort->IspChns[Chn].CamDeviceBufs[i]  = kzalloc(sizeof(OutputBuffer_t), GFP_KERNEL);
+		    OutputBuffer_t *pMediaBuffer = IspPort->IspChns[Chn].CamDeviceBufs[i];
+			if (!pMediaBuffer)
+			{
+				dev_err(isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__, __LINE__);
+				return -ENOMEM;
+			}
+		pMediaBuffer->index=i;
+		pMediaBuffer->baseAddress = IspPort->IspChns[Chn].Bufs[i].Planes[0].DmaAddr;
+
+		dev_err(isp_dev->dev, " %s %d idx:%d Add : %x\n", __func__, __LINE__, \
+                pMediaBuffer->index, pMediaBuffer->baseAddress);
 		}
 	}
 	else if (Chn == CAMDEV_BUFCHAIN_RDMA)
@@ -1598,65 +1619,41 @@ int MediaIspHalBufDone(struct v4l2_subdev *sd, int pad, const MediaBuf *Buf)
 	return VSI_SUCCESS;
 }
 
-int Read_DQ_Bufinfo(void *data, OutputBuffer_t *pMediaBuffer,
-					struct Chn_info *info)
+int Read_DQ_Bufinfo(void *data, struct visp_dev *isp_dev,
+                    struct Chn_info *info, uint8_t *buf_index)
 {
 	uint8_t *p_data = NULL;
 	uint32_t hw_id_t = 100;
+	//uint32_t addr;
+	uint8_t idx;
+
 	payload_packet *packet = data;
-	if (!packet)
-	{
-		loge("NO Data in DQ Payload%s %d\n", __func__, __LINE__);
+	if (!packet) {
+	loge("NO Data in DQ Payload%s %d\n", __func__, __LINE__);
 		return -ENOMEM;
 	}
 
 	p_data = packet->payload;
 
-#if 1
 	memcpy(&(hw_id_t), p_data, sizeof(uint32_t));
 	p_data += sizeof(uint32_t);
 
 	memcpy(info, p_data, sizeof(struct Chn_info));
 	p_data += sizeof(struct Chn_info);
-#endif
 
-	memcpy(&(pMediaBuffer->baseAddress), p_data, sizeof(uint32_t));
+	//memcpy(&(addr), p_data, sizeof(uint32_t));
 	p_data += sizeof(uint32_t);
 
-	memcpy(&(pMediaBuffer->index), p_data, sizeof(uint8_t));
+	memcpy(&(idx), p_data, sizeof(uint8_t));
+	*buf_index=idx;
 	p_data += sizeof(uint8_t);
-	memcpy(&(pMediaBuffer->pOwner), p_data, sizeof(uint32_t));
 
+	OutputBuffer_t *OutputBuffer = NULL;
+	MediaIspChnAttr *IspChns = &isp_dev->IspPorts[info->VtId].IspChns[info->path];
+	OutputBuffer = IspChns->CamDeviceBufs[*buf_index];
+
+	memcpy(&(OutputBuffer->pOwner), p_data, sizeof(uint32_t));
 	return 0;
-}
-
-int MediaIspDeviceDqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
-						MediaBuf *Buf, void *Packet_from_RPU,
-						OutputBuffer_t *OutputBuffer)
-{
-	int RetVal = VSI_SUCCESS;
-	uint32_t Port;
-	uint32_t Chn;
-	MediaIspPortAttr *IspPort = NULL;
-	MediaIspChnAttr *IspChn = NULL;
-
-	if (!Packet_from_RPU)
-	{
-		dev_err(isp_dev->dev, "Received Null data %s %d\n", __func__, __LINE__);
-		return -ENOMEM;
-	}
-
-	Read_DQ_Bufinfo(Packet_from_RPU, OutputBuffer, info);
-
-	Port = info->VtId;
-	Chn = info->path;
-
-	IspPort = &isp_dev->IspPorts[Port];
-	IspChn = &IspPort->IspChns[Chn];
-
-	IspChn->CamDeviceBufs[OutputBuffer->index] = OutputBuffer;
-
-	return RetVal;
 }
 
 int MediaIspSetFormat(struct visp_dev *isp_dev, uint32_t pad_index,

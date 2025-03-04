@@ -500,7 +500,17 @@ RESULT VsiCamDeviceDeQueBuffer(struct visp_dev *isp_dev,
 }
 
 int DRV_ENQ_CNT = 0;
-extern struct mutex r_lock;
+
+#define ENQ_CUSTOM_PAYLOAD_SIZE 48
+typedef struct payload_template_enq {
+    Payload_type type;
+    uint32_t cookie;
+    uint32_t payload_size;
+    response_field_t resp_field;
+    uint8_t payload[ENQ_CUSTOM_PAYLOAD_SIZE];
+}payload_packet_enq;
+
+
 RESULT VsiCamDeviceEnQueBuffer(struct visp_dev *isp_dev,
 							   CamDeviceHandle_t hCamDevice,
 							   CamDeviceBufChainId_t bufId,
@@ -510,7 +520,7 @@ RESULT VsiCamDeviceEnQueBuffer(struct visp_dev *isp_dev,
 	uint8_t *p_data = NULL;
 	CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
 
-	payload_packet *packet = NULL;
+	payload_packet_enq packet = {0};
 
 	DRV_ENQ_CNT++;
 
@@ -527,23 +537,16 @@ RESULT VsiCamDeviceEnQueBuffer(struct visp_dev *isp_dev,
 
 	pCamDevCtx->cookie++;
 
-	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
-	if (!packet)
-	{
-		dev_err(isp_dev->dev, "FAILED TO KZALLOC %s %d\n", __func__, __LINE__);
-		return -ENOMEM;
-	}
+	packet.cookie = pCamDevCtx->cookie;
+	packet.type = CMD;
+	packet.payload_size = 0;
 
-	packet->cookie = pCamDevCtx->cookie;
-	packet->type = CMD;
-	packet->payload_size = 0;
-
-	p_data = packet->payload;
+	p_data = packet.payload;
 	memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-	packet->payload_size += sizeof(uint32_t);
+	packet.payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);
 	memcpy(p_data, &bufId, sizeof(CamDeviceBufChainId_t));
-	packet->payload_size += sizeof(CamDeviceBufChainId_t);
+	packet.payload_size += sizeof(CamDeviceBufChainId_t);
 	p_data += sizeof(CamDeviceBufChainId_t);
 #if 0
 
@@ -567,7 +570,7 @@ RESULT VsiCamDeviceEnQueBuffer(struct visp_dev *isp_dev,
 	p_data += sizeof(bool_t);
 #endif
 	memcpy(p_data, &(pMediaBuf->index), sizeof(uint8_t));
-	packet->payload_size += sizeof(uint8_t);
+	packet.payload_size += sizeof(uint8_t);
 	p_data += sizeof(uint8_t);
 #if 0
 	memcpy(p_data, &(pMediaBuf->bufMode), sizeof(BUFF_MODE));
@@ -581,7 +584,7 @@ RESULT VsiCamDeviceEnQueBuffer(struct visp_dev *isp_dev,
 #endif
 
 	memcpy(p_data, &((pMediaBuf)->pOwner), sizeof(uint32_t));
-	packet->payload_size += sizeof(uint32_t);
+	packet.payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);
 // RANJITH THE BELOW CODE is ADDED due to some memcpy issue
 #if 0
@@ -590,21 +593,15 @@ RESULT VsiCamDeviceEnQueBuffer(struct visp_dev *isp_dev,
 	p_data += sizeof(uint32_t);
 #endif
 
-	//    kfree(pMediaBuf);
 
-	if (packet->payload_size > MAX_ITEM) return RET_OUTOFRANGE;
+	if (packet.payload_size > MAX_ITEM) return RET_OUTOFRANGE;
 
-	//    mutex_lock(&isp_dev->port_lock[0]);
 	mutex_lock(&isp_dev->rpu->rpu_lock);
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, packet,
-		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
+		packet.payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
-
-	//    mutex_unlock(&isp_dev->port_lock[0]);
-	kfree(pMediaBuf);
-	kfree(packet);
 
 	return result;
 }
