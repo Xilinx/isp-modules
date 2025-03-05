@@ -236,7 +236,7 @@ static int isp_read_atm_properties(struct visp_dev *isp)
     // Locate the reserved memory node
     mem_np = of_find_node_by_name(NULL, isp->atm.node_name);
     if (!mem_np) {
-        dev_info(isp->dev, "Reserved memory '%s' not found,
+        dev_info(isp->dev, "Reserved memory '%s' not found, \
 				defaulting to 32-bit memory\n", isp->atm.node_name);
         isp->atm.high_mem_addr = 0;
         isp->atm.is_64bit = false;
@@ -246,7 +246,7 @@ static int isp_read_atm_properties(struct visp_dev *isp)
     // Read the 'reg' property from the device tree
     prop = of_get_property(mem_np, "reg", NULL);
     if (!prop) {
-        dev_info(isp->dev, "Not found 'reg' property from '%s',
+        dev_info(isp->dev, "Not found 'reg' property from '%s',\
 				defaulting to 32-bit memory\n", isp->atm.node_name);
         isp->atm.high_mem_addr = 0;
         isp->atm.is_64bit = false;
@@ -263,7 +263,7 @@ static int isp_read_atm_properties(struct visp_dev *isp)
     // Determine if it's 32-bit or 64-bit based on high address
     isp->atm.is_64bit = (isp->atm.high_mem_addr ? 1 : 0);
 
-    dev_info(isp->dev, "Extracted high 32-bit address from %s:
+    dev_info(isp->dev, "Extracted high 32-bit address from %s: \
 					0x%X (%s-bit memory)\n", isp->atm.node_name,
 					isp->atm.high_mem_addr, isp->atm.is_64bit ? "64" : "32");
 
