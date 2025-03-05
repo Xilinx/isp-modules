@@ -159,7 +159,7 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 	device->isp_dev->op_a[2]=output_addr[2];
 	device->isp_dev->op_a[3]=output_addr[3];
 
-        MediaIspDeviceStreamOn(device->isp_dev, 0, CAMDEV_BUFCHAIN_RDMA);
+    MediaIspDeviceStreamOn(device->isp_dev, 0, CAMDEV_BUFCHAIN_RDMA);
 	MediaIspDeviceDeque(device->isp_dev, 0);
 
 	visp_pr_info("[VISP_M2M] ===== SYNC_WAITB %s : %d\n",__func__, __LINE__);
@@ -187,8 +187,8 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 #endif
 }
 
-  struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type);
-  struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type)
+struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type);
+struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type)
 {
 	visp_pr_info("===== [VISP_M2M] %s : %d v4l2_buf_type is %d out_type %d cap_type %d \n",__func__, __LINE__,type,V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 	struct isp_mimo *device = ctx->device;

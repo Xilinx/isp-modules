@@ -275,6 +275,11 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 								   struct platform_device *pdev)
 {
 	unsigned int port_id = 0;
+	int ret;
+	char node_name[50];
+	struct device_node *mem_np;
+	int mem_num=0;
+
 	int num_mems, i ;
 	struct fwnode_handle *ep;
 	fwnode_property_read_u32(of_fwnode_handle(pdev->dev.of_node), "id",
@@ -290,18 +295,25 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 		}
 		port_id++;
 	}
-#if 0 // this is required for enable reserve memory
-	 ret = of_reserved_mem_device_init(&pdev->dev);
-	 if (ret)
+
+	snprintf(node_name, sizeof(node_name),
+             "isp%d_reserve_memory", visp_mdev->id);
+
+    mem_np = of_find_node_by_name(NULL, node_name);
+
+	if(mem_np){
+		ret = of_reserved_mem_device_init(&pdev->dev);
+		if (ret)
 		dev_dbg(&pdev->dev, "of_reserved_mem_device_init: %d\n", ret);
- 
-	 ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
-	 if (ret) {
-		dev_err(&pdev->dev, "dma_set_mask_and_coherent: %d\n", ret);
-		return -ENOMEM;
-		//goto error;
-	 }
-#endif
+
+		ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+		if (ret) {
+			dev_err(&pdev->dev, "dma_set_mask_and_coherent: %d\n", ret);
+			return -ENOMEM;
+			//goto error;
+		}
+		mem_num=1; // To Skip the first reserved memory region and read the remaining memory regions
+	}
 
 	num_mems =
 		of_count_phandle_with_args(pdev->dev.of_node, "memory-region", NULL);
@@ -312,7 +324,7 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 		return -ENOMEM;
 	}
 
-	for (i = 0; i < num_mems; i++)
+	for (i = mem_num; i < num_mems; i++)
 	{
 		struct device_node *node;
 		struct reserved_mem *rmem;

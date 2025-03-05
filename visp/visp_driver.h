@@ -232,6 +232,12 @@ struct rpu_dev
 	int app_wait_flag;
 };
 
+struct atm_prop {
+    u32 high_mem_addr;      // Higher 32-bit of memory address
+    u32 is_64bit;     // True if 64-bit, False if 32-bit
+    char node_name[50]; // Node name dynamically generated
+};
+
 struct visp_dev
 {
 	phys_addr_t paddr;
@@ -298,7 +304,7 @@ struct visp_dev
 	struct completion apu_wait_for_ack;
 	struct completion apu_wait_for_data;
 	struct completion mailbox_completion;
-
+	struct atm_prop atm;
 	int k_apu_ack_flag;
 	int k_apu_data_flag;
 	int app_wait_flag;

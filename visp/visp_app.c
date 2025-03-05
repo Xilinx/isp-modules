@@ -12,6 +12,8 @@
 #include "visp_common.h"
 #include "visp_v4l2_std_exts.h"
 #include <linux/delay.h>
+#include "cam_device.h"
+#include "visp_mbox_driver.h"
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <media/v4l2-device.h>
@@ -221,6 +223,103 @@ int MediaIspDeviceCameraDisConnect(struct visp_dev *isp_dev, uint8_t Port,
 }
 
 #endif
+static int isp_read_atm_properties(struct visp_dev *isp)
+{
+    struct device_node *mem_np;
+    const __be32 *prop;
+    u64 mem_addr;
+
+    // Generate the reserved memory node name dynamically
+    snprintf(isp->atm.node_name, sizeof(isp->atm.node_name),
+								"isp%d_reserve_memory", isp->id);
+
+    // Locate the reserved memory node
+    mem_np = of_find_node_by_name(NULL, isp->atm.node_name);
+    if (!mem_np) {
+        dev_info(isp->dev, "Reserved memory '%s' not found,
+				defaulting to 32-bit memory\n", isp->atm.node_name);
+        isp->atm.high_mem_addr = 0;
+        isp->atm.is_64bit = false;
+        return 0; // No error, just treating as 32-bit mode
+    }
+
+    // Read the 'reg' property from the device tree
+    prop = of_get_property(mem_np, "reg", NULL);
+    if (!prop) {
+        dev_info(isp->dev, "Not found 'reg' property from '%s',
+				defaulting to 32-bit memory\n", isp->atm.node_name);
+        isp->atm.high_mem_addr = 0;
+        isp->atm.is_64bit = false;
+        of_node_put(mem_np);
+        return 0;
+    }
+
+    // Extract 64-bit base address (first two cells)
+    mem_addr = of_read_number(prop, 2);
+
+    // Store the high 32-bit value
+    isp->atm.high_mem_addr = (u32)(mem_addr >> 32);
+
+    // Determine if it's 32-bit or 64-bit based on high address
+    isp->atm.is_64bit = (isp->atm.high_mem_addr ? 1 : 0);
+
+    dev_info(isp->dev, "Extracted high 32-bit address from %s:
+					0x%X (%s-bit memory)\n", isp->atm.node_name,
+					isp->atm.high_mem_addr, isp->atm.is_64bit ? "64" : "32");
+
+    of_node_put(mem_np);
+    return 0;
+}
+
+static int isp_send_atm_prop_to_rpu(struct visp_dev *isp, CamDeviceHandle_t hCamDevice)
+{
+    int result = 0;
+    payload_packet *packet;
+    uint8_t *p_data;
+    int ret = 0;
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
+
+    if (NULL == pCamDevCtx)
+        return RET_WRONG_HANDLE;
+
+    ret = isp_read_atm_properties(isp);
+    if (ret) {
+        dev_err(isp->dev, "Failed to read ATM properties for ISP%d\n", isp->id);
+        return ret;
+    }
+
+    packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+    if (!packet) {
+        dev_err(isp->dev, "%s: Failed to allocate memory for packet\n", __func__);
+        return -ENOMEM;
+    }
+
+    p_data = packet->payload;
+    packet->cookie = 0x99;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    // Copy instance ID
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    // Copy ATM properties (high_mem, is_64bit, node_name)
+    memcpy(p_data, &isp->atm.high_mem_addr, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, &isp->atm.is_64bit, sizeof(int));
+    p_data += sizeof(int);
+    packet->payload_size += sizeof(int);
+
+	xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_CMD_SET_ATM, packet,
+            packet->payload_size + payload_extra_size, isp->isp_rpu, MBOX_CORE_APU);
+	kfree(packet);
+
+    return result;
+}
+
 
 static int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port,
 								uint8_t Chn)
@@ -2100,6 +2199,8 @@ int IspDeviceCreate(struct visp_dev *isp_dev, uint8_t Port)
 	/*Exit Port Level Critical Section */
 
 	IBA_init_send_command(isp_dev, IspPort->CamDeviceHandle);
+
+	isp_send_atm_prop_to_rpu(isp_dev, IspPort->CamDeviceHandle);
 
 	return RetVal;
 
