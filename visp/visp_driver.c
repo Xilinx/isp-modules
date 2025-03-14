@@ -2257,6 +2257,34 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		dev_err(&pdev->dev, "Failed to parse IBA parameters\n");
 		return -EINVAL;
 	}
+
+	uint32_t num_mems =
+		of_count_phandle_with_args(pdev->dev.of_node, "memory-region", NULL);
+
+	if (num_mems < 0)
+	{
+		dev_err(isp_dev->dev,"%s no memory for calibration\n", __func__);
+		return -ENOMEM;
+	}
+
+	for (int i = 0; i < num_mems; i++)
+	{
+		struct device_node *node;
+		struct reserved_mem *rmem;
+
+		node = of_parse_phandle(pdev->dev.of_node, "memory-region", i);
+		if (!node)
+		{
+			return -EINVAL;
+		}
+
+		rmem = of_reserved_mem_lookup(node);
+		if (!rmem) return -EINVAL;
+		isp_dev->reserve_mem.pa = rmem->base;
+		isp_dev->reserve_mem.size = rmem->size;
+        dev_info(isp_dev->dev, "%s %d pa:%llu size :%u\n", __func__, __LINE__, isp_dev->reserve_mem.pa, isp_dev->reserve_mem.size);
+	}
+
 	return 0;
 }
 
@@ -2372,6 +2400,10 @@ static int visp_probe(struct platform_device *pdev)
 	memset(isp_dev->event_shm.virt_addr, 0, isp_dev->event_shm.size);
 	isp_dev->event_shm.phy_addr = virt_to_phys(isp_dev->event_shm.virt_addr);
 	mutex_init(&isp_dev->event_shm.event_lock);
+
+	isp_dev->reserve_mem.va =
+		ioremap_wc(isp_dev->reserve_mem.pa, isp_dev->reserve_mem.size);
+
 
 	visp_ctrl_init(isp_dev);
 

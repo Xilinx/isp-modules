@@ -238,6 +238,20 @@ struct atm_prop {
     char node_name[50]; // Node name dynamically generated
 };
 
+struct visp_subdev_dma_buf
+{
+	uint64_t pa;
+	int size;
+};
+
+struct visp_isp_reserve_mem
+{
+	dma_addr_t pa;
+	uint32_t size;
+	void *va;
+};
+
+
 struct visp_dev
 {
 	phys_addr_t paddr;
@@ -261,6 +275,7 @@ struct visp_dev
 #endif
 	struct visp_pad_data pad_data[VISP_PAD_NR];
 
+	struct visp_isp_reserve_mem reserve_mem;
 	struct visp_event_shm event_shm;
 	struct v4l2_ctrl_handler ctrl_handler;
 	struct mutex ctrl_lock;

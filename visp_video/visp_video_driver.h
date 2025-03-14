@@ -142,4 +142,11 @@ struct visp_video_fmt_info
 	uint32_t mbus;
 };
 
+struct visp_video_dma_buf
+{
+	uint64_t pa;
+	int size;
+};
+
+
 #endif

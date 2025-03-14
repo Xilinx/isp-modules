@@ -278,9 +278,7 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 	int ret;
 	char node_name[50];
 	struct device_node *mem_np;
-	int mem_num=0;
 
-	int num_mems, i ;
 	struct fwnode_handle *ep;
 	fwnode_property_read_u32(of_fwnode_handle(pdev->dev.of_node), "id",
 							 &visp_mdev->id);
@@ -312,34 +310,8 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 			return -ENOMEM;
 			//goto error;
 		}
-		mem_num=1; // To Skip the first reserved memory region and read the remaining memory regions
 	}
 
-	num_mems =
-		of_count_phandle_with_args(pdev->dev.of_node, "memory-region", NULL);
-
-	if (num_mems < 0)
-	{
-		dev_err(visp_mdev->dev,"%s no memory for calibration\n", __func__);
-		return -ENOMEM;
-	}
-
-	for (i = mem_num; i < num_mems; i++)
-	{
-		struct device_node *node;
-		struct reserved_mem *rmem;
-
-		node = of_parse_phandle(pdev->dev.of_node, "memory-region", i);
-		if (!node)
-		{
-			return -EINVAL;
-		}
-
-		rmem = of_reserved_mem_lookup(node);
-		if (!rmem) return -EINVAL;
-		visp_mdev->reserve_mem.pa = rmem->base;
-		visp_mdev->reserve_mem.size = rmem->size;
-	}
 
 	visp_mdev->ports = port_id;
 	return 0;

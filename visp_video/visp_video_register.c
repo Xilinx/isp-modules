@@ -73,7 +73,6 @@
 
 #include "visp_v4l2_common.h"
 #include "visp_v4l2_std_exts.h"
-#include "visp_video_event.h"
 
 static struct visp_video_fmt_info visp_formats_info[] = {
 	{
@@ -1483,10 +1482,6 @@ static int visp_video_try_create_pipeline(struct visp_video_dev *visp_vdev)
 	{
 		return 0;
 	}
-#if 1
-	ret = visp_video_create_pipeline_event(visp_vdev);
-	if (ret) return ret;
-#endif
 	subdev = visp_video_remote_subdev(visp_vdev);
 	if (!subdev) return -EINVAL;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
@@ -1511,7 +1506,6 @@ static int visp_video_try_create_pipeline(struct visp_video_dev *visp_vdev)
 static int visp_video_destroy_pipeline(struct visp_video_dev *visp_vdev)
 {
 	visp_vdev->pipeline = 0;
-	visp_video_destroy_pipeline_event(visp_vdev);
 	return 0;
 }
 
@@ -2061,9 +2055,6 @@ static int visp_videoc_subscribe_event(
 		case V4L2_EVENT_CTRL:
 			ret = v4l2_ctrl_subscribe_event(fh, sub);
 			break;
-		case VISP_VIDEO_DEAMON_EVENT:
-			ret = v4l2_event_subscribe(fh, sub, 2, NULL);
-			break;
 		default:
 			ret = -EINVAL;
 			break;
@@ -2178,30 +2169,9 @@ static long visp_video_ioctl(struct file *file, unsigned int cmd,
 							 unsigned long arg)
 {
 	long ret = 0;
-	struct visp_video_dev *visp_vdev = video_drvdata(file);
-	struct visp_video_dma_buf dma_buf;
 
 	switch (cmd)
 	{
-		case VISP_VIDEO_IOC_DMABUF:
-			ret = copy_from_user(&dma_buf, (void __user *)arg,
-								 sizeof(struct visp_video_dma_buf));
-			if (ret)
-			{
-				return -EFAULT;
-			}
-
-			dma_buf.pa = visp_vdev->reserve_mem.pa;
-			dma_buf.size = visp_vdev->reserve_mem.size;
-
-			ret = copy_to_user((void __user *)arg, &dma_buf,
-							   sizeof(struct visp_video_dma_buf));
-			if (ret)
-			{
-				return -EFAULT;
-			}
-			break;
-
 		default:
 			ret = video_ioctl2(file, cmd, arg);
 			break;
@@ -2507,18 +2477,6 @@ int visp_video_register(struct visp_media_dev *visp_mdev, int port)
 		dev_err(visp_mdev->dev, "video register device error\n");
 		goto err_media_entity_cleanup;
 	}
-#if 1 //RKC-avoid-shm-memory
-	visp_vdev->event_shm.virt_addr = (void *)__get_free_pages(GFP_KERNEL, 0);
-	visp_vdev->event_shm.size = PAGE_SIZE;
-	memset(visp_vdev->event_shm.virt_addr, 0, visp_vdev->event_shm.size);
-	visp_vdev->event_shm.phy_addr =
-		virt_to_phys(visp_vdev->event_shm.virt_addr);
-	mutex_init(&visp_vdev->event_shm.event_lock);
-	visp_vdev->reserve_mem.pa = visp_mdev->reserve_mem.pa;
-	visp_vdev->reserve_mem.size = visp_mdev->reserve_mem.size;
-	visp_vdev->reserve_mem.va =
-		ioremap_wc(visp_vdev->reserve_mem.pa, visp_vdev->reserve_mem.size);
-#endif
 
 	visp_mdev->video_devs[port] = visp_vdev;
 	return 0;
@@ -2547,8 +2505,6 @@ int visp_video_unregister(struct visp_media_dev *visp_mdev, int port)
 	video_device_release(visp_vdev->video);
 	devm_kfree(visp_mdev->dev, visp_vdev);
 	visp_mdev->video_devs[port] = NULL;
-#if 1 //RKC-avoid-shm-memory
-	free_pages((unsigned long)visp_vdev->event_shm.virt_addr, 0);
-#endif
+
 	return 0;
 }

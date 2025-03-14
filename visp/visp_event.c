@@ -172,6 +172,14 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	pdata += sizeof(uint32_t);
 	event_pkg->head.data_size += sizeof(uint32_t);
 
+	struct  visp_subdev_dma_buf dma_buf ;
+	dma_buf.pa = isp_dev->reserve_mem.pa;
+	dma_buf.size = isp_dev->reserve_mem.size;
+	//pr_err("%s %d :%x %d\n",__func__,__LINE__ , dma_buf.pa, dma_buf.size);
+	memcpy(pdata, &dma_buf, sizeof(struct visp_subdev_dma_buf));
+	pdata += sizeof(struct visp_subdev_dma_buf);
+	event_pkg->head.data_size += sizeof(struct visp_subdev_dma_buf);
+
 	memcpy(pdata, isp_dev->IspPorts[Port].CamDeviceHandle,
 		   sizeof(CamDeviceContext_t));
 	pdata += sizeof(CamDeviceContext_t);
