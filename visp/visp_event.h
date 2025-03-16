@@ -127,6 +127,9 @@ struct visp_ext_buf_info
 #define VISP_IOC_BUFFER_FREE \
 	_IOWR('I', BASE_VIDIOC_PRIVATE + 2, struct visp_ext_buf_info)
 
+#define VISP_GET_RPU_ID \
+    _IOWR('I', BASE_VIDIOC_PRIVATE + 3, uint32_t )
+
 #ifdef __KERNEL__
 #include "visp_driver.h"
 

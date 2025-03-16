@@ -1282,6 +1282,27 @@ int visp_buffer_free_public(struct visp_dev *isp_dev,
 	return ret;
 }
 
+static long visp_return_rpu_id(struct v4l2_subdev *sd, void *arg)
+{
+    long ret = 0;
+    struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+
+    if(!arg)
+    {
+        dev_err(isp_dev->dev, "%s %d NULL ARG \n",__func__,__LINE__);
+    }
+
+    uint32_t *rpu=(uint32_t *)arg;
+    *rpu=isp_dev->isp_rpu;
+
+    dev_info(isp_dev->dev, "%s %d returning RPU id: %d for ISP : %d\n",__func__,__LINE__,*rpu, isp_dev->id);
+
+    return ret;
+}
+
+
+
+
 static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	int ret = -EINVAL;
@@ -1332,6 +1353,9 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			break;
 		case VISP_IOC_BUFFER_FREE:
 			ret = visp_buffer_free(sd, arg);
+			break;
+		case VISP_GET_RPU_ID:
+			ret = visp_return_rpu_id(sd, arg);
 			break;
 		default:
 			break;
