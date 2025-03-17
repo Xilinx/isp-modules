@@ -1927,7 +1927,6 @@ int MediaIspCalibQuerySensor(struct visp_dev *isp_dev, uint8_t Port)
 	RetVal = MediaIspCalibGetSensorMode(isp_dev, Port, &SensorMode);
 	if (RetVal != VSI_SUCCESS)
 	{
-		kfree(QueryInfo);
 		dev_err(isp_dev->dev, "%s: port %d get sensor mode failed", __func__,
 				Port);
 		return RetVal;
@@ -1937,7 +1936,6 @@ int MediaIspCalibQuerySensor(struct visp_dev *isp_dev, uint8_t Port)
 		VsiCamDeviceSensorQuery(isp_dev, IspPort->CamDeviceHandle, QueryInfo);
 	if (RetVal != VSI_SUCCESS)
 	{
-		kfree(QueryInfo);
 		dev_err(isp_dev->dev,
 				"%s: port %d CamDevice query sensor info failed %d", __func__,
 				Port, RetVal);
@@ -1947,7 +1945,6 @@ int MediaIspCalibQuerySensor(struct visp_dev *isp_dev, uint8_t Port)
 
 	if (SensorMode >= QueryInfo->number)
 	{
-		kfree(QueryInfo);
 		RetVal = VSI_ERR_ILLEGAL_PARAM;
 		dev_err(isp_dev->dev, "%s: port %d sensor mode %d out of range [0, %d]",
 				__func__, Port, SensorMode, QueryInfo->number - 1);
