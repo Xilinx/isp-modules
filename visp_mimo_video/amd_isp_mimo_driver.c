@@ -1,16 +1,298 @@
+#include <linux/module.h>
+#include <linux/of_graph.h>
+#include <linux/of_reserved_mem.h>
+#include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
+#include <linux/slab.h>
+#include <linux/spinlock.h>
+#include <linux/version.h>
+#include <linux/vmalloc.h>
+#include <media/v4l2-ctrls.h>
+#include <media/v4l2-device.h>
+#include <media/v4l2-event.h>
+#include <media/v4l2-fh.h>
+#include <media/v4l2-fwnode.h>
+#include <media/v4l2-ioctl.h>
+#include <media/v4l2-mc.h>
+#include <media/v4l2-mediabus.h>
+#include <media/videobuf2-dma-contig.h>
+#include <linux/delay.h>
+#include <linux/interrupt.h>
 #include <amd_isp_mimo_driver.h>
+#include <visp_v4l2_std_exts.h>
 
+//#define DEBUG_ENABLE
 /* version 1.0 */
 #ifndef DEBUG_ENABLE
-#define visp_pr_info(fmt, ...) ;
-#define visp_pr_debug(fmt, ...) ;
-#define visp_pr_err(fmt, ...) ;
+#define visp_pr_info(fmt, ...)
+#define visp_pr_debug(fmt, ...)
+#define visp_pr_err(fmt, ...)
 #else
-#define visp_pr_info pr_info
-#define visp_pr_debug pr_debug
+#define visp_pr_info pr_err
+#define visp_pr_debug pr_err
 #define visp_pr_err pr_err
 #endif
-#define visp_v4l2_dbg(fmt, ...) ;
+
+#define visp_v4l2_dbg(fmt, ...);
+
+struct visp_format visp_mp_fmts[] = {
+	{
+		.fourcc = V4L2_PIX_FMT_NV16,
+		.code = MEDIA_BUS_FMT_YUYV8_2X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_NV12,
+		.code = MEDIA_BUS_FMT_YUYV8_1_5X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_YUYV,
+		.code = MEDIA_BUS_FMT_YUYV8_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR8,
+		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG8,
+		.code = MEDIA_BUS_FMT_SGBRG8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG8,
+		.code = MEDIA_BUS_FMT_SGRBG8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB8,
+		.code = MEDIA_BUS_FMT_SRGGB8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR10,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG10,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG10,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB10,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR12,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG12,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG12,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB12,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P010,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_GREY,
+		.code = MEDIA_BUS_FMT_Y8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+	},
+};
+
+struct visp_format visp_sp_fmts[] = {
+	{
+		.fourcc = V4L2_PIX_FMT_NV16,
+		.code = MEDIA_BUS_FMT_YUYV8_2X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_NV12,
+		.code = MEDIA_BUS_FMT_YUYV8_1_5X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_YUYV,
+		.code = MEDIA_BUS_FMT_YUYV8_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P010,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_GREY,
+		.code = MEDIA_BUS_FMT_Y8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10BPACK,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10DWA,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P00BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P00DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	// {
+	//     .fourcc    = V4L2_PIX_FMT_P02BPACK,
+	//     .code      = MEDIA_BUS_FMT_YUYV12_2X12,
+	// },
+	{
+		.fourcc = V4L2_PIX_FMT_P20BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P20DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	// {
+	//     .fourcc    = V4L2_PIX_FMT_P22BPACK,
+	//     .code      = MEDIA_BUS_FMT_YUYV12_2X12,
+	// },
+	{
+		.fourcc = V4L2_PIX_FMT_I210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_M48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I48DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I40DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24DWA,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24P,
+		.code = MEDIA_BUS_FMT_RGB888_3X8,
+	},
+};
+
+// input path
+struct visp_format visp_raw_fmts[] = {
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR8,
+		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG8,
+		.code = MEDIA_BUS_FMT_SGBRG8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG8,
+		.code = MEDIA_BUS_FMT_SGRBG8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB8,
+		.code = MEDIA_BUS_FMT_SRGGB8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR10,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG10,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG10,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB10,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR12,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG12,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG12,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB12,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR14,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG14,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG14,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB14,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR16,
+		.code = MEDIA_BUS_FMT_SBGGR16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG16,
+		.code = MEDIA_BUS_FMT_SGBRG16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG16,
+		.code = MEDIA_BUS_FMT_SGRBG16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB16,
+		.code = MEDIA_BUS_FMT_SRGGB16_1X16,
+	},
+
+};
 
 
 static int debug;
@@ -99,7 +381,6 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
     struct vb2_buffer *vb;
     dma_addr_t dma_addr;
     unsigned int i;
-    visp_pr_info("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 
     vb2_q = v4l2_m2m_get_src_vq(m2m_ctx);
     for (i = 0; i < vb2_q->max_num_buffers; i++) {
@@ -108,8 +389,7 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
             break;
         }
         dma_addr = vb2_dma_contig_plane_dma_addr(vb, 0);
-	s[i] = dma_addr;
-        visp_pr_info("=====[VISP_M2M] SRC Buffer %d DMA address: 0x%x\n", i, dma_addr);
+		s[i] = dma_addr;
     }
 
     vb2_q = v4l2_m2m_get_dst_vq(m2m_ctx);
@@ -119,18 +399,12 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
             break;
         }
         dma_addr = vb2_dma_contig_plane_dma_addr(vb, 0);
-	d[i] = dma_addr;
-        visp_pr_info("=====[VISP_M2M] DST Buffer %d DMA address: 0x%x\n", i, dma_addr);
+		d[i] = dma_addr;
     }
 }
 
-  void isp_mimo_device_run(void *priv)
+void isp_mimo_device_run(void *priv)
 {
-#if 0
-	static int a=0;
-	visp_pr_info("===== [VISP_M2M] %s : %d device run count [%d] \n",__func__, __LINE__,++a);
-#endif
-
 	struct isp_mimo_ctx *ctx = priv;
 	struct isp_mimo *device = ctx->device;
 	struct vb2_v4l2_buffer *src_vb, *dst_vb;
@@ -142,16 +416,11 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 
 	s_cnt = v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx);
 	d_cnt = v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx);
-	visp_pr_info("===== [VISP_M2M] %s : %d src & dest buf num [%d-%d]  \n",__func__, __LINE__,s_cnt,d_cnt);
 
 	src_buf = v4l2_m2m_next_src_buf(ctx->fh.m2m_ctx);
+	dst_buf = v4l2_m2m_next_dst_buf(ctx->fh.m2m_ctx);
 
-        dst_buf = v4l2_m2m_next_dst_buf(ctx->fh.m2m_ctx);
-
-        inspect_source_buffers(ctx->fh.m2m_ctx, input_addr, output_addr);
-	visp_pr_info("===== [VISP_M2M] %s : %d src[0x%x 0x%x] dst[0x%x 0x%x 0x%x 0x%x]  \n",__func__, __LINE__,
-		input_addr[0], input_addr[1],output_addr[0],output_addr[1],output_addr[2],output_addr[3]);
-
+    inspect_source_buffers(ctx->fh.m2m_ctx, input_addr, output_addr);
 	device->isp_dev->ip_a[0]=input_addr[0];
 	device->isp_dev->ip_a[1]=input_addr[0];
 	device->isp_dev->op_a[0]=output_addr[0];
@@ -159,13 +428,11 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 	device->isp_dev->op_a[2]=output_addr[2];
 	device->isp_dev->op_a[3]=output_addr[3];
 
-    MediaIspDeviceStreamOn(device->isp_dev, 0, CAMDEV_BUFCHAIN_RDMA);
+	MediaIspDeviceStreamOn(device->isp_dev, 0, CAMDEV_BUFCHAIN_RDMA);
 	MediaIspDeviceDeque(device->isp_dev, 0);
 
-	visp_pr_info("[VISP_M2M] ===== SYNC_WAITB %s : %d\n",__func__, __LINE__);
 	device->isp_dev->apu_wait_for_isp_frame_done = 1;
 	wait_event_interruptible(device->isp_dev->wq_frame_done_finished, ! device->isp_dev->apu_wait_for_isp_frame_done);
-	visp_pr_info("[VISP_M2M] ===== SYNC_WAITA %s : %d isp_dq_out_index = %d \n",__func__, __LINE__,device->isp_dev->isp_dq_out_index);
 
 	/* return the src and dst buffers back to V4L2 M2M layer to return to application */
 	src_vb = v4l2_m2m_src_buf_remove(curr_ctx->fh.m2m_ctx);
@@ -181,11 +448,832 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 	}
 	src_vb->sequence = dst_vb->sequence = curr_ctx->sequence++;
 	v4l2_m2m_job_finish(device->m2m_dev, curr_ctx->fh.m2m_ctx);
-#if 0 //--TODO
-	MediaIspStreamOff(device->isp_dev, 0, 6);
-	MediaIspStreamOff(device->isp_dev, 0, 0);
+#if 1 //--TODO
+//	MediaIspStreamOff(device->isp_dev, 0, 6);
+//	MediaIspStreamOff(device->isp_dev, 0, 0);
 #endif
 }
+
+static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
+{
+	/* format info for user define or supported by later versions */
+	static const struct v4l2_format_info formats[] = {
+		{
+			.format = V4L2_PIX_FMT_GREY,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {1, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {1, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_Y10BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {5, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_Y10DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 0, 0, 0},
+			.bpp_div = {3, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_Y10,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		// 420
+		{
+			.format = V4L2_PIX_FMT_P00BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 2,
+			.hdiv = 2,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {5, 10, 0, 0},
+			.bpp_div = {4, 4, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_P00DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 2,
+			.hdiv = 2,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 8, 0, 0},
+			.bpp_div = {3, 3, 1, 1},
+#else
+			.bpp = {2, 2, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_P010,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 2,
+			.hdiv = 1,
+			.vdiv = 2,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 2, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 2, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_P02BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 2,
+			.hdiv = 2,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {3, 6, 0, 0},
+			.bpp_div = {2, 2, 1, 1},
+#else
+			.bpp = {2, 2, 0, 0},
+#endif
+		},
+		// 422
+		{
+			.format = V4L2_PIX_FMT_P20BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 2,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {5, 10, 0, 0},
+			.bpp_div = {4, 4, 1, 1},
+#else
+			.bpp = {2, 2, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_P20DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 2,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 8, 0, 0},
+			.bpp_div = {3, 3, 1, 1},
+#else
+			.bpp = {2, 2, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_P210,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 2,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 4, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 2, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_P22BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 2,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {3, 6, 0, 0},
+			.bpp_div = {2, 2, 1, 1},
+#else
+			.bpp = {2, 2, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_I20BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {15, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {4, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_I210,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {4, 0, 0, 0},
+#endif
+		},
+		// 444
+		{
+			.format = V4L2_PIX_FMT_M48BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 3,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {1, 1, 1, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {1, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_I48BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {3, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {3, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_I48DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {4, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_I40DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_YUV,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {4, 0, 0, 0},
+#endif
+		},
+		// RGB
+		{
+			.format = V4L2_PIX_FMT_RGB24,
+			.pixel_enc = V4L2_PIXEL_ENC_RGB,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {3, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {3, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_RGB24DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_RGB,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {4, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_RGB24P,
+			.pixel_enc = V4L2_PIXEL_ENC_RGB,
+			.mem_planes = 1,
+			.comp_planes = 3,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {1, 1, 1, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {1, 1, 1, 0},
+#endif
+		},
+		// RAW
+		{
+			.format = V4L2_PIX_FMT_SBGGR10BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {5, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGBRG10BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {5, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGRBG10BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {5, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SRGGB10BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {5, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SBGGR10DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 0, 0, 0},
+			.bpp_div = {3, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGBRG10DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 0, 0, 0},
+			.bpp_div = {3, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGRBG10DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 0, 0, 0},
+			.bpp_div = {3, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SRGGB10DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {4, 0, 0, 0},
+			.bpp_div = {3, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SBGGR12BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {3, 0, 0, 0},
+			.bpp_div = {2, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGBRG12BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {3, 0, 0, 0},
+			.bpp_div = {2, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGRBG12BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {3, 0, 0, 0},
+			.bpp_div = {2, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SRGGB12BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {3, 0, 0, 0},
+			.bpp_div = {2, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SBGGR12DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {8, 0, 0, 0},
+			.bpp_div = {5, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGBRG12DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {8, 0, 0, 0},
+			.bpp_div = {5, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGRBG12DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {8, 0, 0, 0},
+			.bpp_div = {5, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SRGGB12DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {8, 0, 0, 0},
+			.bpp_div = {5, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SBGGR14BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {7, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGBRG14BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {7, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGRBG14BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {7, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SRGGB14BPACK,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {7, 0, 0, 0},
+			.bpp_div = {4, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SBGGR14DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {16, 0, 0, 0},
+			.bpp_div = {9, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGBRG14DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {16, 0, 0, 0},
+			.bpp_div = {9, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGRBG14DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {16, 0, 0, 0},
+			.bpp_div = {9, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SRGGB14DWA,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {16, 0, 0, 0},
+			.bpp_div = {9, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SBGGR14,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGBRG14,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGRBG14,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SRGGB14,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SBGGR16,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGBRG16,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGRBG16,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SRGGB16,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {2, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SBGGR24,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {3, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGBRG24,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {3, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SGRBG24,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {3, 0, 0, 0},
+#endif
+		},
+		{
+			.format = V4L2_PIX_FMT_SRGGB24,
+			.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+			.mem_planes = 1,
+			.comp_planes = 1,
+			.hdiv = 1,
+			.vdiv = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+			.bpp = {2, 0, 0, 0},
+			.bpp_div = {1, 1, 1, 1},
+#else
+			.bpp = {3, 0, 0, 0},
+#endif
+		},
+
+	};
+
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(formats); i++)
+	{
+		if (formats[i].format == format) return &formats[i];
+	}
+
+	return NULL;
+}
+
 
 struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type);
 struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type)
@@ -207,7 +1295,7 @@ struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_
 	}
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_querycap(struct file *file, void *priv,
+int isp_mimo_v4l2_m2m_ioctl_querycap(struct file *file, void *priv,
 			   		struct v4l2_capability *cap)
 {
 	visp_pr_info("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
@@ -217,154 +1305,332 @@ struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_
 			"platform:%s", MEM2MEM_NAME);
 	return 0;
 }
-  int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void*priv,
+
+
+static int visp_m2m_cal_imagesize(struct v4l2_format *f)
+{
+	const struct v4l2_format_info *info;
+	uint32_t bytesperline;
+	uint32_t sizeimage = 0;
+	uint32_t width;
+	uint32_t height;
+	int i;
+	int private_fmt = 0;
+
+	width = f->fmt.pix.width;
+	height = f->fmt.pix.height;
+
+	info = v4l2_format_info(f->fmt.pix.pixelformat);
+	if (info != NULL)
+	{
+		bytesperline = info->bpp[0] * width;
+	}
+	else
+	{
+		private_fmt = 1;
+		info = visp_video_vfmt_info(f->fmt.pix.pixelformat);
+		if (info == NULL)
+		{
+			visp_pr_err("%s %d width %d height %d format %d\n", __func__, __LINE__, width, height, f->fmt.pix.pixelformat);
+			return -EINVAL;
+		}
+
+		// calculate size information here for private format
+		switch (info->format)
+		{
+			/* YUV format */
+			// 8bit unalign
+			case V4L2_PIX_FMT_GREY:
+			case V4L2_PIX_FMT_M48BPACK:
+			case V4L2_PIX_FMT_I48BPACK:
+				bytesperline = width;
+				if (info->format == V4L2_PIX_FMT_I48BPACK)
+				{
+					bytesperline *= 3;
+				}
+				break;
+
+			// 8bit dwa
+			case V4L2_PIX_FMT_I48DWA:
+			case V4L2_PIX_FMT_I40DWA:
+				bytesperline = ((width * 4) / 3) * 3;
+				break;
+
+			// 10bit unalign
+			case V4L2_PIX_FMT_Y10BPACK:
+			case V4L2_PIX_FMT_P00BPACK:
+			case V4L2_PIX_FMT_P20BPACK:
+			case V4L2_PIX_FMT_I20BPACK:
+				bytesperline = DIV_ROUND_UP(width * 10, 128) * 16;
+				if (info->format == V4L2_PIX_FMT_I20BPACK)
+				{
+					bytesperline *= 4;
+				}
+				break;
+
+			// 10 bit double align
+			case V4L2_PIX_FMT_Y10DWA:
+			case V4L2_PIX_FMT_P00DWA:
+			case V4L2_PIX_FMT_P20DWA:
+				bytesperline = width * 4 / 3;
+				break;
+
+			// 10 bit mode 1, per pixel 16bits
+			case V4L2_PIX_FMT_Y10:
+			case V4L2_PIX_FMT_P010:
+			case V4L2_PIX_FMT_P210:
+			case V4L2_PIX_FMT_I210:
+				bytesperline = DIV_ROUND_UP(width, 8) * 16;
+				if (info->format == V4L2_PIX_FMT_I210)
+				{
+					bytesperline *= 2;
+				}
+				break;
+
+			// 12bit unalign
+			case V4L2_PIX_FMT_P02BPACK:
+			case V4L2_PIX_FMT_P22BPACK:
+				bytesperline = DIV_ROUND_UP(width * 12, 128) * 16;
+				break;
+
+			// RGB
+			case V4L2_PIX_FMT_RGB24:
+				bytesperline = width * 3;
+				break;
+
+			case V4L2_PIX_FMT_RGB24P:
+				bytesperline = width;
+				break;
+
+			case V4L2_PIX_FMT_RGB24DWA:
+				bytesperline = (width * 4 / 3) * 3;
+				break;
+
+			// RAW
+			// 10 bit-unalign
+			case V4L2_PIX_FMT_SBGGR10BPACK:
+			case V4L2_PIX_FMT_SGBRG10BPACK:
+			case V4L2_PIX_FMT_SGRBG10BPACK:
+			case V4L2_PIX_FMT_SRGGB10BPACK:
+				bytesperline = DIV_ROUND_UP(width * 10, 128) * 16;
+				break;
+
+			case V4L2_PIX_FMT_SBGGR10DWA:
+			case V4L2_PIX_FMT_SGBRG10DWA:
+			case V4L2_PIX_FMT_SGRBG10DWA:
+			case V4L2_PIX_FMT_SRGGB10DWA:
+				bytesperline = DIV_ROUND_UP(width, 12) * 16;
+				break;
+
+			// 12bit
+			case V4L2_PIX_FMT_SBGGR12BPACK:
+			case V4L2_PIX_FMT_SGBRG12BPACK:
+			case V4L2_PIX_FMT_SGRBG12BPACK:
+			case V4L2_PIX_FMT_SRGGB12BPACK:
+				bytesperline = DIV_ROUND_UP(width * 12, 128) * 16;
+				break;
+
+			case V4L2_PIX_FMT_SBGGR12DWA:
+			case V4L2_PIX_FMT_SGBRG12DWA:
+			case V4L2_PIX_FMT_SGRBG12DWA:
+			case V4L2_PIX_FMT_SRGGB12DWA:
+				bytesperline = DIV_ROUND_UP(width, 10) * 16;
+				break;
+
+			// 14 bit
+			case V4L2_PIX_FMT_SBGGR14BPACK:
+			case V4L2_PIX_FMT_SGBRG14BPACK:
+			case V4L2_PIX_FMT_SGRBG14BPACK:
+			case V4L2_PIX_FMT_SRGGB14BPACK:
+				bytesperline = DIV_ROUND_UP(width * 14, 128) * 16;
+				break;
+
+			case V4L2_PIX_FMT_SBGGR14DWA:
+			case V4L2_PIX_FMT_SGBRG14DWA:
+			case V4L2_PIX_FMT_SGRBG14DWA:
+			case V4L2_PIX_FMT_SRGGB14DWA:
+				bytesperline = DIV_ROUND_UP(width, 9) * 16;
+				break;
+
+			case V4L2_PIX_FMT_SBGGR14:
+			case V4L2_PIX_FMT_SGBRG14:
+			case V4L2_PIX_FMT_SGRBG14:
+			case V4L2_PIX_FMT_SRGGB14:
+				bytesperline = DIV_ROUND_UP(width, 8) * 16;
+				break;
+
+			case V4L2_PIX_FMT_SBGGR16:
+			case V4L2_PIX_FMT_SGBRG16:
+			case V4L2_PIX_FMT_SGRBG16:
+			case V4L2_PIX_FMT_SRGGB16:
+				bytesperline = DIV_ROUND_UP(width * 16, 128) * 16;
+				break;
+
+			case V4L2_PIX_FMT_SBGGR24:
+			case V4L2_PIX_FMT_SGBRG24:
+			case V4L2_PIX_FMT_SGRBG24:
+			case V4L2_PIX_FMT_SRGGB24:
+				bytesperline = DIV_ROUND_UP(width * 24, 128) * 16;
+				break;
+
+			default:
+				break;
+		}
+	}
+
+	sizeimage = bytesperline * height;
+
+	if (info->comp_planes == 1)
+	{
+		f->fmt.pix.bytesperline = bytesperline;
+		f->fmt.pix.sizeimage = sizeimage;
+		return 0;
+	}
+
+	f->fmt.pix.bytesperline = bytesperline;
+	f->fmt.pix.sizeimage = sizeimage;
+
+	for (i = 1; i < info->comp_planes; i++)
+	{
+		if (private_fmt)
+		{
+			bytesperline = DIV_ROUND_UP(bytesperline, info->hdiv);
+		}
+		else
+		{
+			bytesperline = info->bpp[i] * DIV_ROUND_UP(width, info->hdiv);
+		}
+		sizeimage = bytesperline * DIV_ROUND_UP(height, info->vdiv);
+		f->fmt.pix.sizeimage += sizeimage;
+	}
+
+	return 0;
+}
+
+int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void*priv,
 					struct v4l2_format *f)
 {
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
-	struct vvcam_isp_dev *isp_dev = ctx->device->isp_dev;
+	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
+	struct v4l2_format *fmt;
+	int i;
+	int ret = 0;
 
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
+	if (pix->width < VISPM2M_MIN_WIDTH || pix->width >  VISPM2M_MAX_WIDTH||
+	    pix->height < VISPM2M_MIN_HEIGHT || pix->height > VISPM2M_MAX_HEIGHT) {
+		visp_pr_err("Wrong input parameters %d, wxh: %dx%d.\n", f->type, f->fmt.pix.width, f->fmt.pix.height);
+	}
+	/*
+	 * V4L2 specification suggests the driver corrects the
+	 * format struct if any of the dimensions is unsupported
+	 */
+	if (pix->height < VISPM2M_MIN_HEIGHT)
+		pix->height = VISPM2M_MIN_HEIGHT;
+	else if (pix->height > VISPM2M_MAX_HEIGHT)
+		pix->height = VISPM2M_MAX_HEIGHT;
 
-	if(f->fmt.pix.width > MAX_WIDTH)
-		f->fmt.pix.width = MAX_WIDTH;
-	
-	if(f->fmt.pix.height > MAX_HEIGHT)
-		f->fmt.pix.height = MAX_HEIGHT;
+	if (pix->width < VISPM2M_MIN_WIDTH)
+		pix->width = VISPM2M_MIN_WIDTH;
+	else if (pix->width > VISPM2M_MAX_WIDTH)
+		pix->width = VISPM2M_MAX_WIDTH;
 
-	switch(f->fmt.pix.pixelformat) {
-		case FORMAT_OUT_BAYER10:
-			visp_pr_debug("===== [VISP_M2M] %s : %d FORMAT_OUT_BAYER10\n",__func__, __LINE__);
-			f->fmt.pix.sizeimage = f->fmt.pix.width * f->fmt.pix.height * 2; 
-			break;
-		case FORMAT_OUT_BAYER12:
-			visp_pr_debug("===== [VISP_M2M] %s : %d FORMAT_OUT_BAYER12\n",__func__, __LINE__);
-			f->fmt.pix.sizeimage = f->fmt.pix.width * f->fmt.pix.height * 2; 
-			break;
-		case FORMAT_OUT_BAYER8:
-			visp_pr_debug("===== [VISP_M2M] %s : %d FORMAT_OUT_BAYER8\n",__func__, __LINE__);
-			f->fmt.pix.sizeimage = f->fmt.pix.width * f->fmt.pix.height; 
-			break;
-		default:
-			visp_pr_err("===== [VISP_M2M] %s : %d !!!!! ERROR default to FORMAT_OUT_BAYER12 \n",__func__, __LINE__);
-		        f->fmt.pix.pixelformat = FORMAT_OUT_BAYER12;
-			f->fmt.pix.sizeimage = f->fmt.pix.width * f->fmt.pix.height;
+	for (i = 0; i < ARRAY_SIZE(visp_raw_fmts); i++) {
+		if (visp_raw_fmts[i].fourcc == f->fmt.pix_mp.pixelformat)
 			break;
 	}
-	isp_dev->out_sizeimage = f->fmt.pix.sizeimage;
-	isp_dev->out_w = f->fmt.pix.width;
-	isp_dev->out_h = f->fmt.pix.height;
-	isp_dev->out_fmt = f->fmt.pix.pixelformat;
+	if (i == ARRAY_SIZE(visp_raw_fmts)) {
+		visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
+		return -EINVAL;
+	}
+
+	ret = visp_m2m_cal_imagesize(f);
+	if (ret) {
+		visp_pr_err("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
+		return -EINVAL;
+	}
+
+	fmt = isp_mimo_get_format(ctx, f->type);
+	fmt->fmt.pix.sizeimage = f->fmt.pix.sizeimage;
+	fmt->fmt.pix.width = f->fmt.pix.width;
+	fmt->fmt.pix.height = f->fmt.pix.height;
+	fmt->fmt.pix.pixelformat = f->fmt.pix.pixelformat;
+
 	return 0;
 }
-  int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void*priv,
-					struct v4l2_format *f)
+
+int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
+													struct v4l2_format *f)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
-	struct vvcam_isp_dev *isp_dev = ctx->device->isp_dev;
+	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
+	struct v4l2_format *fmt;
+	int i;
+	int ret;
 
-	if(f->fmt.pix.width > MAX_WIDTH)
-		f->fmt.pix.width = MAX_WIDTH;
-	
-	if(f->fmt.pix.height > MAX_HEIGHT)
-		f->fmt.pix.height = MAX_HEIGHT;
-
-	switch(f->fmt.pix.pixelformat) {
-		case FORMAT_CAP_NV12:
-	visp_pr_debug("===== [VISP_M2M] %s : %d FORMAT_CAP_NV12 \n",__func__, __LINE__);
-			f->fmt.pix.sizeimage = f->fmt.pix.width * ((f->fmt.pix.height * 3) / 2);
-		break;
-		case FORMAT_CAP_RGB:
-	visp_pr_debug("===== [VISP_M2M] %s : %d FORMAT_CAP_RGB \n",__func__, __LINE__);
-			f->fmt.pix.sizeimage = f->fmt.pix.width * f->fmt.pix.height * 3;
-		break;
-		case FORMAT_CAP_NV16:
-	visp_pr_debug("===== [VISP_M2M] %s : %d FORMAT_CAP_NV16 \n",__func__, __LINE__);
-			f->fmt.pix.sizeimage = f->fmt.pix.width * f->fmt.pix.height * 2;
-		break;
-		default:
-	visp_pr_err("===== [VISP_M2M] %s : %d !!!!! ERROR default to FORMAT_CAP_RGB\n",__func__, __LINE__);
-			f->fmt.pix.pixelformat = FORMAT_CAP_RGB;
-			f->fmt.pix.sizeimage = f->fmt.pix.width * f->fmt.pix.height * 3;
-		break;
+	if (pix->width < VISPM2M_MIN_WIDTH || pix->width > VISPM2M_MAX_WIDTH ||
+	    pix->height < VISPM2M_MIN_HEIGHT || pix->height > VISPM2M_MAX_HEIGHT) {
+		visp_pr_err("Wrong input parameters %d, wxh: %dx%d.\n", f->type, f->fmt.pix.width, f->fmt.pix.height);
 	}
-	isp_dev->cap_sizeimage = f->fmt.pix.sizeimage;
-	isp_dev->cap_w = f->fmt.pix.width;
-	isp_dev->cap_h = f->fmt.pix.height;
-	isp_dev->cap_fmt = f->fmt.pix.pixelformat;
+	/*
+	 * V4L2 specification suggests the driver corrects the
+	 * format struct if any of the dimensions is unsupported
+	 */
+	if (pix->height < VISPM2M_MIN_HEIGHT)
+		pix->height = VISPM2M_MIN_HEIGHT;
+	else if (pix->height > VISPM2M_MAX_HEIGHT)
+		pix->height = VISPM2M_MAX_HEIGHT;
+
+	if (pix->width < VISPM2M_MIN_WIDTH)
+		pix->width = VISPM2M_MIN_WIDTH;
+	else if (pix->width > VISPM2M_MAX_WIDTH)
+		pix->width = VISPM2M_MAX_WIDTH;
+
+	for (i = 0; i < ARRAY_SIZE(visp_mp_fmts); i++) {
+		if (visp_mp_fmts[i].fourcc == f->fmt.pix_mp.pixelformat)
+			break;
+	}
+	if (i == ARRAY_SIZE(visp_mp_fmts)) {
+		return -EINVAL;
+	}
+
+	ret = visp_m2m_cal_imagesize(f);
+	if (ret){
+		return -EINVAL;
+	}
+
+	fmt = isp_mimo_get_format(ctx, f->type);
+	fmt->fmt.pix.sizeimage = f->fmt.pix.sizeimage;
+	fmt->fmt.pix.width = f->fmt.pix.width;
+	fmt->fmt.pix.height = f->fmt.pix.height;
+	fmt->fmt.pix.pixelformat = f->fmt.pix.pixelformat;
+
 	return 0;
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_enum_fmt_cap(struct file *file, void *priv,
+int isp_mimo_v4l2_m2m_ioctl_enum_fmt_cap(struct file *file, void *priv,
 							struct v4l2_fmtdesc *f)
 {
-	visp_pr_debug("===== [VISP_M2M] %s :%d [0x%x] [0x%x]\n",__func__, __LINE__,file->private_data,priv);
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
-	struct v4l2_format *fmt;
-	
-	fmt = isp_mimo_get_format(ctx, f->type);
-
-	if(IS_ERR(fmt))
+	if (f->index >= ARRAY_SIZE(visp_mp_fmts))
 		return -EINVAL;
 
-	switch(f->index){
-	case 0:
-		visp_pr_debug("===== [VISP_M2M] %s : %d FORMAT_CAP_NV12\n",__func__, __LINE__);
-		f->pixelformat = FORMAT_CAP_NV12;
-		break;
-	case 1:
-		visp_pr_debug("===== [VISP_M2M] %s : %d FORMAT_CAP_RGB\n",__func__, __LINE__);
-		f->pixelformat = FORMAT_CAP_RGB;
-		break;
-	case 2:
-		visp_pr_debug("===== [VISP_M2M] %s : %d FORMAT_CAP_NV16 \n",__func__, __LINE__);
-		f->pixelformat = FORMAT_CAP_NV16;
-		break;
-	default:
-		visp_pr_err("===== [VISP_M2M] %s : %d ERROR: default case \n",__func__, __LINE__);
-		return -EINVAL;
-	}
-	return 0;	
+	f->pixelformat = visp_mp_fmts[f->index].fourcc;
+    return 0;
+
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_enum_fmt_out(struct file *file, void *priv,
+int isp_mimo_v4l2_m2m_ioctl_enum_fmt_out(struct file *file, void *priv,
 						struct v4l2_fmtdesc *f)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d f->type = %d \n",__func__, __LINE__,f->type);
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
-	struct v4l2_format *fmt;
-	
-	fmt = isp_mimo_get_format(ctx, f->type); //-- VISP_M2M check this f-type should be valid
-
-	if(IS_ERR(fmt))
+	if (f->index >= ARRAY_SIZE(visp_raw_fmts))
 		return -EINVAL;
 
-	switch(f->index){
-	case 0:
-		visp_pr_debug("===== [VISP_M2M] %s : %d  FORMAT_OUT_BAYER10 \n",__func__, __LINE__);
-		f->pixelformat = FORMAT_OUT_BAYER10;
-		break;
-	case 1:
-		visp_pr_debug("===== [VISP_M2M] %s : %d  FORMAT_OUT_BAYER12 \n",__func__, __LINE__);
-		f->pixelformat = FORMAT_OUT_BAYER12;
-		break;
-	case 2:
-		visp_pr_debug("===== [VISP_M2M] %s : %d  FORMAT_OUT_BAYER8 \n",__func__, __LINE__);
-		f->pixelformat = FORMAT_OUT_BAYER8;
-		break;
-	default:
-		visp_pr_debug("===== [VISP_M2M] %s : %d  ERROR: default case \n",__func__, __LINE__);
-		return -EINVAL;
-	}
-	return 0;	
+	f->pixelformat = visp_raw_fmts[f->index].fourcc;
+    return 0;
 }
 
-
-
-  int isp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
+int isp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
 						struct v4l2_format *f)
 {
-visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
 	struct v4l2_format *fmt;
 
@@ -374,17 +1640,21 @@ visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 		return -EINVAL;
 
 	f->fmt.pix = fmt->fmt.pix;
+	f->fmt.pix.height = fmt->fmt.pix.height;
+	f->fmt.pix.width = fmt->fmt.pix.width;
+	f->fmt.pix.sizeimage = fmt->fmt.pix.sizeimage;
 	
 	return 0;	
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
+int isp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 			     			struct v4l2_format *f)
 {
-visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
 	struct v4l2_format *fmt;
-	
+	int i;
+	struct vvcam_isp_dev *isp_dev = ctx->device->isp_dev;
+
 	isp_mimo_v4l2_m2m_ioctl_try_fmt_out(file, priv, f);
 
 	fmt = isp_mimo_get_format(ctx, f->type);
@@ -393,15 +1663,31 @@ visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 		return -EINVAL;
 
 	fmt->fmt.pix = f->fmt.pix;
+	fmt->fmt.pix.sizeimage = f->fmt.pix.sizeimage;
+	fmt->fmt.pix.width = f->fmt.pix.width;
+	fmt->fmt.pix.height = f->fmt.pix.height;
+	fmt->fmt.pix.pixelformat = f->fmt.pix.pixelformat;
 
+	isp_dev->out_sizeimage = f->fmt.pix.sizeimage;
+	isp_dev->out_w = f->fmt.pix.width;
+	isp_dev->out_h = f->fmt.pix.height;
+	isp_dev->out_fmt = f->fmt.pix.pixelformat;
+	for (i = 0; i < ARRAY_SIZE(visp_raw_fmts); i++) {
+		if (visp_mp_fmts[i].fourcc == f->fmt.pix_mp.pixelformat) {
+			isp_dev->out_fmt = visp_raw_fmts[i].code;
+			break;
+		}
+	}
 	return 0;	
 }
-  int isp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
+
+int isp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 			     			struct v4l2_format *f)
 {
-visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
 	struct v4l2_format *fmt;
+	int i;
+	struct vvcam_isp_dev *isp_dev = ctx->device->isp_dev;
 	
 	isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(file, priv, f);
 
@@ -411,95 +1697,102 @@ visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 		return -EINVAL;
 
 	fmt->fmt.pix = f->fmt.pix;
+	fmt->fmt.pix.sizeimage = f->fmt.pix.sizeimage;
+	fmt->fmt.pix.width = f->fmt.pix.width;
+	fmt->fmt.pix.height = f->fmt.pix.height;
+	fmt->fmt.pix.pixelformat = f->fmt.pix.pixelformat;
+
+	isp_dev->cap_sizeimage = f->fmt.pix.sizeimage;
+	isp_dev->cap_w = f->fmt.pix.width;
+	isp_dev->cap_h = f->fmt.pix.height;
+	for (i = 0; i < ARRAY_SIZE(visp_mp_fmts); i++) {
+		if (visp_mp_fmts[i].fourcc == f->fmt.pix_mp.pixelformat) {
+			isp_dev->cap_fmt = visp_mp_fmts[i].code;
+			break;
+		}	
+	}
+
+	isp_dev->cap_fmt = f->fmt.pix.pixelformat;
 
 	return 0;	
 }
 
-
-
-  int isp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
+int isp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
                            			enum v4l2_buf_type type)
 {
-visp_pr_debug("===== [VISP_M2M] %s : %d\n",  __func__, __LINE__);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) fh;
 
-        return v4l2_m2m_streamon(file, ctx->fh.m2m_ctx, type);
+	return v4l2_m2m_streamon(file, ctx->fh.m2m_ctx, type);
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
+int isp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
                             			enum v4l2_buf_type type)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",  __func__, __LINE__);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
 
-        return v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, type);
-
+	return v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, type);
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
+int isp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
                             		struct v4l2_requestbuffers *rb)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d count [%d] type [%d]\n",  __func__, __LINE__,rb->count, rb->type);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-        return v4l2_m2m_ioctl_reqbufs(file, ctx->fh.m2m_ctx, rb);
+    return v4l2_m2m_ioctl_reqbufs(file, ctx->fh.m2m_ctx, rb);
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
+int isp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
                             			struct v4l2_buffer *buf)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d buf index [%d] type[%d] \n",  __func__, __LINE__,buf->index,buf->type);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-        return v4l2_m2m_ioctl_querybuf(file, ctx->fh.m2m_ctx, buf);
+    return v4l2_m2m_ioctl_querybuf(file, ctx->fh.m2m_ctx, buf);
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
+int isp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
                             			struct v4l2_buffer *buf)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",  __func__, __LINE__);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-        return v4l2_m2m_ioctl_qbuf(file, ctx->fh.m2m_ctx, buf);
+    return v4l2_m2m_ioctl_qbuf(file, ctx->fh.m2m_ctx, buf);
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
+int isp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
                             			struct v4l2_buffer *buf)
 {
 	int status;
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-        status = v4l2_m2m_ioctl_dqbuf(file, ctx->fh.m2m_ctx, buf);
-	visp_pr_info("[VISP_M2M] %s : %d buf index actual [%d] real [%d] for buf type [%d]\n",  __func__, __LINE__,
-				buf->index, ctx->device->isp_dev->isp_dq_out_index,buf->type);
+
+	status = v4l2_m2m_ioctl_dqbuf(file, ctx->fh.m2m_ctx, buf);
+
 	return status;
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
+int isp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
                             			struct v4l2_buffer *buf)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",  __func__, __LINE__);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-        return v4l2_m2m_ioctl_prepare_buf(file, ctx->fh.m2m_ctx, buf);
+
+	return v4l2_m2m_ioctl_prepare_buf(file, ctx->fh.m2m_ctx, buf);
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
+int isp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
                             		struct v4l2_create_buffers *create)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d index %d count %d\n",  __func__, __LINE__,create->index, create->count);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-        return v4l2_m2m_ioctl_create_bufs(file, ctx->fh.m2m_ctx, create);
+
+	return v4l2_m2m_ioctl_create_bufs(file, ctx->fh.m2m_ctx, create);
 }
 
-  int isp_mimo_v4l2_m2m_ioctl_expbuf(struct file *file, void *fh,
+int isp_mimo_v4l2_m2m_ioctl_expbuf(struct file *file, void *fh,
                             		struct v4l2_exportbuffer *eb)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",  __func__, __LINE__);
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-        return v4l2_m2m_ioctl_expbuf(file, ctx->fh.m2m_ctx, eb);
+
+	return v4l2_m2m_ioctl_expbuf(file, ctx->fh.m2m_ctx, eb);
 }
 
-  int isp_mimo_queue_setup(struct vb2_queue *vq,
+int isp_mimo_queue_setup(struct vb2_queue *vq,
 			   unsigned int *nbuffers, unsigned int *nplanes,
 			   unsigned int sizes[], struct device *alloc_devs[])
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d count=%d \n",__func__, __LINE__,*nbuffers);
 	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(vq);
 
 	struct v4l2_format *fmt;
@@ -510,15 +1803,11 @@ visp_pr_debug("===== [VISP_M2M] %s : %d\n",  __func__, __LINE__);
 
 	*nplanes = 1;	
 	sizes[0] = fmt->fmt.pix.sizeimage;
-
-	//visp_v4l2_dbg(1, debug, v4l2_dev, "get %d buffer(s) of size %d each.\n", count, sizes[0]);
-
 	return 0;
 }
 
-  int isp_mimo_buf_prepare(struct vb2_buffer *vb)
+int isp_mimo_buf_prepare(struct vb2_buffer *vb)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
 
 	struct v4l2_format *fmt;
@@ -527,7 +1816,6 @@ visp_pr_debug("===== [VISP_M2M] %s : %d\n",  __func__, __LINE__);
 	if(IS_ERR(fmt))
 		return -EINVAL;
 
-
 	visp_v4l2_dbg(1, debug, v4l2_dev, "type: %d\n", vb->vb2_queue->type);
 
 	vb2_set_plane_payload(vb, 0, fmt->fmt.pix.sizeimage);
@@ -535,27 +1823,24 @@ visp_pr_debug("===== [VISP_M2M] %s : %d\n",  __func__, __LINE__);
 	return 0;
 }
 
-  void isp_mimo_buf_queue(struct vb2_buffer *vb)
+void isp_mimo_buf_queue(struct vb2_buffer *vb)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
 	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
 
 	v4l2_m2m_buf_queue(ctx->fh.m2m_ctx, vbuf);
 }
 
-  int isp_mimo_start_streaming(struct vb2_queue *q, unsigned int count)
+int isp_mimo_start_streaming(struct vb2_queue *q, unsigned int count)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d count=%d \n",__func__, __LINE__,count);
 	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(q);
 
 	ctx->sequence = 0;
 	return 0;
 }
 
-  void isp_mimo_stop_streaming(struct vb2_queue *q)
+void isp_mimo_stop_streaming(struct vb2_queue *q)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(q);
 	struct vb2_v4l2_buffer *vbuf;
 
@@ -571,10 +1856,9 @@ visp_pr_debug("===== [VISP_M2M] %s : %d\n",  __func__, __LINE__);
 }
 
 
-  int queue_init(void *priv, struct vb2_queue *src_vq,
+int queue_init(void *priv, struct vb2_queue *src_vq,
 		      struct vb2_queue *dst_vq)
 {
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	struct isp_mimo_ctx *ctx = priv;
 	int ret;
 
@@ -614,25 +1898,18 @@ int isp_mimo_open(struct file *file)
 	static char c=0;
 
 	++device_open_count;
-	visp_pr_debug("ENTER ===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
-	visp_pr_debug("===== [VISP_M2M] Device opened by process: %s [PID: %d] total device_open_count [%d] \n", 
-					current->comm, current->pid, device_open_count);
-
-	if(!strcmp(current->comm,"v4l_id")) {
-        	visp_pr_debug("===== [VISP_M2M] Device opened %d times \n", device_open_count);
-		//return 0;
-	}
 
 	struct isp_mimo_ctx *ctx = NULL;
 
 	struct isp_mimo *device = video_drvdata(file);
 	int rc = 0;
+	int ret = 0;
 
 
 	if (mutex_lock_interruptible(&device->lock))
 		return -ERESTARTSYS;
+
 	if(!ctx) {
-		visp_pr_debug("===== [VISP_M2M] %s : %d create a new CTX .. \n",__func__, __LINE__);
 		ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 		if (!ctx) {
 			rc = -ENOMEM;
@@ -668,86 +1945,60 @@ int isp_mimo_open(struct file *file)
 		ctx->fmt[FMT_CAPTURE].fmt.pix.height = DEFAULT_HEIGHT;
 		ctx->fmt[FMT_CAPTURE].fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
 
-		visp_v4l2_dbg(1, debug, v4l2_dev, "[v4l2] Created instance: [0x%x], m2m_ctx: [0x%x]\n", ctx, ctx->fh.m2m_ctx);
-
-
 		if(!c) {
-			IspDeviceCreateMIMO(device->isp_dev,0);
-			visp_pr_debug("=====Done IspDeviceCreateMIMO [VISP_M2M] %s : %d\n",__func__, __LINE__);
-		}else {
-			visp_pr_debug("===== [VISP_M2M] %s : %d device already opened ..\n",__func__, __LINE__);
+			ret = IspDeviceCreateMIMO(device->isp_dev,0);
+			if (ret)
+				goto open_unlock;
 		}
 		c = 1;
 	} else {
 		file->private_data =  &ctx->fh;
 	}
-	visp_pr_debug("=====open [VISP_M2M] %s : %d ctx 0x%x m2m_ctx 0x%x \n",__func__, __LINE__,ctx, ctx->fh.m2m_ctx);
 
 open_unlock:
 	mutex_unlock(&device->lock);
-	visp_pr_debug("EXIT ===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	return rc;
 }
 
-  int isp_mimo_release(struct file *file)
+int isp_mimo_release(struct file *file)
 {
-#if 0
-	static int device_close_count=0;
-	visp_pr_debug("=====ENTER [VISP_M2M] %s : %d total device_close_count [%d] \n",__func__, __LINE__, ++device_close_count);
-#endif
-
 	struct isp_mimo *device = video_drvdata(file);
 	struct isp_mimo_ctx *ctx = file2ctx(file);
-
-	visp_pr_debug("=====release [VISP_M2M] %s : %d ctx 0x%x m2m_ctx 0x%x \n",__func__, __LINE__,ctx, ctx->fh.m2m_ctx);
-
-#if 1
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
 	mutex_lock(&device->lock);
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
 	mutex_unlock(&device->lock);
 	kfree(ctx);
-	visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
-#else
-	v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
-	visp_pr_err("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
-
-	v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
-	visp_pr_err("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
-#endif
+//	v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
+//	v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 	visp_pr_debug("=====EXIT [VISP_M2M] %s : %d\n",__func__, __LINE__);
 
 	return 0;
 }
 
-
-
-
 int isp_mimo_probe(struct platform_device *pdev)
 {
 	static int probe_cnt = 0;
-	if(probe_cnt >= MAX_SUPPORTED_DEVICE_COUNT){
-		visp_pr_debug("[VISP_M2M] %s : %d Skipping unsupported probe cnt [%d] for pdev[0x%x]..\n",__func__, __LINE__, probe_cnt,pdev);
-		return 0;
-	}
-	pdev->id = probe_cnt;
-	visp_pr_debug("[VISP_M2M] %s : %d pdev[0x%x] num_res[%d] id[%d] id_auto[%d] .. \n",__func__, __LINE__,pdev, pdev->num_resources, pdev->id, pdev->id_auto);
-
 	struct isp_mimo *device;
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	struct video_device *vfd;
-	struct v4l2_device *v4l2_dev = &device->v4l2_dev;
+	struct v4l2_device *v4l2_dev;
 	int ret = 0;
+
+	if(probe_cnt >= MAX_SUPPORTED_DEVICE_COUNT){
+		return 0;
+	}
+	pdev->id = probe_cnt;
 
 	device = devm_kzalloc(dev, sizeof(*device), GFP_KERNEL);
 	if(!device)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	v4l2_dev = &device->v4l2_dev;
 
-	visp_pr_info("===== [VISP_M2M] %s : %d v4l2_dev = [0x%x] \n",__func__, __LINE__,&device->v4l2_dev);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
 	ret = v4l2_device_register(&pdev->dev, &device->v4l2_dev);
 	if (ret) {
@@ -763,8 +2014,6 @@ int isp_mimo_probe(struct platform_device *pdev)
 	video_set_drvdata(vfd, device);
 	platform_set_drvdata(pdev, device);
 
-//	struct isp_mimo *device1 = platform_get_drvdata(pdev);
-	
 	snprintf(vfd->name, sizeof(vfd->name), "%s", MEM2MEM_NAME);
 
 	device->m2m_dev = v4l2_m2m_init(&m2m_ops);
@@ -775,14 +2024,14 @@ int isp_mimo_probe(struct platform_device *pdev)
 	}
 
 	ret = video_register_device(vfd, VFL_TYPE_VIDEO, 0);
-        if (ret) {
+	if (ret) {
 		v4l2_err(v4l2_dev, "Failed to register video device\n");
 		goto err_m2m;
 	}
-	
+
 	device->isp_dev = devm_kzalloc(&pdev->dev, sizeof(struct vvcam_isp_dev), GFP_KERNEL);
 	if (!device->isp_dev)
-        	return -ENOMEM;
+		return -ENOMEM;
 
 	mutex_init(&device->isp_dev->mlock);
 	mutex_init(&device->isp_dev->ctrl_lock);
@@ -791,14 +2040,13 @@ int isp_mimo_probe(struct platform_device *pdev)
 	device->isp_dev->isp_rpu = 0;
 	ret = xlnx_link_mbox(device->isp_dev);
 	if (ret) {
-        	dev_err(&pdev->dev, "failed to init mbox\n");
+		dev_err(&pdev->dev, "failed to init mbox\n");
 		return -EINVAL;
 	}
+
 	vvcam_isp_pads_init(device->isp_dev);
 
 	probe_cnt +=1;
-
-	visp_pr_info("===== [VISP_M2M] %s : %d done \n",__func__, __LINE__);
 
 	return 0;
 
@@ -815,12 +2063,11 @@ void isp_mimo_remove(struct platform_device *pdev)
 	struct isp_mimo *device = platform_get_drvdata(pdev);
 	if(pdev->id >= 0) {
 		video_unregister_device(&device->video_dev);
-        	v4l2_m2m_release(device->m2m_dev);
-	        v4l2_device_unregister(&device->v4l2_dev);
+		v4l2_m2m_release(device->m2m_dev);
+		v4l2_device_unregister(&device->v4l2_dev);
 	}
 	return;
 }
-
 
 MODULE_DEVICE_TABLE(of, isp_mimo_dt_ids);
 module_platform_driver(isp_mimo_driver);

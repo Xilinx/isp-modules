@@ -32,7 +32,13 @@
 
 #define MAX_WIDTH (1920) 
 #define MAX_HEIGHT (1080) 
+#define VISPM2M_MIN_WIDTH (64)
+#define VISPM2M_MIN_HEIGHT (64)
 
+#define VISPM2M_MAX_WIDTH (4096)
+#define VISPM2M_MAX_HEIGHT (4096)
+
+#
 #define FMT_OUTPUT	(0)
 #define FMT_CAPTURE	(1)
 #define FMT_MAX	(2)
@@ -45,8 +51,15 @@ struct isp_mimo {
 	struct video_device	video_dev;
 	struct v4l2_m2m_dev	*m2m_dev;
 	struct mutex 		lock;
-        struct vvcam_isp_dev 	*isp_dev;
+    struct vvcam_isp_dev 	*isp_dev;
 };
+
+struct visp_format
+{
+	uint32_t code;
+	uint32_t fourcc;
+};
+
 
 struct isp_mimo_ctx {	
 	struct v4l2_fh		fh;

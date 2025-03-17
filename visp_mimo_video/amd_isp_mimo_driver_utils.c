@@ -39,9 +39,8 @@ int IspDeviceCreateMIMO(struct vvcam_isp_dev *isp_dev , uint8_t Port)
     //mutex_lock(&isp_dev->port_lock[Port]);
 
 	dev_info(isp_dev->dev, "RKC-ISPDRV_APP PORT = %u %s %d ", Port, __func__, __LINE__);
-
+	pr_err("%s %d\n", __func__, __LINE__);
     memset(&CamConfig, 0 ,sizeof(CamConfig)); // RKC-UNDO to COMMENT
-
 
     CamConfig.ispHwId = 0; //isp_dev->id; //--MSLPK
     CamConfig.inputCfg.inputType = CAMDEV_INPUT_TYPE_IMAGE ; //CAMDEV_INPUT_TYPE_SENSOR; //--MSLPK
@@ -49,9 +48,9 @@ int IspDeviceCreateMIMO(struct vvcam_isp_dev *isp_dev , uint8_t Port)
         return VSI_SUCCESS;
     }
 
- 	CamConfig.workCfg.workMode = CAMDEV_WORK_MODE_RDMA; //CAMDEV_WORK_MODE_STREAM; //MSLPK
-       	CamConfig.workCfg.modeCfg.stream.portId =  0; //Port + 1;  //"1:CAMDEV_MCM_PORT_0, 2:CAMDEV_MCM_PORT_1, ..."
-        dev_err(isp_dev->dev, "%s %d port = %d %d\n",__func__,__LINE__,Port,CamConfig.workCfg.modeCfg.stream.portId);
+	CamConfig.workCfg.workMode = CAMDEV_WORK_MODE_RDMA; //CAMDEV_WORK_MODE_STREAM; //MSLPK
+	CamConfig.workCfg.modeCfg.stream.portId =  0; //Port + 1;  //"1:CAMDEV_MCM_PORT_0, 2:CAMDEV_MCM_PORT_1, ..."
+	dev_err(isp_dev->dev, "%s %d port = %d %d\n",__func__,__LINE__,Port,CamConfig.workCfg.modeCfg.stream.portId);
 
 	CamConfig.outputCfg.outputType = CAMDEV_OUTPUT_TYPE_MEMORY;
     CamConfig.priority = CAMDEV_SEQ_PRI_0;
@@ -63,7 +62,7 @@ int IspDeviceCreateMIMO(struct vvcam_isp_dev *isp_dev , uint8_t Port)
         RetVal = VSI_ERR_TIMEOUT;
         return RetVal;
     }
-pr_err("[MSLPK] ----- done creating cam device %s %d [%p] [%p]\n",__func__,__LINE__,isp_dev->IspPorts[Port].CamDeviceHandle,IspPort->CamDeviceHandle);
+	pr_err("[MSLPK] ----- done creating cam device %s %d [%p] [%p]\n",__func__,__LINE__,isp_dev->IspPorts[Port].CamDeviceHandle,IspPort->CamDeviceHandle);
 
 #if 1
     Format= kmalloc(sizeof(MediaFmt), GFP_KERNEL);
@@ -75,19 +74,22 @@ pr_err("[MSLPK] ----- done creating cam device %s %d [%p] [%p]\n",__func__,__LIN
     } 
 
     memset(Format, 0, sizeof(MediaFmt));
-    Format->Width       = 1920;//IspPort->SinkInfo.Rect.Width; //--MSLPK
+    Format->Width       = 1920; // isp_dev->out_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
     Format->Height      = 1080; //IspPort->SinkInfo.Rect.Height;
-    Format->PixelFormat = MEDIA_PIX_FMT_SBGGR8; //IspPort->SinkInfo.Fourcc;
-pr_err("[MSLPK] ----- at %s %d w %d h %d fmt %d \n",__func__,__LINE__,Format->Width,Format->Height,Format->PixelFormat);
+    Format->PixelFormat = MEDIA_PIX_FMT_SBGGR8;//isp->out_fmt; //IspPort->SinkInfo.Fourcc;
+	pr_err("[MSLPK] ----- at %s %d w %d h %d fmt %d \n",__func__,__LINE__,Format->Width,Format->Height,Format->PixelFormat);
 
     //RetVal= MediaIspHalSetFmt(isp_dev , Port * MEDIA_ISP_PORT_PAD_COUNT , Format); //MSLPK
-    RetVal= MediaIspHalSetFmt(isp_dev , Port * MEDIA_ISP_PORT_PAD_COUNT , Format); //MSLPK
+    RetVal= MediaIspHalSetFmt(isp_dev , 0, Format); //MSLPK
     if (RetVal != VSI_SUCCESS) {
         dev_err(isp_dev->dev,"%s: MediaIspHalSetFmt failed %d", __func__, RetVal);
 //        goto ERR_TO_UNREGISTER_SENSOR_HANDLE;
     }
-    Format->PixelFormat = MEDIA_PIX_FMT_RGB24; //IspPort->SinkInfo.Fourcc;
-    RetVal= MediaIspHalSetFmt(isp_dev , 1 , Format); //MSLPK
+
+	Format->Width       = 1920;//isp_dev->cap_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
+    Format->Height      = 1080;//isp_dev->cap_h; //IspPort->SinkInfo.Rect.Height;
+    Format->PixelFormat = MEDIA_PIX_FMT_RGB24; // isp_dev->cap_fmt; //IspPort->SinkInfo.Fourcc;
+    RetVal= MediaIspHalSetFmt(isp_dev , 1, Format); //MSLPK
     if (RetVal != VSI_SUCCESS) {
         dev_err(isp_dev->dev,"%s: MediaIspHalSetFmt failed %d", __func__, RetVal);
 //        goto ERR_TO_UNREGISTER_SENSOR_HANDLE;
