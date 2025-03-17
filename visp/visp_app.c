@@ -1024,7 +1024,7 @@ int MediaIspHalSetFmt(struct visp_dev *isp_dev, int Pad, MediaFmt *Format)
 	struct v4l2_subdev_format *SdFmt;
 	int RetVal = 0;
 
-	SdFmt = kmalloc(sizeof(SdFmt), GFP_KERNEL);
+	SdFmt = kmalloc(sizeof(struct v4l2_subdev_format), GFP_KERNEL);
 	if (!SdFmt)
 	{
 		dev_err(isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__, __LINE__);
