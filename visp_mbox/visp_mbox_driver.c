@@ -181,7 +181,7 @@ static void visp_mb_rx_cb(struct mbox_client *cl, void *msg)
 	if (rpu != NULL)
 	{
 		/* Schedule work to handle the received event */
-		if (queue_work(system_wq, &rpu->mbox_work))
+		if ( queue_work_on(1, system_wq, &rpu->mbox_work) )
 		{
 		}
 		else
