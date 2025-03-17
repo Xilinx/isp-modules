@@ -39,7 +39,7 @@ int IspDeviceCreateMIMO(struct vvcam_isp_dev *isp_dev , uint8_t Port)
     //mutex_lock(&isp_dev->port_lock[Port]);
 
 	dev_info(isp_dev->dev, "RKC-ISPDRV_APP PORT = %u %s %d ", Port, __func__, __LINE__);
-	pr_err("%s %d\n", __func__, __LINE__);
+
     memset(&CamConfig, 0 ,sizeof(CamConfig)); // RKC-UNDO to COMMENT
 
     CamConfig.ispHwId = 0; //isp_dev->id; //--MSLPK
@@ -74,22 +74,22 @@ int IspDeviceCreateMIMO(struct vvcam_isp_dev *isp_dev , uint8_t Port)
     } 
 
     memset(Format, 0, sizeof(MediaFmt));
-    Format->Width       = 1920; // isp_dev->out_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
-    Format->Height      = 1080; //IspPort->SinkInfo.Rect.Height;
+    Format->Width       = isp_dev->out_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
+    Format->Height      = isp_dev->out_h; //IspPort->SinkInfo.Rect.Height;
     Format->PixelFormat = MEDIA_PIX_FMT_SBGGR8;//isp->out_fmt; //IspPort->SinkInfo.Fourcc;
 	pr_err("[MSLPK] ----- at %s %d w %d h %d fmt %d \n",__func__,__LINE__,Format->Width,Format->Height,Format->PixelFormat);
 
     //RetVal= MediaIspHalSetFmt(isp_dev , Port * MEDIA_ISP_PORT_PAD_COUNT , Format); //MSLPK
-    RetVal= MediaIspHalSetFmt(isp_dev , 0, Format); //MSLPK
+    RetVal= MediaIspHalSetFmt(isp_dev , Port * MEDIA_ISP_PORT_PAD_COUNT , Format); //MSLPK
     if (RetVal != VSI_SUCCESS) {
         dev_err(isp_dev->dev,"%s: MediaIspHalSetFmt failed %d", __func__, RetVal);
 //        goto ERR_TO_UNREGISTER_SENSOR_HANDLE;
     }
 
-	Format->Width       = 1920;//isp_dev->cap_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
-    Format->Height      = 1080;//isp_dev->cap_h; //IspPort->SinkInfo.Rect.Height;
-    Format->PixelFormat = MEDIA_PIX_FMT_RGB24; // isp_dev->cap_fmt; //IspPort->SinkInfo.Fourcc;
-    RetVal= MediaIspHalSetFmt(isp_dev , 1, Format); //MSLPK
+	Format->Width       = isp_dev->cap_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
+    Format->Height      = isp_dev->cap_h; //IspPort->SinkInfo.Rect.Height;
+    Format->PixelFormat = isp_dev->cap_fmt; //IspPort->SinkInfo.Fourcc;
+    RetVal= MediaIspHalSetFmt(isp_dev , 1 , Format); //MSLPK
     if (RetVal != VSI_SUCCESS) {
         dev_err(isp_dev->dev,"%s: MediaIspHalSetFmt failed %d", __func__, RetVal);
 //        goto ERR_TO_UNREGISTER_SENSOR_HANDLE;

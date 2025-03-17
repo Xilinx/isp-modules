@@ -7,6 +7,7 @@
 #include <linux/spinlock.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
+//<REMOVED IN M13> #include <linux/arm-smccc.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
@@ -16,24 +17,33 @@
 #include <media/v4l2-mc.h>
 #include <media/v4l2-mediabus.h>
 #include <media/videobuf2-dma-contig.h>
+
+//#include "visp_ctrl.h"
+//#include "visp_driver.h"
+//#include "visp_event.h"
+//#include "visp_procfs.h"
+//#include "visp_v4l2_common.h"
+//#include "visp_v4l2_std_exts.h"
+/*RKC-TODO Check below headers requirement in M13*/
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+
+
 #include <amd_isp_mimo_driver.h>
 #include <visp_v4l2_std_exts.h>
 
-//#define DEBUG_ENABLE
+#define DEBUG_ENABLE
 /* version 1.0 */
 #ifndef DEBUG_ENABLE
-#define visp_pr_info(fmt, ...)
-#define visp_pr_debug(fmt, ...)
-#define visp_pr_err(fmt, ...)
+#define visp_pr_info(fmt, ...) ;
+#define isp_pr_debug(fmt, ...) ;
+#define visp_pr_err(fmt, ...) ;
 #else
 #define visp_pr_info pr_err
 #define visp_pr_debug pr_err
 #define visp_pr_err pr_err
 #endif
-
-#define visp_v4l2_dbg(fmt, ...);
+#define visp_v4l2_dbg(fmt, ...) ;
 
 struct visp_format visp_mp_fmts[] = {
 	{
@@ -112,6 +122,273 @@ struct visp_format visp_mp_fmts[] = {
 		.fourcc = V4L2_PIX_FMT_RGB24,
 		.code = MEDIA_BUS_FMT_RGB888_1X24,
 	},
+#if 0
+	{
+		.fourcc = V4L2_PIX_FMT_Y10BPACK,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+{
+		.fourcc = V4L2_PIX_FMT_RGB24DWA,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+	},
+
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR14,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG14,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG14,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB14,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR16,
+		.code = MEDIA_BUS_FMT_SBGGR16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG16,
+		.code = MEDIA_BUS_FMT_SGBRG16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG16,
+		.code = MEDIA_BUS_FMT_SGRBG16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB16,
+		.code = MEDIA_BUS_FMT_SRGGB16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR24,
+		.code = MEDIA_BUS_FMT_SBGGR24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG24,
+		.code = MEDIA_BUS_FMT_SGBRG24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG24,
+		.code = MEDIA_BUS_FMT_SGRBG24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB24,
+		.code = MEDIA_BUS_FMT_SRGGB24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P00BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P00DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	// {
+	//     .fourcc    = V4L2_PIX_FMT_P02BPACK,
+	//     .code      = MEDIA_BUS_FMT_YUYV12_2X12,
+	// },
+	{
+		.fourcc = V4L2_PIX_FMT_P20BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P20DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	// {
+	//     .fourcc    = V4L2_PIX_FMT_P22BPACK,
+	//     .code      = MEDIA_BUS_FMT_YUYV12_2X12,
+	// },
+	{
+		.fourcc = V4L2_PIX_FMT_I20BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_M48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I48DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I40DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24DWA,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24P,
+		.code = MEDIA_BUS_FMT_RGB888_3X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR10BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG10BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG10BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB10BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR10DWA,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG10DWA,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG10DWA,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB10DWA,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR12BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG12BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG12BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB12BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR12DWA,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG12DWA,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG12DWA,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB12DWA,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR14BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG14BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG14BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB14BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR14DWA,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG14DWA,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG14DWA,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB14DWA,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR14,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG14,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG14,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB14,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR16,
+		.code = MEDIA_BUS_FMT_SBGGR16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG16,
+		.code = MEDIA_BUS_FMT_SGBRG16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG16,
+		.code = MEDIA_BUS_FMT_SGRBG16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB16,
+		.code = MEDIA_BUS_FMT_SRGGB16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR24,
+		.code = MEDIA_BUS_FMT_SBGGR24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG24,
+		.code = MEDIA_BUS_FMT_SGBRG24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG24,
+		.code = MEDIA_BUS_FMT_SGRBG24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB24,
+		.code = MEDIA_BUS_FMT_SRGGB24_1X24,
+	},
+#endif
 };
 
 struct visp_format visp_sp_fmts[] = {
@@ -209,7 +486,7 @@ struct visp_format visp_sp_fmts[] = {
 	},
 };
 
-// input path
+// main path
 struct visp_format visp_raw_fmts[] = {
 	{
 		.fourcc = V4L2_PIX_FMT_SBGGR8,
@@ -403,8 +680,13 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
     }
 }
 
-void isp_mimo_device_run(void *priv)
+  void isp_mimo_device_run(void *priv)
 {
+#if 0
+	static int a=0;
+	visp_pr_info("===== [VISP_M2M] %s : %d device run count [%d] \n",__func__, __LINE__,++a);
+#endif
+
 	struct isp_mimo_ctx *ctx = priv;
 	struct isp_mimo *device = ctx->device;
 	struct vb2_v4l2_buffer *src_vb, *dst_vb;
@@ -413,6 +695,8 @@ void isp_mimo_device_run(void *priv)
 	struct vb2_v4l2_buffer *src_buf, *dst_buf;
 	int s_cnt, d_cnt;
 	struct isp_mimo_ctx *curr_ctx=ctx;
+	int RetVal;
+    MediaFmt *Format=NULL;
 
 	s_cnt = v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx);
 	d_cnt = v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx);
@@ -421,14 +705,43 @@ void isp_mimo_device_run(void *priv)
 	dst_buf = v4l2_m2m_next_dst_buf(ctx->fh.m2m_ctx);
 
     inspect_source_buffers(ctx->fh.m2m_ctx, input_addr, output_addr);
+
 	device->isp_dev->ip_a[0]=input_addr[0];
 	device->isp_dev->ip_a[1]=input_addr[0];
 	device->isp_dev->op_a[0]=output_addr[0];
 	device->isp_dev->op_a[1]=output_addr[1];
 	device->isp_dev->op_a[2]=output_addr[2];
 	device->isp_dev->op_a[3]=output_addr[3];
+#if 1
+    Format= kmalloc(sizeof(MediaFmt), GFP_KERNEL);
+    if(!Format)
+    {
+        visp_pr_err(",FAILED TO KMALLOC %s %d\n",__func__,__LINE__);
+        RetVal = -ENOMEM;
+      //  goto ERR_TO_UNREGISTER_SENSOR_HANDLE;
+    }
 
-	MediaIspDeviceStreamOn(device->isp_dev, 0, CAMDEV_BUFCHAIN_RDMA);
+    memset(Format, 0, sizeof(MediaFmt));
+    Format->Width       = device->isp_dev->out_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
+    Format->Height      = device->isp_dev->out_h; //IspPort->SinkInfo.Rect.Height;
+    Format->PixelFormat = device->isp_dev->out_fmt; //IspPort->SinkInfo.Fourcc;
+
+    //RetVal= MediaIspHalSetFmt(isp_dev , Port * MEDIA_ISP_PORT_PAD_COUNT , Format); //MSLPK
+    RetVal= MediaIspHalSetFmt(device->isp_dev , 0 , Format); //MSLPK
+    if (RetVal != VSI_SUCCESS) {
+        visp_pr_err("%s: MediaIspHalSetFmt failed %d\n", __func__, RetVal);
+//        goto ERR_TO_UNREGISTER_SENSOR_HANDLE;
+    }
+	Format->Width       = device->isp_dev->cap_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
+    Format->Height      = device->isp_dev->cap_h; //IspPort->SinkInfo.Rect.Height;
+    Format->PixelFormat = device->isp_dev->cap_fmt; //IspPort->SinkInfo.Fourcc;
+    RetVal= MediaIspHalSetFmt(device->isp_dev , 1 , Format); //MSLPK
+    if (RetVal != VSI_SUCCESS) {
+        visp_pr_err("%s: MediaIspHalSetFmt failed %d\n", __func__, RetVal);
+//        goto ERR_TO_UNREGISTER_SENSOR_HANDLE;
+    }
+#endif
+    MediaIspDeviceStreamOn(device->isp_dev, 0, CAMDEV_BUFCHAIN_RDMA);
 	MediaIspDeviceDeque(device->isp_dev, 0);
 
 	device->isp_dev->apu_wait_for_isp_frame_done = 1;
@@ -448,9 +761,9 @@ void isp_mimo_device_run(void *priv)
 	}
 	src_vb->sequence = dst_vb->sequence = curr_ctx->sequence++;
 	v4l2_m2m_job_finish(device->m2m_dev, curr_ctx->fh.m2m_ctx);
-#if 1 //--TODO
-//	MediaIspStreamOff(device->isp_dev, 0, 6);
-//	MediaIspStreamOff(device->isp_dev, 0, 0);
+#if 0 //--TODO
+	MediaIspStreamOff(device->isp_dev, 0, 6);
+	MediaIspStreamOff(device->isp_dev, 0, 0);
 #endif
 }
 
@@ -1275,10 +1588,9 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 }
 
 
-struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type);
-struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type)
+  struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type);
+  struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_type type)
 {
-	visp_pr_info("===== [VISP_M2M] %s : %d v4l2_buf_type is %d out_type %d cap_type %d \n",__func__, __LINE__,type,V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 	struct isp_mimo *device = ctx->device;
 	struct v4l2_device *v4l2_dev = &device->v4l2_dev;
 
@@ -1295,10 +1607,9 @@ struct v4l2_format* isp_mimo_get_format(struct isp_mimo_ctx *ctx, enum v4l2_buf_
 	}
 }
 
-int isp_mimo_v4l2_m2m_ioctl_querycap(struct file *file, void *priv,
+  int isp_mimo_v4l2_m2m_ioctl_querycap(struct file *file, void *priv,
 			   		struct v4l2_capability *cap)
 {
-	visp_pr_info("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 	strscpy(cap->driver, MEM2MEM_NAME, sizeof(cap->driver));
 	strscpy(cap->card, MEM2MEM_NAME, sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info),
@@ -1505,21 +1816,18 @@ static int visp_m2m_cal_imagesize(struct v4l2_format *f)
 	}
 
 	return 0;
-}
 
+}
 int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void*priv,
 					struct v4l2_format *f)
 {
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
+	struct vvcam_isp_dev *isp_dev = ctx->device->isp_dev;
 	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
 	struct v4l2_format *fmt;
 	int i;
 	int ret = 0;
 
-	if (pix->width < VISPM2M_MIN_WIDTH || pix->width >  VISPM2M_MAX_WIDTH||
-	    pix->height < VISPM2M_MIN_HEIGHT || pix->height > VISPM2M_MAX_HEIGHT) {
-		visp_pr_err("Wrong input parameters %d, wxh: %dx%d.\n", f->type, f->fmt.pix.width, f->fmt.pix.height);
-	}
 	/*
 	 * V4L2 specification suggests the driver corrects the
 	 * format struct if any of the dimensions is unsupported
@@ -1535,17 +1843,16 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void*priv,
 		pix->width = VISPM2M_MAX_WIDTH;
 
 	for (i = 0; i < ARRAY_SIZE(visp_raw_fmts); i++) {
+//		fmt = &visp_raw_fmts[i];
 		if (visp_raw_fmts[i].fourcc == f->fmt.pix_mp.pixelformat)
 			break;
 	}
 	if (i == ARRAY_SIZE(visp_raw_fmts)) {
-		visp_pr_debug("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 		return -EINVAL;
 	}
 
 	ret = visp_m2m_cal_imagesize(f);
 	if (ret) {
-		visp_pr_err("===== [VISP_M2M] %s : %d\n",__func__, __LINE__);
 		return -EINVAL;
 	}
 
@@ -1555,6 +1862,10 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void*priv,
 	fmt->fmt.pix.height = f->fmt.pix.height;
 	fmt->fmt.pix.pixelformat = f->fmt.pix.pixelformat;
 
+	isp_dev->out_sizeimage = f->fmt.pix.sizeimage;
+	isp_dev->out_w = f->fmt.pix.width;
+	isp_dev->out_h = f->fmt.pix.height;
+	isp_dev->out_fmt = f->fmt.pix.pixelformat;
 	return 0;
 }
 
@@ -1562,15 +1873,12 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 													struct v4l2_format *f)
 {
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
+	struct vvcam_isp_dev *isp_dev = ctx->device->isp_dev;
 	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
 	struct v4l2_format *fmt;
 	int i;
 	int ret;
 
-	if (pix->width < VISPM2M_MIN_WIDTH || pix->width > VISPM2M_MAX_WIDTH ||
-	    pix->height < VISPM2M_MIN_HEIGHT || pix->height > VISPM2M_MAX_HEIGHT) {
-		visp_pr_err("Wrong input parameters %d, wxh: %dx%d.\n", f->type, f->fmt.pix.width, f->fmt.pix.height);
-	}
 	/*
 	 * V4L2 specification suggests the driver corrects the
 	 * format struct if any of the dimensions is unsupported
@@ -1586,6 +1894,7 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 		pix->width = VISPM2M_MAX_WIDTH;
 
 	for (i = 0; i < ARRAY_SIZE(visp_mp_fmts); i++) {
+//		fmt = &visp_mp_fmts[i];
 		if (visp_mp_fmts[i].fourcc == f->fmt.pix_mp.pixelformat)
 			break;
 	}
@@ -1594,7 +1903,7 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 	}
 
 	ret = visp_m2m_cal_imagesize(f);
-	if (ret){
+	if (ret) {
 		return -EINVAL;
 	}
 
@@ -1604,6 +1913,10 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 	fmt->fmt.pix.height = f->fmt.pix.height;
 	fmt->fmt.pix.pixelformat = f->fmt.pix.pixelformat;
 
+	isp_dev->cap_sizeimage = f->fmt.pix.sizeimage;
+	isp_dev->cap_w = f->fmt.pix.width;
+	isp_dev->cap_h = f->fmt.pix.height;
+	isp_dev->cap_fmt = f->fmt.pix.pixelformat;
 	return 0;
 }
 
@@ -1647,14 +1960,12 @@ int isp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
 	return 0;	
 }
 
-int isp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
+  int isp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 			     			struct v4l2_format *f)
 {
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
 	struct v4l2_format *fmt;
-	int i;
-	struct vvcam_isp_dev *isp_dev = ctx->device->isp_dev;
-
+	
 	isp_mimo_v4l2_m2m_ioctl_try_fmt_out(file, priv, f);
 
 	fmt = isp_mimo_get_format(ctx, f->type);
@@ -1668,26 +1979,13 @@ int isp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 	fmt->fmt.pix.height = f->fmt.pix.height;
 	fmt->fmt.pix.pixelformat = f->fmt.pix.pixelformat;
 
-	isp_dev->out_sizeimage = f->fmt.pix.sizeimage;
-	isp_dev->out_w = f->fmt.pix.width;
-	isp_dev->out_h = f->fmt.pix.height;
-	isp_dev->out_fmt = f->fmt.pix.pixelformat;
-	for (i = 0; i < ARRAY_SIZE(visp_raw_fmts); i++) {
-		if (visp_mp_fmts[i].fourcc == f->fmt.pix_mp.pixelformat) {
-			isp_dev->out_fmt = visp_raw_fmts[i].code;
-			break;
-		}
-	}
 	return 0;	
 }
-
-int isp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
+  int isp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 			     			struct v4l2_format *f)
 {
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *) priv;
 	struct v4l2_format *fmt;
-	int i;
-	struct vvcam_isp_dev *isp_dev = ctx->device->isp_dev;
 	
 	isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(file, priv, f);
 
@@ -1701,18 +1999,6 @@ int isp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 	fmt->fmt.pix.width = f->fmt.pix.width;
 	fmt->fmt.pix.height = f->fmt.pix.height;
 	fmt->fmt.pix.pixelformat = f->fmt.pix.pixelformat;
-
-	isp_dev->cap_sizeimage = f->fmt.pix.sizeimage;
-	isp_dev->cap_w = f->fmt.pix.width;
-	isp_dev->cap_h = f->fmt.pix.height;
-	for (i = 0; i < ARRAY_SIZE(visp_mp_fmts); i++) {
-		if (visp_mp_fmts[i].fourcc == f->fmt.pix_mp.pixelformat) {
-			isp_dev->cap_fmt = visp_mp_fmts[i].code;
-			break;
-		}	
-	}
-
-	isp_dev->cap_fmt = f->fmt.pix.pixelformat;
 
 	return 0;	
 }
@@ -1737,21 +2023,21 @@ int isp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
                             		struct v4l2_requestbuffers *rb)
 {
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-    return v4l2_m2m_ioctl_reqbufs(file, ctx->fh.m2m_ctx, rb);
+        return v4l2_m2m_ioctl_reqbufs(file, ctx->fh.m2m_ctx, rb);
 }
 
 int isp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
                             			struct v4l2_buffer *buf)
 {
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-    return v4l2_m2m_ioctl_querybuf(file, ctx->fh.m2m_ctx, buf);
+        return v4l2_m2m_ioctl_querybuf(file, ctx->fh.m2m_ctx, buf);
 }
 
 int isp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
                             			struct v4l2_buffer *buf)
 {
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-    return v4l2_m2m_ioctl_qbuf(file, ctx->fh.m2m_ctx, buf);
+        return v4l2_m2m_ioctl_qbuf(file, ctx->fh.m2m_ctx, buf);
 }
 
 int isp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
@@ -1803,6 +2089,8 @@ int isp_mimo_queue_setup(struct vb2_queue *vq,
 
 	*nplanes = 1;	
 	sizes[0] = fmt->fmt.pix.sizeimage;
+
+
 	return 0;
 }
 
@@ -1815,6 +2103,7 @@ int isp_mimo_buf_prepare(struct vb2_buffer *vb)
 	fmt = isp_mimo_get_format(ctx, vb->type);
 	if(IS_ERR(fmt))
 		return -EINVAL;
+
 
 	visp_v4l2_dbg(1, debug, v4l2_dev, "type: %d\n", vb->vb2_queue->type);
 
@@ -1899,16 +2188,19 @@ int isp_mimo_open(struct file *file)
 
 	++device_open_count;
 
+	if(!strcmp(current->comm,"v4l_id")) {
+		visp_pr_debug("===== [VISP_M2M] Device opened %d times \n", device_open_count);
+		//return 0;
+	}
+
 	struct isp_mimo_ctx *ctx = NULL;
 
 	struct isp_mimo *device = video_drvdata(file);
 	int rc = 0;
-	int ret = 0;
 
 
 	if (mutex_lock_interruptible(&device->lock))
 		return -ERESTARTSYS;
-
 	if(!ctx) {
 		ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 		if (!ctx) {
@@ -1945,10 +2237,11 @@ int isp_mimo_open(struct file *file)
 		ctx->fmt[FMT_CAPTURE].fmt.pix.height = DEFAULT_HEIGHT;
 		ctx->fmt[FMT_CAPTURE].fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
 
+		visp_v4l2_dbg(1, debug, v4l2_dev, "[v4l2] Created instance: [0x%x], m2m_ctx: [0x%x]\n", ctx, ctx->fh.m2m_ctx);
 		if(!c) {
-			ret = IspDeviceCreateMIMO(device->isp_dev,0);
-			if (ret)
-				goto open_unlock;
+			IspDeviceCreateMIMO(device->isp_dev,0);
+		}else {
+			visp_pr_debug("===== [VISP_M2M] %s : %d device already opened ..\n",__func__, __LINE__);
 		}
 		c = 1;
 	} else {
@@ -1964,41 +2257,38 @@ int isp_mimo_release(struct file *file)
 {
 	struct isp_mimo *device = video_drvdata(file);
 	struct isp_mimo_ctx *ctx = file2ctx(file);
+
+
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
 	mutex_lock(&device->lock);
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
 	mutex_unlock(&device->lock);
 	kfree(ctx);
-//	v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, V4L2_BUF_TYPE_VIDEO_OUTPUT);
-//	v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
-	visp_pr_debug("=====EXIT [VISP_M2M] %s : %d\n",__func__, __LINE__);
-
 	return 0;
 }
 
 int isp_mimo_probe(struct platform_device *pdev)
 {
 	static int probe_cnt = 0;
-	struct isp_mimo *device;
-	struct device *dev = &pdev->dev;
-	struct resource *res;
-	struct video_device *vfd;
-	struct v4l2_device *v4l2_dev;
-	int ret = 0;
-
 	if(probe_cnt >= MAX_SUPPORTED_DEVICE_COUNT){
 		return 0;
 	}
 	pdev->id = probe_cnt;
 
+	struct isp_mimo *device;
+	struct device *dev = &pdev->dev;
+	struct resource *res;
+	struct video_device *vfd;
+	struct v4l2_device *v4l2_dev = &device->v4l2_dev;
+	int ret = 0;
+
 	device = devm_kzalloc(dev, sizeof(*device), GFP_KERNEL);
 	if(!device)
 		return -ENOMEM;
 
-	v4l2_dev = &device->v4l2_dev;
-
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+
 
 	ret = v4l2_device_register(&pdev->dev, &device->v4l2_dev);
 	if (ret) {
@@ -2013,7 +2303,6 @@ int isp_mimo_probe(struct platform_device *pdev)
 
 	video_set_drvdata(vfd, device);
 	platform_set_drvdata(pdev, device);
-
 	snprintf(vfd->name, sizeof(vfd->name), "%s", MEM2MEM_NAME);
 
 	device->m2m_dev = v4l2_m2m_init(&m2m_ops);

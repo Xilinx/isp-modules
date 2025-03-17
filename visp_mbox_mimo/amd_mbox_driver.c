@@ -146,9 +146,6 @@ static void my_tasklet_function(void  *data) {
     } else if (recv_cmd_id == MB_CMD_RES_SUCCESS || recv_cmd_id == MB_CMD_GET_SUCCESS) {
         complete(&mailbox_completion);
     } else if (recv_cmd_id ==  RPU_2_APU_CMD_DISPLAY_BUFFER) {
-        pr_err("%s %d recv_cmd_id %d \n",__func__,__LINE__,recv_cmd_id);
-
-	#if 1
         exported_func1 = symbol_get(Handle_Frameout_Buffer);
         if (!exported_func1) {
             pr_err("my_tasklet_function: Handle_Frameout_Buffer function not available\n");
@@ -157,7 +154,6 @@ static void my_tasklet_function(void  *data) {
         exported_func1(data_from_interrupt.data, isp_dev);
 		isp_dev->apu_wait_for_isp_frame_done = 0;
 		wake_up(&isp_dev->wq_frame_done_finished);
-	#endif
     } else {
         pr_err("my_tasklet_function: Unexpected command ID %d received\n", recv_cmd_id);
     }
@@ -167,6 +163,8 @@ int get_rpu_id(int ipi_id);
 int get_rpu_id(int ipi_id)
 {
     int rpu_id;
+
+    pr_debug("get_rpu_id: Processing IPI ID %d\n", ipi_id);
 
     /* Determine the RPU ID based on the IPI ID */
     switch (ipi_id) {
@@ -200,8 +198,6 @@ static void vvcam_isp_mb_rx_cb(struct mbox_client *cl, void *msg)
     rpu = get_rpu_dev(rpu_id);
 
     if (rpu != NULL) {
-        pr_info("vvcam_isp_mb_rx_cb: Received interrupt from RPU ID %d\n", rpu_id);
-
         /* Schedule work to handle the received event */
         if (queue_work(system_wq, &rpu->mbox_work)) {
             pr_debug("vvcam_isp_mb_rx_cb: Work scheduled for RPU ID %d\n", rpu_id);
@@ -231,6 +227,8 @@ static int vvcam_isp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
     mclient->tx_done = vvcam_isp_mb_tx_done; // Set the TX done callback
     mclient->dev = rpu->dev;
 
+    dev_dbg(rpu->dev, "TX mailbox client configured.\n");
+
     /* Setup RX mailbox channel client */
     mclient = &rpu->rx_mc;
     mclient->dev = rpu->dev;
@@ -238,8 +236,11 @@ static int vvcam_isp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
     mclient->tx_block = false;
     mclient->knows_txdone = false;
 
+    dev_dbg(rpu->dev, "RX mailbox client configured.\n");
+
     /* Initialize work */
     INIT_WORK(&rpu->mbox_work, handle_event_notified);
+    dev_dbg(rpu->dev, "Mailbox work handler initialized.\n");
 
     /* Request TX channel */
     rpu->tx_chan = mbox_request_channel_byname(&rpu->tx_mc, "tx");
@@ -249,6 +250,8 @@ static int vvcam_isp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
         return PTR_ERR(rpu->tx_chan);
     }
 
+    dev_info(rpu->dev, "TX mailbox channel requested successfully.\n");
+
     /* Request RX channel */
     rpu->rx_chan = mbox_request_channel_byname(&rpu->rx_mc, "rx");
     if (IS_ERR(rpu->rx_chan)) {
@@ -256,6 +259,8 @@ static int vvcam_isp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
         rpu->rx_chan = NULL;
         return PTR_ERR(rpu->rx_chan);
     }
+
+    dev_info(rpu->dev, "RX mailbox channel requested successfully.\n");
 
     /* Initialize TX mailbox client SKB queue */
     skb_queue_head_init(&rpu->tx_mc_skbs);
@@ -277,6 +282,7 @@ static int char_dev_open(struct inode *inode, struct file *file)
 
     /* Set private_data for the file structure */
     file->private_data = rpu;
+    pr_info("%s: Open operation invoked successfully\n", __func__);
 
     return 0; // Indicate successful open
 }
@@ -290,6 +296,9 @@ static int char_dev_release(struct inode *inode, struct file *file)
         pr_err("%s: Release called with invalid RPU device\n", __func__);
         return -ENODEV; // Return error if RPU is invalid
     }
+
+    /* Decrement reference count or perform other cleanup if needed */
+    pr_info("%s: Release operation invoked successfully\n", __func__);
 
     return 0; // Indicate successful release
 }
@@ -404,6 +413,7 @@ static ssize_t my_driver_read(struct file *file, char __user *buf, size_t count,
         return -EFAULT; // Handle the copy_to_user error
     }
 
+    pr_info("%s: Read operation completed successfully\n", __func__);
     mutex_unlock(&rpu->lock);
 
     return bytes_copied; // Return the size of data copied on success
@@ -442,6 +452,9 @@ struct rpu_dev *get_rpu_dev(int rpu_id)
         }
     }
 
+    /* RPU not found, log an informational message */
+    pr_info("get_rpu_dev: RPU device with ID %d not found.\n", rpu_id);
+
     /* Unlock the mutex before returning */
     mutex_unlock(&rpu_list_lock);
 
@@ -458,6 +471,8 @@ static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev, int rpu_
     int ret;
 
     node = pdev->dev.of_node;
+    dev_dbg(&pdev->dev, "%s: Entry, rpu_id = %d\n", __func__, rpu_id);
+
     mutex_lock(&rpu_list_lock);
 
     /* Look for an existing RPU with the given rpu_id */
@@ -479,6 +494,7 @@ static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev, int rpu_
     }
 
     snprintf(dev_name, sizeof(dev_name), "%s_%d", CHAR_DEV_NAME, rpu_id);
+    dev_dbg(&pdev->dev, "Creating new RPU with name %s and ID %d\n", dev_name, rpu_id);
 
     rpu->dev = &pdev->dev;
     rpu->rpu_id = rpu_id;
@@ -630,8 +646,9 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct vvcam_isp_dev *isp_dev, void *data)
 
     /* Copy the received data */
     memcpy(data, data_from_interrupt.res_payload_pkt.payload, sizeof(data_from_interrupt.res_payload_pkt.payload));
+    dev_info(isp_dev->dev, "Data received successfully.\n");
 
-	/* Clear the data flag */
+    /* Clear the data flag */
     isp_dev->k_apu_data_flag = 0;
 
     /* Unlock the data mutex */
@@ -679,7 +696,6 @@ void xlnx_mbox_apu_wait_for_ack(struct vvcam_isp_dev *isp_dev)
     /* Unlock the acknowledgment mutex */
     mutex_unlock(&rpu->ack_lock);
 
-    dev_info(isp_dev->dev, "Acknowledgment received successfully.\n");
 }
 EXPORT_SYMBOL(xlnx_mbox_apu_wait_for_ack);
 
@@ -699,9 +715,12 @@ int Mailbox_Initialization(struct rpu_dev *rpu)
         dev_err(rpu->dev, "Failed to initialize reserved memory. Error: %d\n", ret);
         return ret;
     }
+    dev_info(rpu->dev, "Reserved memory initialized successfully.\n");
 
     /* Initialize mailbox with reserved memory */
     mailbox_init(MBOX_CORE_APU, (uintptr_t)reserved_memory.virt_addr, (uintptr_t)reserved_memory.phys_addr);
+    dev_info(rpu->dev, "Mailbox initialized with virtual address: %p and physical address: %pa\n",
+             reserved_memory.virt_addr, &reserved_memory.phys_addr);
 
     /* Trigger an inter-processor interrupt (IPI) */
     ret = mbox_send_message(rpu->tx_chan, NULL);
@@ -709,6 +728,7 @@ int Mailbox_Initialization(struct rpu_dev *rpu)
         dev_err(rpu->dev, "Failed to trigger IPI. Error: %d\n", ret);
         return ret;
     }
+    dev_info(rpu->dev, "Sync Signal triggered successfully.\n");
 
     return 0;
 }
@@ -841,10 +861,12 @@ static void amd_mbox_remove(struct platform_device *pdev)
 
     /* Clean up reserved memory structure */
     reserved_memory_exit();
+    dev_dbg(&pdev->dev, "Reserved memory cleaned up.\n");
 
      /* Call rpu_remove to handle RPU-specific cleanup */
     rpu_remove();
 
+    dev_info(&pdev->dev, "amd_mbox_remove completed successfully.\n");
     return;
 }
 
@@ -876,6 +898,7 @@ static int __init amd_mbox_init_module(void)
         pr_err("Failed to create mailbox class.\n");
         return PTR_ERR(mailbox_class);
     }
+    pr_info("Mailbox class created successfully.\n");
 
     /* Register the platform driver */
     ret = platform_driver_register(&amd_mbox_driver);

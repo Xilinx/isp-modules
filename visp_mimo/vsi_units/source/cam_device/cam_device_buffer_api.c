@@ -711,7 +711,6 @@ RESULT VsiCamDeviceEnQueBuffer
     	return RET_OUTOFRANGE;
 #if 1
 
-    dev_err(isp_dev->dev ," [APU-SEND-ENQ]-COOKIE == %d  CNT=%d Instance:%d_CHN:%d %x\n",packet->cookie,DRV_ENQ_CNT,pCamDevCtx->instanceId,bufId,pMediaBuf->baseAddress);
     //mutex_lock(&isp_dev->mlock); 	//--TODO
     result = Send_Command(APU_2_RPU_MB_CMD_ENQUE_BUFFER , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
     if(0 != result) {
