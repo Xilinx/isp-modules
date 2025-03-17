@@ -849,6 +849,64 @@ EXPORT_SYMBOL_GPL(Handle_Frameout_Buffer);
 
 //
 
+
+/**
+ * visp_get_input_subdev - Retrieve the remote sub-device connected to the ISP input pad.
+ * @isp_dev: Pointer to the ISP device structure.
+ *
+ * This function iterates over all media pads of the ISP device and identifies the
+ * input pad (MEDIA_PAD_FL_SINK). It then checks for a remote connection using
+ * media_pad_remote_pad_first() (for kernel 6.0 and later) or media_entity_remote_pad().
+ *
+ * If a valid sub-device is connected to the input pad, it is returned. Otherwise,
+ * the function logs an error and returns NULL.
+ *
+ * Return: Pointer to the v4l2_subdev structure if found, NULL otherwise.
+ */
+
+static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev)
+{
+    struct media_pad *remote_pad;
+    struct v4l2_subdev *subdev;
+    int pad;
+
+    dev_dbg(isp_dev->dev, "Searching for input sub-device...\n");
+
+    for (pad = 0; pad < VISP_PAD_NR; pad++)
+    {
+        // Check if this pad is a SINK (input pad)
+        if (!(isp_dev->pads[pad].flags & MEDIA_PAD_FL_SINK)) {
+            dev_dbg(isp_dev->dev, "Pad %d is not a sink, skipping...\n", pad);
+            continue;
+        }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+        remote_pad = media_pad_remote_pad_first(&isp_dev->pads[pad]);
+#else
+        remote_pad = media_entity_remote_pad(&isp_dev->pads[pad]);
+#endif
+
+        if (!remote_pad) {
+            dev_dbg(isp_dev->dev, "Pad %d has no remote connection.\n", pad);
+            continue;
+        }
+
+        if (!is_media_entity_v4l2_subdev(remote_pad->entity)) {
+            dev_dbg(isp_dev->dev, "Pad %d remote entity is not a sub-device.\n", pad);
+            continue;
+        }
+
+        subdev = media_entity_to_v4l2_subdev(remote_pad->entity);
+        dev_info(isp_dev->dev, "Found input sub-device: %s on pad %d\n", subdev->name, pad);
+
+        return subdev; // Return the first valid input sub-device found
+    }
+
+    dev_err(isp_dev->dev, "No input sub-device found!\n");
+    return NULL;
+}
+
+
 static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 {
 	struct visp_pad_stream_status *pad_stream =
@@ -857,6 +915,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	int ret = 0;
 	int Port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int Chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+	struct v4l2_subdev *subdev;
 	//RKC-TODO CHECK-M13
 	//	dev_info(isp_dev->dev ,"RKC_ISPDRV %s %d Pad=%d Status=%d Port  =%d Chn=%d\n",__func__,__LINE__,pad_stream->pad,pad_stream->status,Port,Chn);
 	isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
@@ -935,6 +994,14 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 
+		subdev = visp_get_input_subdev(isp_dev);
+		if (!subdev) {
+			dev_err(isp_dev->dev, "No valid input sub-device found! Cannot proceed.\n");
+			return -ENODEV;  // Return error code
+		}else{
+			// call s_stream
+			v4l2_subdev_call(subdev, video, s_stream, 1);
+		}
 		ret = MediaIspDeviceStreamOn(isp_dev, Port, Chn);
 		if (ret != 0)
 		{
@@ -1904,6 +1971,8 @@ static const struct media_entity_operations visp_entity_ops = {
 
 };
 
+
+#if 0
 static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
 							   struct v4l2_subdev *sd,
 							   struct v4l2_async_connection *asc)
@@ -1954,6 +2023,68 @@ static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
 
 	return ret;
 }
+
+#endif
+static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
+                               struct v4l2_subdev *sd,
+                               struct v4l2_async_connection *asc)
+{
+    int ret = 0;
+    struct visp_dev *isp_dev = container_of(notifier, struct visp_dev, notifier);
+    struct device *dev = isp_dev->dev;
+    struct fwnode_handle *ep = NULL;
+    struct v4l2_fwnode_link link;
+    struct media_entity *source, *sink;
+    unsigned int source_pad, sink_pad;
+
+    if (!sd->fwnode) {
+        dev_err(dev, "Subdev %s has no fwnode, skipping link creation\n", sd->name);
+        return -EINVAL;
+    }
+
+    /* Loop through all available endpoints */
+    while ((ep = fwnode_graph_get_next_endpoint(sd->fwnode, ep))) {
+        ret = v4l2_fwnode_parse_link(ep, &link);
+        if (ret < 0) {
+            dev_err(dev, "Failed to parse link for %pOF: %d\n", to_of_node(ep), ret);
+            continue;
+        }
+
+        /* Ensure the subdev is actually a source */
+        if (sd->entity.pads[link.local_port].flags & MEDIA_PAD_FL_SINK) {
+            v4l2_fwnode_put_link(&link);
+            continue;
+        }
+
+        source = &sd->entity;       // The remote source (MIPI)
+        source_pad = link.local_port; // The pad number on the source subdev
+        sink = &isp_dev->sd.entity; // The ISP subdev
+        sink_pad = link.remote_port; // The corresponding pad on the ISP
+
+        v4l2_fwnode_put_link(&link);
+
+        /* Create media pad link */
+        ret = media_create_pad_link(source, source_pad, sink, sink_pad, MEDIA_LNK_FL_ENABLED);
+        if (ret) {
+            dev_err(dev, "Failed to create link: %s:%u -> %s:%u\n",
+                    source->name, source_pad, sink->name, sink_pad);
+            break;
+        }
+
+        dev_info(dev, "Successfully linked %s:%u -> %s:%u\n",
+                 source->name, source_pad, sink->name, sink_pad);
+
+        /* Update PortsMask */
+        isp_dev->PortsMask |= (1 << source_pad);
+    }
+
+    fwnode_handle_put(ep);
+    return ret;
+}
+
+
+
+
 
 static void visp_notifier_unbound(struct v4l2_async_notifier *notifier,
 								  struct v4l2_subdev *sd,
@@ -2390,7 +2521,10 @@ static int visp_probe(struct platform_device *pdev)
 	if (ret) return ret;
 
 	ret = visp_async_notifier(isp_dev);
-	if (ret) goto err_async_notifier;
+	if (ret){
+		dev_err(dev, "register visp_async_notifier error\n");
+		goto err_async_notifier;
+	}
 
 	ret = v4l2_async_register_subdev(&isp_dev->sd);
 	if (ret)
@@ -2557,7 +2691,7 @@ static const struct dev_pm_ops visp_pm_ops = {
 
 static const struct of_device_id visp_of_match[] = {
 	{
-		.compatible = "verisilicon,isp",
+		.compatible = "xlnx,visp-ss-limo-1.0",
 	},
 	{/* sentinel */},
 };

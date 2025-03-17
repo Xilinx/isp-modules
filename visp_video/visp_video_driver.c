@@ -401,7 +401,7 @@ static void visp_video_remove(struct platform_device *pdev)
 
 static const struct of_device_id visp_video_of_match[] = {
 	{
-		.compatible = "verisilicon,video",
+		.compatible = "xlnx,visp-video",
 	},
 	{/* sentinel */},
 };
