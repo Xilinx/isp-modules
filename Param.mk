@@ -10,7 +10,7 @@
 #KERNEL_SRC="/wrk/paeg/users/amamidal/proj/audio/vcu/telluride/isp_driver_dev/vnc/linux/linux-xlnx"
 #KERNEL_SRC="/wrk/paeg/users/amamidal/proj/audio/vcu/telluride/isp_driver_dev/vnc/linux/linux-xlnx"
 #KERNEL_SRC="/wrk/paeg/users/amamidal/proj/audio/vcu/telluride/isp_driver_dev/vnc/linux/linux_build/output/linux-xlnx-arm64"
-KERNEL_SRC="/wrk/paeg1/users/katravul/Telluride/25_1/linux_driver/6_12_Kernel/linux-xlnx/"
+#KERNEL_SRC="/wrk/paeg1/users/katravul/Telluride/25_1/linux_driver/6_12_Kernel/linux-xlnx/"
 #KERNEL_SRC="/wrk/paeg/users/amamidal/proj/audio/vcu/telluride/isp_driver_dev/vnc/linux/linux-xlnx"
 #KERNLE_SRC="/everest/sivxhd_apps_bkup/users/chandu/Modular_designs/2024.2/MIPI/mipi_isp_hdmi_2.0/linux_sources/linux-xlnx_versal_vck190_reva_x_ebm_01_reva-standard-build"
 
