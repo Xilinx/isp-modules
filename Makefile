@@ -11,6 +11,7 @@ SRC := $(shell pwd)
 obj-m += visp_mbox/
 obj-m += visp/
 obj-m += visp_lilo/
+obj-m += visp_lilo_mbox/
 obj-m += visp_video/
 obj-m += visp_mbox_mimo/
 obj-m += visp_mimo/

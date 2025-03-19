@@ -1,0 +1,1177 @@
+/****************************************************************************
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2023-2024 VeriSilicon Holdings Co., Ltd.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ *
+ *****************************************************************************
+ *
+ * The GPL License (GPL)
+ *
+ * Copyright (c) 2023-2024 VeriSilicon Holdings Co., Ltd.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program;
+ *
+ *****************************************************************************
+ *
+ * Note: This software is released under dual MIT and GPL licenses. A
+ * recipient may use this file under the terms of either the MIT license or
+ * GPL License. If you wish to use only one license not the other, you can
+ * indicate your decision by deleting one of the above license notices in your
+ * version of this file.
+ *
+ *****************************************************************************/
+
+#include "visp_hdr.h"
+
+#include <media/v4l2-ioctl.h>
+
+#include "visp_ctrl.h"
+#include "visp_driver.h"
+#include "visp_event.h"
+
+static int visp_hdr_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	int ret = 0;
+	struct visp_dev *isp_dev =
+		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
+
+	switch (ctrl->id)
+	{
+		case VISP_CID_HDR_DPF_L_ENABLE:
+		case VISP_CID_HDR_DPF_S_ENABLE:
+		case VISP_CID_HDR_DPF_VS_ENABLE:
+		case VISP_CID_HDR_DEGHOST_LS_ENABLE:
+		case VISP_CID_HDR_DEGHOST_LSVS_ENABLE:
+		case VISP_CID_HDR_RESET:
+		case VISP_CID_HDR_COLOR_WEIGHT:
+		case VISP_CID_HDR_RATIO:
+		case VISP_CID_HDR_TRANS_RANGE:
+		case VISP_CID_HDR_EXTEND_BIT:
+		case VISP_CID_HDR_DEGHOST_MOTION_WEIGHT:
+		case VISP_CID_HDR_DEGHOST_LS_MOTION_LOWER_THR:
+		case VISP_CID_HDR_DEGHOST_LS_MOTION_UPPER_THR:
+		case VISP_CID_HDR_DEGHOST_LSVS_MOTION_LOWER_THR:
+		case VISP_CID_HDR_DEGHOST_LSVS_MOTION_UPPER_THR:
+		case VISP_CID_HDR_DEGHOST_LS_DARK_LOWER_THR:
+		case VISP_CID_HDR_DEGHOST_LS_DARK_UPPER_THR:
+		case VISP_CID_HDR_DEGHOST_LSVS_DARK_LOWER_THR:
+		case VISP_CID_HDR_DEGHOST_LSVS_DARK_UPPER_THR:
+		case VISP_CID_HDR_DPF_L_GAIN:
+		case VISP_CID_HDR_DPF_L_GRADIENT:
+		case VISP_CID_HDR_DPF_L_OFFSET:
+		case VISP_CID_HDR_DPF_L_MIN:
+		case VISP_CID_HDR_DPF_L_DIV:
+		case VISP_CID_HDR_DPF_L_SIGMA_G:
+		case VISP_CID_HDR_DPF_L_SIGMA_RB:
+		case VISP_CID_HDR_DPF_L_NOISE_CURVE:
+		case VISP_CID_HDR_DPF_S_GAIN:
+		case VISP_CID_HDR_DPF_S_GRADIENT:
+		case VISP_CID_HDR_DPF_S_OFFSET:
+		case VISP_CID_HDR_DPF_S_MIN:
+		case VISP_CID_HDR_DPF_S_DIV:
+		case VISP_CID_HDR_DPF_S_SIGMA_G:
+		case VISP_CID_HDR_DPF_S_SIGMA_RB:
+		case VISP_CID_HDR_DPF_S_NOISE_CURVE:
+		case VISP_CID_HDR_DPF_VS_GAIN:
+		case VISP_CID_HDR_DPF_VS_GRADIENT:
+		case VISP_CID_HDR_DPF_VS_OFFSET:
+		case VISP_CID_HDR_DPF_VS_MIN:
+		case VISP_CID_HDR_DPF_VS_DIV:
+		case VISP_CID_HDR_DPF_VS_SIGMA_G:
+		case VISP_CID_HDR_DPF_VS_SIGMA_RB:
+		case VISP_CID_HDR_DPF_VS_NOISE_CURVE:
+			ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+			break;
+
+		default:
+			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			return -EACCES;
+	}
+
+	return ret;
+}
+
+static int visp_hdr_g_ctrl(struct v4l2_ctrl *ctrl)
+{
+	int ret = 0;
+	struct visp_dev *isp_dev =
+		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
+
+	switch (ctrl->id)
+	{
+		case VISP_CID_HDR_ENABLE:
+		case VISP_CID_HDR_DPF_L_ENABLE:
+		case VISP_CID_HDR_DPF_S_ENABLE:
+		case VISP_CID_HDR_DPF_VS_ENABLE:
+		case VISP_CID_HDR_DEGHOST_LS_ENABLE:
+		case VISP_CID_HDR_DEGHOST_LSVS_ENABLE:
+		case VISP_CID_HDR_COLOR_WEIGHT:
+		case VISP_CID_HDR_RATIO:
+		case VISP_CID_HDR_TRANS_RANGE:
+		case VISP_CID_HDR_EXTEND_BIT:
+		case VISP_CID_HDR_DEGHOST_MOTION_WEIGHT:
+		case VISP_CID_HDR_DEGHOST_LS_MOTION_LOWER_THR:
+		case VISP_CID_HDR_DEGHOST_LS_MOTION_UPPER_THR:
+		case VISP_CID_HDR_DEGHOST_LSVS_MOTION_LOWER_THR:
+		case VISP_CID_HDR_DEGHOST_LSVS_MOTION_UPPER_THR:
+		case VISP_CID_HDR_DEGHOST_LS_DARK_LOWER_THR:
+		case VISP_CID_HDR_DEGHOST_LS_DARK_UPPER_THR:
+		case VISP_CID_HDR_DEGHOST_LSVS_DARK_LOWER_THR:
+		case VISP_CID_HDR_DEGHOST_LSVS_DARK_UPPER_THR:
+		case VISP_CID_HDR_DPF_L_GAIN:
+		case VISP_CID_HDR_DPF_L_GRADIENT:
+		case VISP_CID_HDR_DPF_L_OFFSET:
+		case VISP_CID_HDR_DPF_L_MIN:
+		case VISP_CID_HDR_DPF_L_DIV:
+		case VISP_CID_HDR_DPF_L_SIGMA_G:
+		case VISP_CID_HDR_DPF_L_SIGMA_RB:
+		case VISP_CID_HDR_DPF_L_NOISE_CURVE:
+		case VISP_CID_HDR_DPF_S_GAIN:
+		case VISP_CID_HDR_DPF_S_GRADIENT:
+		case VISP_CID_HDR_DPF_S_OFFSET:
+		case VISP_CID_HDR_DPF_S_MIN:
+		case VISP_CID_HDR_DPF_S_DIV:
+		case VISP_CID_HDR_DPF_S_SIGMA_G:
+		case VISP_CID_HDR_DPF_S_SIGMA_RB:
+		case VISP_CID_HDR_DPF_S_NOISE_CURVE:
+		case VISP_CID_HDR_DPF_VS_GAIN:
+		case VISP_CID_HDR_DPF_VS_GRADIENT:
+		case VISP_CID_HDR_DPF_VS_OFFSET:
+		case VISP_CID_HDR_DPF_VS_MIN:
+		case VISP_CID_HDR_DPF_VS_DIV:
+		case VISP_CID_HDR_DPF_VS_SIGMA_G:
+		case VISP_CID_HDR_DPF_VS_SIGMA_RB:
+		case VISP_CID_HDR_DPF_VS_NOISE_CURVE:
+		case VISP_CID_HDR_STAT_COLOR_WEIGHT:
+		case VISP_CID_HDR_STAT_RATIO:
+		case VISP_CID_HDR_STAT_TRANS_RANGE:
+		case VISP_CID_HDR_STAT_EXTEND_BIT:
+		case VISP_CID_HDR_STAT_DEGHOST_MOTION_WEIGHT:
+		case VISP_CID_HDR_STAT_DEGHOST_LS_MOTION_LOWER_THR:
+		case VISP_CID_HDR_STAT_DEGHOST_LS_MOTION_UPPER_THR:
+		case VISP_CID_HDR_STAT_DEGHOST_LSVS_MOTION_LOWER_THR:
+		case VISP_CID_HDR_STAT_DEGHOST_LSVS_MOTION_UPPER_THR:
+		case VISP_CID_HDR_STAT_DEGHOST_LS_DARK_LOWER_THR:
+		case VISP_CID_HDR_STAT_DEGHOST_LS_DARK_UPPER_THR:
+		case VISP_CID_HDR_STAT_DEGHOST_LSVS_DARK_LOWER_THR:
+		case VISP_CID_HDR_STAT_DEGHOST_LSVS_DARK_UPPER_THR:
+		case VISP_CID_HDR_STAT_DPF_L_GAIN:
+		case VISP_CID_HDR_STAT_DPF_L_GRADIENT:
+		case VISP_CID_HDR_STAT_DPF_L_OFFSET:
+		case VISP_CID_HDR_STAT_DPF_L_MIN:
+		case VISP_CID_HDR_STAT_DPF_L_DIV:
+		case VISP_CID_HDR_STAT_DPF_L_SIGMA_G:
+		case VISP_CID_HDR_STAT_DPF_L_SIGMA_RB:
+		case VISP_CID_HDR_STAT_DPF_L_NOISE_CURVE:
+		case VISP_CID_HDR_STAT_DPF_S_GAIN:
+		case VISP_CID_HDR_STAT_DPF_S_GRADIENT:
+		case VISP_CID_HDR_STAT_DPF_S_OFFSET:
+		case VISP_CID_HDR_STAT_DPF_S_MIN:
+		case VISP_CID_HDR_STAT_DPF_S_DIV:
+		case VISP_CID_HDR_STAT_DPF_S_SIGMA_G:
+		case VISP_CID_HDR_STAT_DPF_S_SIGMA_RB:
+		case VISP_CID_HDR_STAT_DPF_S_NOISE_CURVE:
+		case VISP_CID_HDR_STAT_DPF_VS_GAIN:
+		case VISP_CID_HDR_STAT_DPF_VS_GRADIENT:
+		case VISP_CID_HDR_STAT_DPF_VS_OFFSET:
+		case VISP_CID_HDR_STAT_DPF_VS_MIN:
+		case VISP_CID_HDR_STAT_DPF_VS_DIV:
+		case VISP_CID_HDR_STAT_DPF_VS_SIGMA_G:
+		case VISP_CID_HDR_STAT_DPF_VS_SIGMA_RB:
+		case VISP_CID_HDR_STAT_DPF_VS_NOISE_CURVE:
+			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+			break;
+
+		default:
+			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			return -EACCES;
+	}
+
+	return ret;
+}
+
+static const struct v4l2_ctrl_ops visp_hdr_ctrl_ops = {
+	.s_ctrl = visp_hdr_s_ctrl,
+	.g_volatile_ctrl = visp_hdr_g_ctrl,
+};
+
+const struct v4l2_ctrl_config visp_hdr_ctrls[] = {
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_ENABLE,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_L_ENABLE,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_l_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_S_ENABLE,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_s_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_VS_ENABLE,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_vs_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LS_ENABLE,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_deghost_ls_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LSVS_ENABLE,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_deghost_lsvs_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_RESET,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_reset",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		/* uint8_t 3x array */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_COLOR_WEIGHT,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_color_weight",
+		.step = 1,
+		.min = 0,
+		.max = 255,
+		.dims = {3, 0, 0, 0},
+	},
+	{
+		/* float 2x array [1.0, 256.0] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_RATIO,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_ratio",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {2, 0, 0, 0},
+	},
+	{
+		/* float 4x2 array [0, 1.1] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_TRANS_RANGE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_trans_range",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {4, 2, 0, 0},
+	},
+	{
+		/* int8_t 2x array [-1, 8] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_EXTEND_BIT,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_extend_bit",
+		.step = 1,
+		.min = 0,
+		.max = 0xFF,
+		.dims = {2, 0, 0, 0},
+	},
+	{
+		/* uint16_t 2x array */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_MOTION_WEIGHT,
+		.type = V4L2_CTRL_TYPE_U16,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dg_motion_weight",
+		.step = 1,
+		.min = 0,
+		.max = 1024,
+		.dims = {2, 0, 0, 0},
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LS_MOTION_LOWER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dg_ls_motion_lwr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LS_MOTION_UPPER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dg_ls_motion_upr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LSVS_MOTION_LOWER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dg_lsvs_motion_lwr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LSVS_MOTION_UPPER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dg_lsvs_motion_upr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LS_DARK_LOWER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dg_ls_dark_lwr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LS_DARK_UPPER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dg_ls_dark_upr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LSVS_DARK_LOWER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dg_lsvs_dark_lwr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DEGHOST_LSVS_DARK_UPPER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dg_lsvs_dark_upr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		/* float 1.0 ~ 1000.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_L_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_l_gain",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 10000000,
+	},
+	{
+		/* float 0.1 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_L_GRADIENT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_l_gradient",
+		.step = 1,
+		.def = 1000,
+		.min = 1000,
+		.max = 1280000,
+	},
+	{
+		/* float 0.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_L_OFFSET,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_l_offset",
+		.step = 1,
+		.def = 0,
+		.min = 0,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_L_MIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_l_min",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 64.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_L_DIV,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_l_div",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 640000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_L_SIGMA_G,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_l_sigma_g",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_L_SIGMA_RB,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_l_sigma_rb",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 17x array [0, 4095] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_L_NOISE_CURVE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_l_noise_curve",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {17, 0, 0, 0},
+	},
+	{
+		/* float 1.0 ~ 1000.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_S_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_s_gain",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 10000000,
+	},
+	{
+		/* float 0.1 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_S_GRADIENT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_s_gradient",
+		.step = 1,
+		.def = 1000,
+		.min = 1000,
+		.max = 1280000,
+	},
+	{
+		/* float 0.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_S_OFFSET,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_s_offset",
+		.step = 1,
+		.def = 0,
+		.min = 0,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_S_MIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_s_min",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 64.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_S_DIV,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_s_div",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 640000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_S_SIGMA_G,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_s_sigma_g",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_S_SIGMA_RB,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_s_sigma_rb",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 17x array [0, 4095] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_S_NOISE_CURVE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_s_noise_curve",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {17, 0, 0, 0},
+	},
+	{
+		/* float 1.0 ~ 1000.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_VS_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_vs_gain",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 10000000,
+	},
+	{
+		/* float 0.1 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_VS_GRADIENT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_vs_gradient",
+		.step = 1,
+		.def = 1000,
+		.min = 1000,
+		.max = 1280000,
+	},
+	{
+		/* float 0.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_VS_OFFSET,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_vs_offset",
+		.step = 1,
+		.def = 0,
+		.min = 0,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_VS_MIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_vs_min",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 64.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_VS_DIV,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_vs_div",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 640000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_VS_SIGMA_G,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_vs_sigma_g",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_VS_SIGMA_RB,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_vs_sigma_rb",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 17x array [0, 4095] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_DPF_VS_NOISE_CURVE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_dpf_vs_noise_curve",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {17, 0, 0, 0},
+	},
+	{
+		/* uint8_t 3x array */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_COLOR_WEIGHT,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_color_weight",
+		.step = 1,
+		.min = 0,
+		.max = 255,
+		.dims = {3, 0, 0, 0},
+	},
+	{
+		/* float 2x array [1.0, 256.0] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_RATIO,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_ratio",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {2, 0, 0, 0},
+	},
+	{
+		/* float 4x2 array [0, 1.1] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_TRANS_RANGE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_trans_range",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {4, 2, 0, 0},
+	},
+	{
+		/* int8_t 2x array [-1, 8] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_EXTEND_BIT,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_extend_bit",
+		.step = 1,
+		.min = 0,
+		.max = 0xFF,
+		.dims = {2, 0, 0, 0},
+	},
+	{
+		/* uint16_t 2x array */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DEGHOST_MOTION_WEIGHT,
+		.type = V4L2_CTRL_TYPE_U16,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dg_mo_weight",
+		.step = 1,
+		.min = 0,
+		.max = 1024,
+		.dims = {2, 0, 0, 0},
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DEGHOST_LS_MOTION_LOWER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dg_ls_mo_lwr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DEGHOST_LS_MOTION_UPPER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dg_ls_mo_upr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DEGHOST_LSVS_MOTION_LOWER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dg_lsvs_mo_lwr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DEGHOST_LSVS_MOTION_UPPER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dg_lsvs_mo_upr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DEGHOST_LS_DARK_LOWER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dg_ls_dk_lwr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DEGHOST_LS_DARK_UPPER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dg_ls_dk_upr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DEGHOST_LSVS_DARK_LOWER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dg_lsvs_dk_lwr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DEGHOST_LSVS_DARK_UPPER_THR,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dg_lsvs_dk_upr_thr",
+		.step = 1,
+		.min = 0,
+		.max = 4095,
+	},
+	{
+		/* float 1.0 ~ 1000.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_L_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_l_gain",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 10000000,
+	},
+	{
+		/* float 0.1 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_L_GRADIENT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_l_gradient",
+		.step = 1,
+		.def = 1000,
+		.min = 1000,
+		.max = 1280000,
+	},
+	{
+		/* float 0.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_L_OFFSET,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_l_offset",
+		.step = 1,
+		.def = 0,
+		.min = 0,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_L_MIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_l_min",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 64.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_L_DIV,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_l_div",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 640000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_L_SIGMA_G,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_l_sigma_g",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_L_SIGMA_RB,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_l_sigma_rb",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 17x array [0, 4095] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_L_NOISE_CURVE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_l_noise_curve",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {17, 0, 0, 0},
+	},
+	{
+		/* float 1.0 ~ 1000.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_S_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_s_gain",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 10000000,
+	},
+	{
+		/* float 0.1 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_S_GRADIENT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_s_gradient",
+		.step = 1,
+		.def = 1000,
+		.min = 1000,
+		.max = 1280000,
+	},
+	{
+		/* float 0.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_S_OFFSET,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_s_offset",
+		.step = 1,
+		.def = 0,
+		.min = 0,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_S_MIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_s_min",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 64.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_S_DIV,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_s_div",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 640000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_S_SIGMA_G,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_s_sigma_g",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_S_SIGMA_RB,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_s_sigma_rb",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 17x array [0, 4095] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_S_NOISE_CURVE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_s_noise_curve",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {17, 0, 0, 0},
+	},
+	{
+		/* float 1.0 ~ 1000.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_VS_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_vs_gain",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 10000000,
+	},
+	{
+		/* float 0.1 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_VS_GRADIENT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_vs_gradient",
+		.step = 1,
+		.def = 1000,
+		.min = 1000,
+		.max = 1280000,
+	},
+	{
+		/* float 0.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_VS_OFFSET,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_vs_offset",
+		.step = 1,
+		.def = 0,
+		.min = 0,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_VS_MIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_vs_min",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 64.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_VS_DIV,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_vs_div",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 640000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_VS_SIGMA_G,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_vs_sigma_g",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 1.0 ~ 128.0, ratio 10000:1 */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_VS_SIGMA_RB,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_vs_sigma_rb",
+		.step = 1,
+		.def = 10000,
+		.min = 10000,
+		.max = 1280000,
+	},
+	{
+		/* float 17x array [0, 4095] */
+		.ops = &visp_hdr_ctrl_ops,
+		.id = VISP_CID_HDR_STAT_DPF_VS_NOISE_CURVE,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hdr_stat_dpf_vs_noise_curve",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {17, 0, 0, 0},
+	},
+};
+
+int visp_hdr_ctrl_count(void)
+{
+	return ARRAY_SIZE(visp_hdr_ctrls);
+}
+
+int visp_hdr_ctrl_create(struct visp_dev *isp_dev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(visp_hdr_ctrls); i++)
+	{
+		v4l2_ctrl_new_custom(&isp_dev->ctrl_handler, &visp_hdr_ctrls[i], NULL);
+		if (isp_dev->ctrl_handler.error)
+		{
+			dev_err(isp_dev->dev, "reigster isp hdr ctrl %s failed %d.\n",
+					visp_hdr_ctrls[i].name, isp_dev->ctrl_handler.error);
+		}
+	}
+
+	return 0;
+}
