@@ -996,8 +996,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 		subdev = visp_get_input_subdev(isp_dev);
 		if (!subdev) {
-			dev_err(isp_dev->dev, "No valid input sub-device found! Cannot proceed.\n");
-			return -ENODEV;  // Return error code
+			dev_err(isp_dev->dev, "No valid input sub-device found!\n");
 		}else{
 			// call s_stream
 			v4l2_subdev_call(subdev, video, s_stream, 1);
@@ -1015,6 +1014,15 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	else //streamoff
 	{
 		MediaIspStreamOff(isp_dev, Port, Chn);
+		subdev = visp_get_input_subdev(isp_dev);
+		if (!subdev) {
+			dev_err(isp_dev->dev, "No valid input sub-device found!\n");
+			//return -ENODEV;  // Return error code
+		}else{
+			// call s_stream
+			v4l2_subdev_call(subdev, video, s_stream, 0);
+		}
+
 		isp_dev->streamon[pad_stream->pad] = 0;
 	}
 
@@ -2076,15 +2084,11 @@ static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
 
         /* Update PortsMask */
         isp_dev->PortsMask |= (1 << source_pad);
+		fwnode_handle_put(ep);
     }
 
-    fwnode_handle_put(ep);
     return ret;
 }
-
-
-
-
 
 static void visp_notifier_unbound(struct v4l2_async_notifier *notifier,
 								  struct v4l2_subdev *sd,
