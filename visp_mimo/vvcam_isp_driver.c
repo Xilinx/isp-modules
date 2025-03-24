@@ -2490,7 +2490,10 @@ static const struct dev_pm_ops vvcam_isp_pm_ops = {
 };
 
 static const struct of_device_id vvcam_isp_of_match[] = {
-	{.compatible = "xlnx,visp-ss-mimo-1.0",},
+
+
+	{.compatible = "xlnx,visp-mimo",},
+//	{.compatible = "xlnx,visp-ss-mimo-1.0",},
 	{ /* sentinel */ },
 };
 

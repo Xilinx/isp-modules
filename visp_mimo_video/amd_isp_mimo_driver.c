@@ -7,7 +7,6 @@
 #include <linux/spinlock.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
-//<REMOVED IN M13> #include <linux/arm-smccc.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
@@ -17,14 +16,6 @@
 #include <media/v4l2-mc.h>
 #include <media/v4l2-mediabus.h>
 #include <media/videobuf2-dma-contig.h>
-
-//#include "visp_ctrl.h"
-//#include "visp_driver.h"
-//#include "visp_event.h"
-//#include "visp_procfs.h"
-//#include "visp_v4l2_common.h"
-//#include "visp_v4l2_std_exts.h"
-/*RKC-TODO Check below headers requirement in M13*/
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 
@@ -44,6 +35,13 @@
 #define visp_pr_err pr_err
 #endif
 #define visp_v4l2_dbg(fmt, ...) ;
+
+static int debug;
+module_param(debug, int, 0644);
+MODULE_PARM_DESC(debug, "debug level (0-3)");
+
+struct isp_mimo_ctx;
+
 
 struct visp_format visp_mp_fmts[] = {
 	{
@@ -571,86 +569,6 @@ struct visp_format visp_raw_fmts[] = {
 
 };
 
-
-static int debug;
-module_param(debug, int, 0644);
-MODULE_PARM_DESC(debug, "debug level (0-3)");
-
-struct isp_mimo_ctx;
-
-static const struct of_device_id isp_mimo_dt_ids[] = {
-	{ .compatible = "xlnx,visp-ss-mimo", .data = NULL },
-	{ },
-};
-
-static struct platform_driver isp_mimo_driver = {
-	.probe		= isp_mimo_probe,
-	.remove		= isp_mimo_remove,
-	.driver		= {
-		.name	= MEM2MEM_NAME,
-		.of_match_table = isp_mimo_dt_ids,
-	},
-};
-
-static const struct v4l2_file_operations isp_mimo_fops = {
-	.owner		= THIS_MODULE,
-	.open		= isp_mimo_open,
-	.release	= isp_mimo_release,
-	.poll		= v4l2_m2m_fop_poll,
-	.unlocked_ioctl	= video_ioctl2,
-	.mmap		= v4l2_m2m_fop_mmap,
-};
-
-static const struct v4l2_ioctl_ops isp_mimo_ioctl_ops = {
-	.vidioc_querycap	 = isp_mimo_v4l2_m2m_ioctl_querycap,
-	.vidioc_enum_fmt_vid_cap = isp_mimo_v4l2_m2m_ioctl_enum_fmt_cap,
-	.vidioc_g_fmt_vid_cap	 = isp_mimo_v4l2_m2m_ioctl_g_fmt,
-	.vidioc_try_fmt_vid_cap	 = isp_mimo_v4l2_m2m_ioctl_try_fmt_cap,
-	.vidioc_s_fmt_vid_cap	 = isp_mimo_v4l2_m2m_ioctl_s_fmt_cap,
-	.vidioc_enum_fmt_vid_out = isp_mimo_v4l2_m2m_ioctl_enum_fmt_out,
-	.vidioc_g_fmt_vid_out	 = isp_mimo_v4l2_m2m_ioctl_g_fmt,
-	.vidioc_try_fmt_vid_out	 = isp_mimo_v4l2_m2m_ioctl_try_fmt_out,
-	.vidioc_s_fmt_vid_out	 = isp_mimo_v4l2_m2m_ioctl_s_fmt_out,
-	.vidioc_reqbufs		 = isp_mimo_v4l2_m2m_ioctl_reqbufs,
-	.vidioc_querybuf	 = isp_mimo_v4l2_m2m_ioctl_querybuf,
-	.vidioc_qbuf		 = isp_mimo_v4l2_m2m_ioctl_qbuf,
-	.vidioc_dqbuf		 = isp_mimo_v4l2_m2m_ioctl_dqbuf,
-	.vidioc_prepare_buf	 = isp_mimo_v4l2_m2m_ioctl_prepare_buf,
-	.vidioc_create_bufs	 = isp_mimo_v4l2_m2m_ioctl_create_bufs,
-	.vidioc_expbuf		 = isp_mimo_v4l2_m2m_ioctl_expbuf,
-	.vidioc_streamon	 = isp_mimo_v4l2_m2m_ioctl_streamon,
-	.vidioc_streamoff	 = isp_mimo_v4l2_m2m_ioctl_streamoff,
-};
-
-static const struct video_device isp_mimo_video_dev = {
-	.name		= MEM2MEM_NAME,
-	.vfl_dir	= VFL_DIR_M2M,
-	.fops		= &isp_mimo_fops,
-	.device_caps	= V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING,
-	.ioctl_ops	= &isp_mimo_ioctl_ops,
-	.minor		= -1,
-	.release	= video_device_release_empty,
-};
-
-static const struct v4l2_m2m_ops m2m_ops = {
-	.device_run	= isp_mimo_device_run,
-};
-
-static const struct vb2_ops isp_mimo_qops = {
-	.queue_setup	 = isp_mimo_queue_setup,
-	.buf_prepare	 = isp_mimo_buf_prepare,
-	.buf_queue	 = isp_mimo_buf_queue,
-	.start_streaming = isp_mimo_start_streaming,
-	.stop_streaming  = isp_mimo_stop_streaming,
-	.wait_prepare	 = vb2_ops_wait_prepare,
-	.wait_finish	 = vb2_ops_wait_finish,
-};
-
-  inline struct isp_mimo_ctx *file2ctx(struct file *file)
-{
-	return container_of(file->private_data, struct isp_mimo_ctx, fh);
-}
-
 void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_addr_t *d);
 void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_addr_t *d)
 {
@@ -695,8 +613,6 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 	struct vb2_v4l2_buffer *src_buf, *dst_buf;
 	int s_cnt, d_cnt;
 	struct isp_mimo_ctx *curr_ctx=ctx;
-	int RetVal;
-    MediaFmt *Format=NULL;
 
 	s_cnt = v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx);
 	d_cnt = v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx);
@@ -707,45 +623,17 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
     inspect_source_buffers(ctx->fh.m2m_ctx, input_addr, output_addr);
 
 	device->isp_dev->ip_a[0]=input_addr[0];
-	device->isp_dev->ip_a[1]=input_addr[0];
+	device->isp_dev->ip_a[1]=input_addr[1];
 	device->isp_dev->op_a[0]=output_addr[0];
 	device->isp_dev->op_a[1]=output_addr[1];
 	device->isp_dev->op_a[2]=output_addr[2];
 	device->isp_dev->op_a[3]=output_addr[3];
-#if 1
-    Format= kmalloc(sizeof(MediaFmt), GFP_KERNEL);
-    if(!Format)
-    {
-        visp_pr_err(",FAILED TO KMALLOC %s %d\n",__func__,__LINE__);
-        RetVal = -ENOMEM;
-      //  goto ERR_TO_UNREGISTER_SENSOR_HANDLE;
-    }
 
-    memset(Format, 0, sizeof(MediaFmt));
-    Format->Width       = device->isp_dev->out_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
-    Format->Height      = device->isp_dev->out_h; //IspPort->SinkInfo.Rect.Height;
-    Format->PixelFormat = device->isp_dev->out_fmt; //IspPort->SinkInfo.Fourcc;
-
-    //RetVal= MediaIspHalSetFmt(isp_dev , Port * MEDIA_ISP_PORT_PAD_COUNT , Format); //MSLPK
-    RetVal= MediaIspHalSetFmt(device->isp_dev , 0 , Format); //MSLPK
-    if (RetVal != VSI_SUCCESS) {
-        visp_pr_err("%s: MediaIspHalSetFmt failed %d\n", __func__, RetVal);
-//        goto ERR_TO_UNREGISTER_SENSOR_HANDLE;
-    }
-	Format->Width       = device->isp_dev->cap_w;//IspPort->SinkInfo.Rect.Width; //--MSLPK
-    Format->Height      = device->isp_dev->cap_h; //IspPort->SinkInfo.Rect.Height;
-    Format->PixelFormat = device->isp_dev->cap_fmt; //IspPort->SinkInfo.Fourcc;
-    RetVal= MediaIspHalSetFmt(device->isp_dev , 1 , Format); //MSLPK
-    if (RetVal != VSI_SUCCESS) {
-        visp_pr_err("%s: MediaIspHalSetFmt failed %d\n", __func__, RetVal);
-//        goto ERR_TO_UNREGISTER_SENSOR_HANDLE;
-    }
-#endif
-    MediaIspDeviceStreamOn(device->isp_dev, 0, CAMDEV_BUFCHAIN_RDMA);
+    MediaIspDeviceStreamOn(device->isp_dev, 0, 0);
 	MediaIspDeviceDeque(device->isp_dev, 0);
 
 	device->isp_dev->apu_wait_for_isp_frame_done = 1;
-	wait_event_interruptible(device->isp_dev->wq_frame_done_finished, ! device->isp_dev->apu_wait_for_isp_frame_done);
+	wait_event_interruptible(device->isp_dev->wq_frame_done_finished, !device->isp_dev->apu_wait_for_isp_frame_done);
 
 	/* return the src and dst buffers back to V4L2 M2M layer to return to application */
 	src_vb = v4l2_m2m_src_buf_remove(curr_ctx->fh.m2m_ctx);
@@ -761,8 +649,7 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 	}
 	src_vb->sequence = dst_vb->sequence = curr_ctx->sequence++;
 	v4l2_m2m_job_finish(device->m2m_dev, curr_ctx->fh.m2m_ctx);
-#if 0 //--TODO
-	MediaIspStreamOff(device->isp_dev, 0, 6);
+#if 1 //--TODO
 	MediaIspStreamOff(device->isp_dev, 0, 0);
 #endif
 }
@@ -1843,7 +1730,6 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void*priv,
 		pix->width = VISPM2M_MAX_WIDTH;
 
 	for (i = 0; i < ARRAY_SIZE(visp_raw_fmts); i++) {
-//		fmt = &visp_raw_fmts[i];
 		if (visp_raw_fmts[i].fourcc == f->fmt.pix_mp.pixelformat)
 			break;
 	}
@@ -2144,6 +2030,70 @@ void isp_mimo_stop_streaming(struct vb2_queue *q)
 	}
 }
 
+static const struct v4l2_file_operations isp_mimo_fops = {
+	.owner		= THIS_MODULE,
+	.open		= isp_mimo_open,
+	.release	= isp_mimo_release,
+	.poll		= v4l2_m2m_fop_poll,
+	.unlocked_ioctl	= video_ioctl2,
+	.mmap		= v4l2_m2m_fop_mmap,
+};
+
+/*
+ * File operations
+ */
+static const struct v4l2_ioctl_ops isp_mimo_ioctl_ops = {
+	.vidioc_querycap	 = isp_mimo_v4l2_m2m_ioctl_querycap,
+	.vidioc_enum_fmt_vid_cap = isp_mimo_v4l2_m2m_ioctl_enum_fmt_cap,
+	.vidioc_g_fmt_vid_cap	 = isp_mimo_v4l2_m2m_ioctl_g_fmt,
+	.vidioc_try_fmt_vid_cap	 = isp_mimo_v4l2_m2m_ioctl_try_fmt_cap,
+	.vidioc_s_fmt_vid_cap	 = isp_mimo_v4l2_m2m_ioctl_s_fmt_cap,
+	.vidioc_enum_fmt_vid_out = isp_mimo_v4l2_m2m_ioctl_enum_fmt_out,
+	.vidioc_g_fmt_vid_out	 = isp_mimo_v4l2_m2m_ioctl_g_fmt,
+	.vidioc_try_fmt_vid_out	 = isp_mimo_v4l2_m2m_ioctl_try_fmt_out,
+	.vidioc_s_fmt_vid_out	 = isp_mimo_v4l2_m2m_ioctl_s_fmt_out,
+	.vidioc_reqbufs		 = isp_mimo_v4l2_m2m_ioctl_reqbufs,
+	.vidioc_querybuf	 = isp_mimo_v4l2_m2m_ioctl_querybuf,
+	.vidioc_qbuf		 = isp_mimo_v4l2_m2m_ioctl_qbuf,
+	.vidioc_dqbuf		 = isp_mimo_v4l2_m2m_ioctl_dqbuf,
+	.vidioc_prepare_buf	 = isp_mimo_v4l2_m2m_ioctl_prepare_buf,
+	.vidioc_create_bufs	 = isp_mimo_v4l2_m2m_ioctl_create_bufs,
+	.vidioc_expbuf		 = isp_mimo_v4l2_m2m_ioctl_expbuf,
+	.vidioc_streamon	 = isp_mimo_v4l2_m2m_ioctl_streamon,
+	.vidioc_streamoff	 = isp_mimo_v4l2_m2m_ioctl_streamoff,
+};
+
+static const struct video_device isp_mimo_video_dev = {
+	.name		= MEM2MEM_NAME,
+	.vfl_dir	= VFL_DIR_M2M,
+	.fops		= &isp_mimo_fops,
+	.device_caps	= V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING,
+	.ioctl_ops	= &isp_mimo_ioctl_ops,
+	.minor		= -1,
+	.release	= video_device_release_empty,
+};
+
+static const struct v4l2_m2m_ops m2m_ops = {
+	.device_run	= isp_mimo_device_run,
+};
+
+static const struct vb2_ops isp_mimo_qops = {
+	.queue_setup	 = isp_mimo_queue_setup,
+	.buf_prepare	 = isp_mimo_buf_prepare,
+	.buf_queue	 = isp_mimo_buf_queue,
+	.start_streaming = isp_mimo_start_streaming,
+	.stop_streaming  = isp_mimo_stop_streaming,
+	.wait_prepare	 = vb2_ops_wait_prepare,
+	.wait_finish	 = vb2_ops_wait_finish,
+};
+
+inline struct isp_mimo_ctx *file2ctx(struct file *file)
+{
+	return container_of(file->private_data, struct isp_mimo_ctx, fh);
+}
+
+
+
 
 int queue_init(void *priv, struct vb2_queue *src_vq,
 		      struct vb2_queue *dst_vq)
@@ -2177,14 +2127,10 @@ int queue_init(void *priv, struct vb2_queue *src_vq,
 
 	return vb2_queue_init(dst_vq);
 }
-
-/*
- * File operations
- */
+static char dev_open = 0;
 int isp_mimo_open(struct file *file)
 {
 	static int device_open_count=0;
-	static char c=0;
 
 	++device_open_count;
 
@@ -2238,12 +2184,12 @@ int isp_mimo_open(struct file *file)
 		ctx->fmt[FMT_CAPTURE].fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
 
 		visp_v4l2_dbg(1, debug, v4l2_dev, "[v4l2] Created instance: [0x%x], m2m_ctx: [0x%x]\n", ctx, ctx->fh.m2m_ctx);
-		if(!c) {
-			IspDeviceCreateMIMO(device->isp_dev,0);
+		if(!dev_open) {
+			rc = IspDeviceCreateMIMO(device->isp_dev,0);
+			dev_open = 1;
 		}else {
 			visp_pr_debug("===== [VISP_M2M] %s : %d device already opened ..\n",__func__, __LINE__);
 		}
-		c = 1;
 	} else {
 		file->private_data =  &ctx->fh;
 	}
@@ -2258,6 +2204,10 @@ int isp_mimo_release(struct file *file)
 	struct isp_mimo *device = video_drvdata(file);
 	struct isp_mimo_ctx *ctx = file2ctx(file);
 
+	if (dev_open == 1) {
+		IspDeviceDistroyMIMO(device->isp_dev, 0);
+		dev_open = 0;
+	}
 
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
@@ -2268,20 +2218,89 @@ int isp_mimo_release(struct file *file)
 	return 0;
 }
 
+static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform_device *pdev)
+{
+    int ret = 0;
+    struct device_node *node = pdev->dev.of_node;
+
+#if 0
+	strncpy(isp_dev->IspPorts[port].SensorInfo.ManuJson, VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON,
+	strlen(VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON)+1);
+	// isp_dev->IspPorts[port].SensorInfo.ManuJson[strlen(VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON)] = '\0';
+
+	strncpy(isp_dev->IspPorts[port].SensorInfo.AutoJson, VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON,
+	strlen(VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON)+1);
+	// isp_dev->IspPorts[port].SensorInfo.AutoJson[strlen(VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON)] = '\0';
+#endif
+    fwnode_property_read_u32(of_fwnode_handle(node),
+            "isp_id", &isp_dev->id);
+    if (!node) {
+        dev_err(&pdev->dev, "No device tree node found\n");
+        return -EINVAL;
+    }
+
+    if(isp_dev->id < 0 && isp_dev->id > 6)
+    {
+        dev_err(&pdev->dev, "Invalid ISP Id %d\n",isp_dev->id);
+        return -EINVAL;
+    }
+    dev_info(&pdev->dev, "Found vvcam_isp device in device tree.\n");
+
+	// Read string property for SS-MODE-I0 (LIMO, etc.)
+    ret = of_property_read_string(node, "xlnx,io_mode", &isp_dev->ss_mode_i0);
+    if (ret) {
+        dev_err(&pdev->dev, "Failed to read xlnx,io_mode\n");
+        return ret;
+    } else {
+        dev_info(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
+    }
+
+	// Read stream info (multi-stream, single-stream)
+    ret = of_property_read_u32(node, "xlnx,num_streams", &isp_dev->num_streams);
+    if (ret) {
+        dev_err(&pdev->dev, "Failed to read xlnx,num_streams property\n");
+        return ret;
+    } else {
+        dev_info(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
+    }
+        dev_err(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
+
+    ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
+    if (ret) {
+        dev_err(&pdev->dev, "Failed to read xlnx,mem_inputs property\n");
+        return ret;
+    } else {
+        dev_info(&pdev->dev, "xlnx,mem_inputs: %u\n", isp_dev->isp_mem);
+    }
+
+    ret = of_property_read_u32(node, "xlnx,rpu", &isp_dev->isp_rpu);
+    if (ret) {
+        dev_err(&pdev->dev, "Failed to read xlnx,rpu property\n");
+        return ret;
+    } else {
+        dev_info(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
+    }
+
+	return 0;
+}
+
+
 int isp_mimo_probe(struct platform_device *pdev)
 {
 	static int probe_cnt = 0;
-	if(probe_cnt >= MAX_SUPPORTED_DEVICE_COUNT){
-		return 0;
-	}
-	pdev->id = probe_cnt;
 
 	struct isp_mimo *device;
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	struct video_device *vfd;
-	struct v4l2_device *v4l2_dev = &device->v4l2_dev;
+	struct v4l2_device *v4l2_dev;
 	int ret = 0;
+
+	if(probe_cnt >= MAX_SUPPORTED_DEVICE_COUNT){
+		return 0;
+	}
+	pdev->id = probe_cnt;
+
 
 	device = devm_kzalloc(dev, sizeof(*device), GFP_KERNEL);
 	if(!device)
@@ -2289,13 +2308,13 @@ int isp_mimo_probe(struct platform_device *pdev)
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
-
 	ret = v4l2_device_register(&pdev->dev, &device->v4l2_dev);
 	if (ret) {
 		dev_err(dev, "could not register video device rc=%d\n", ret);
 		return ret;
 	}
-	
+
+	v4l2_dev = &device->v4l2_dev;
 	device->video_dev = isp_mimo_video_dev;
 	vfd = &device->video_dev;
 	vfd->lock = &device->lock;
@@ -2312,12 +2331,6 @@ int isp_mimo_probe(struct platform_device *pdev)
 		goto err_v4l2;
 	}
 
-	ret = video_register_device(vfd, VFL_TYPE_VIDEO, 0);
-	if (ret) {
-		v4l2_err(v4l2_dev, "Failed to register video device\n");
-		goto err_m2m;
-	}
-
 	device->isp_dev = devm_kzalloc(&pdev->dev, sizeof(struct vvcam_isp_dev), GFP_KERNEL);
 	if (!device->isp_dev)
 		return -ENOMEM;
@@ -2326,14 +2339,22 @@ int isp_mimo_probe(struct platform_device *pdev)
 	mutex_init(&device->isp_dev->ctrl_lock);
 	device->isp_dev->dev = &pdev->dev;
 
-	device->isp_dev->isp_rpu = 0;
+	ret = vvcam_isp_parse_params(device->isp_dev, pdev);
+	if (ret) {
+		dev_err(&pdev->dev, "failed to parse params\n");
+		return -EINVAL;
+	}
+
 	ret = xlnx_link_mbox(device->isp_dev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to init mbox\n");
 		return -EINVAL;
 	}
-
-	vvcam_isp_pads_init(device->isp_dev);
+	ret = video_register_device(vfd, VFL_TYPE_VIDEO, 0);
+	if (ret) {
+		v4l2_err(v4l2_dev, "Failed to register video device\n");
+		goto err_m2m;
+	}
 
 	probe_cnt +=1;
 
@@ -2350,6 +2371,7 @@ err_v4l2:
 void isp_mimo_remove(struct platform_device *pdev)
 {
 	struct isp_mimo *device = platform_get_drvdata(pdev);
+
 	if(pdev->id >= 0) {
 		video_unregister_device(&device->video_dev);
 		v4l2_m2m_release(device->m2m_dev);
@@ -2357,6 +2379,21 @@ void isp_mimo_remove(struct platform_device *pdev)
 	}
 	return;
 }
+
+static const struct of_device_id isp_mimo_dt_ids[] = {
+	{.compatible = "xlnx,visp-ss-mimo-1.0",},
+	{ },
+};
+
+static struct platform_driver isp_mimo_driver = {
+	.probe		= isp_mimo_probe,
+	.remove		= isp_mimo_remove,
+	.driver		= {
+		.name	= MEM2MEM_NAME,
+		.of_match_table = isp_mimo_dt_ids,
+	},
+};
+
 
 MODULE_DEVICE_TABLE(of, isp_mimo_dt_ids);
 module_platform_driver(isp_mimo_driver);

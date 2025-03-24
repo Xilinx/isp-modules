@@ -143,6 +143,7 @@ int MediaIspDeviceStreamOff(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t
     CamDevicePathStreamingCfg_t PathStatus;
     VsiCamDeviceGetPathStreaming(isp_dev , IspPort->CamDeviceHandle, &PathStatus);
     PathStatus.outPathEnable &=  ~(1 << Chn);
+    dev_info(isp_dev->dev, "%s %d PathStatus.outPathEnable %d\n", __func__, __LINE__, PathStatus.outPathEnable);    
     RetVal = VsiCamDeviceSetPathStreaming(isp_dev, IspPort->CamDeviceHandle, &PathStatus);
     dev_info(isp_dev->dev, "%s %d\n", __func__, __LINE__);    
     MediaIspDeviceDestroyBufPool(isp_dev, Port, Chn);
@@ -191,19 +192,6 @@ static int MediaIspDeviceUnRegister3aLib(struct vvcam_isp_dev *isp_dev, uint8_t 
     return VSI_SUCCESS;
 }
                                 
-static int MediaIspDeviceSensorClose(struct vvcam_isp_dev *isp_dev, uint8_t Port)
-{
-    int RetVal = VSI_SUCCESS;
-    MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
-    RetVal = VsiCamDeviceSensorClose(isp_dev,  IspPort->CamDeviceHandle);
-    if (RetVal != VSI_SUCCESS) {
-        dev_err(isp_dev->dev, "CamDevice close sensor failed, ret is %d", RetVal);
-        RetVal = VSI_ERR_TIMEOUT;
-    }
-
-    return RetVal;
-}
-
 static int MediaIspDeviceMcmTerminate(struct vvcam_isp_dev *isp_dev, uint8_t Port)
 {
     int RetVal = VSI_SUCCESS;
@@ -234,11 +222,7 @@ int MediaIspDeviceCameraDisConnect(struct vvcam_isp_dev *isp_dev, uint8_t Port, 
         dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d\n", __func__, __LINE__);    
         MediaIspDeviceUnRegister3aLib(isp_dev, Port, Chn);
         VsiCamDeviceDisconnectCamera(isp_dev, IspPort->CamDeviceHandle);
-        if (isp_dev->PortsMask != 0x01) //RKC-TODO Enable the logic during MCM
-		{
-            MediaIspDeviceMcmTerminate(isp_dev, Port);
-        }
-        MediaIspDeviceSensorClose(isp_dev, Port);
+        MediaIspDeviceMcmTerminate(isp_dev, Port);
     }
 
     dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d\n", __func__, __LINE__);    
@@ -409,7 +393,7 @@ int MediaIspDeviceStreamOn(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t 
     MediaIspDeviceMcmSetFormat(isp_dev,Port);
 
     /*Create Buffer pool for input*/
-    RetVal = MediaIspDeviceCreateBufPool(isp_dev, Port, Chn);
+    RetVal = MediaIspDeviceCreateBufPool(isp_dev, Port, 6);
     if (RetVal != VSI_SUCCESS) {
         dev_err(isp_dev->dev,"%s: Port %d Chn %d create buf pool failed, ret is %d",
             __func__, Port, Chn, RetVal);
@@ -483,17 +467,13 @@ int MediaIspDeviceDeque(struct vvcam_isp_dev *isp_dev, uint8_t Port)
 }
 EXPORT_SYMBOL(MediaIspDeviceDeque);
 
-
-
-
-
 int IspDeviceDestroy(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 {
     int RetVal = VSI_SUCCESS;
     MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
 
     if (IspPort->CamDeviceHandle) {
-        RetVal = VsiCamDeviceSensorDrvHandleUnRegister(isp_dev, IspPort->CamDeviceHandle);
+//        RetVal = VsiCamDeviceSensorDrvHandleUnRegister(isp_dev, IspPort->CamDeviceHandle);
         if (RetVal != VSI_SUCCESS) {
             dev_err(isp_dev->dev, "CamDevice unregister sensor driver Failed, ret is %d", RetVal);
             RetVal = VSI_ERR_TIMEOUT;
@@ -543,7 +523,7 @@ int MediaIspStreamOff(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 
     MediaIspDeviceCameraDisConnect(isp_dev, Port, Chn);
 
-    IspDestroyPipeline(isp_dev, Port, Chn);
+    //IspDestroyPipeline(isp_dev, Port, Chn);
     
     return VSI_SUCCESS;
 }
@@ -910,9 +890,6 @@ int MediaIspHalMbusFmtToMediaFmt(uint32_t *Code, uint32_t *PixelFormat, uint32_t
 
     return VSI_SUCCESS;
 }
-
-
-
 
 int MediaIspHalSetFmt(struct vvcam_isp_dev *isp_dev, int Pad, MediaFmt *Format)
 {
@@ -1571,58 +1548,22 @@ int MediaIspDeviceCameraConnect(struct vvcam_isp_dev *isp_dev, uint8_t Index)
     int RetVal = VSI_SUCCESS;
     CamDevicePipeSubmoduleCtrl_u SubModuleInit;
 
-    RetVal = MediaIspDeviceSensorOpen(isp_dev, Port);
-    if (RetVal != VSI_SUCCESS) {
-        dev_err(isp_dev->dev,"Port %d Chn %d open sensor failed, ret is %d", Port, Chn, RetVal);
-        goto ERR_TO_RELEASE_CAMCOMMON;
-    }
-
-#if 0
-    if (isp_dev->PortsMask != 0x01) {
-        RetVal = MediaIspDeviceMcmInit(isp_dev, Port);
-        if (RetVal != VSI_SUCCESS) {
-            dev_err(isp_dev->dev," Port %d Chn %d init mcm failed, ret is %d", Port, Chn, RetVal);
-            goto ERR_TO_CLOSE_SENSOR;
-        }
-    }
-#endif
-
     memset(&SubModuleInit, 0, sizeof(SubModuleInit));
 
     RetVal = MediaIspDeviceSubModuleInit(isp_dev, Port, &SubModuleInit);
     if (RetVal != VSI_SUCCESS) {
         dev_err(isp_dev->dev," Port %d Chn %d init submodule failed, ret is %d", Port, Chn, RetVal);
-        goto ERR_TO_TERMINATE_MCM;
+        goto exit;
     }
 
     RetVal = VsiCamDeviceConnectCamera( isp_dev, IspPort->CamDeviceHandle, &SubModuleInit);
     if (RetVal != VSI_SUCCESS) {
         dev_err(isp_dev->dev,"CamDevice camera connect failed, ret is %d", RetVal);
         RetVal = VSI_ERR_ILLEGAL_PARAM;
-        goto ERR_TO_TERMINATE_MCM;
     }
-
-//    IspPort->CameraConnectRefCnt++;
-//	cam_connect_flag++;
+exit:
 	return RetVal;
 
-//ERR_TO_UNREISTER_3ALIB:
-//    MediaIspDeviceUnRegister3aLib(IspEventDev, Port, Chn);
-//ERR_TO_DISCONNECT_CAMERA:
- //   VsiCamDeviceDisconnectCamera(IspPort->CamDeviceHandle);
-ERR_TO_TERMINATE_MCM:
-    if (isp_dev->PortsMask != 0x01) {
-        MediaIspDeviceMcmTerminate(isp_dev, Port);
-    }
-	RetVal = VsiCamDeviceSensorClose(isp_dev , IspPort->CamDeviceHandle);
-    if (RetVal != VSI_SUCCESS) {
-        dev_err(isp_dev->dev,"CamDevice close sensor failed, ret is %d", RetVal);
-        RetVal = VSI_ERR_TIMEOUT;
-    }
-
-ERR_TO_RELEASE_CAMCOMMON:
-//    VsiCamCommonDestroy(&CamCommon);
-    return RetVal;
 }
 
 int vvcam_isp_buf_done(struct v4l2_subdev *sd, void *arg);

@@ -79,6 +79,7 @@ extern int MediaIspDeviceSetFormat(struct vvcam_isp_dev *isp_dev, uint8_t Port, 
 
 int xlnx_link_mbox(struct vvcam_isp_dev *isp_dev);
 int IspDeviceCreateMIMO(struct vvcam_isp_dev *isp_dev , uint8_t Port);
+int IspDeviceDistroyMIMO(struct vvcam_isp_dev *isp_dev , uint8_t Port);
 
 int isp_mimo_open(struct file *file);
   int isp_mimo_release(struct file *file);

@@ -78,7 +78,6 @@ RESULT VsiCamDeviceCreate
      * AMD : Multi-Core Changes
      * Verifying Multi-core
      */
-    // // xil_printf("%s %d camConfig.ispHwId=%x \n\r",__func__,__LINE__,hwId);
 
 #ifdef DEBUG_FLAG
 #else
@@ -86,7 +85,6 @@ RESULT VsiCamDeviceCreate
         return RET_OUTOFRANGE;
     }
 #endif
-
     CamDeviceIspcoreInit();
     /*Get Cam Device Handle*/
     result = CamDeviceRequestInstance(hwId, &hCamDevice, &virtualId);
@@ -118,24 +116,17 @@ RESULT VsiCamDeviceCreate
     packet->payload_size = 0;
 
     p_data = packet->payload;
-    #if 1
     memcpy(p_data, &instanceId, sizeof(uint32_t));
     packet->payload_size += sizeof(uint32_t);
     p_data += sizeof(uint32_t);
     memcpy(p_data, pCamConfig, sizeof(CamDeviceConfig_t));
     packet->payload_size += sizeof(CamDeviceConfig_t);
 
-#ifdef DEBUG_FLAG
-    // // xil_printf("APU create cam device payload size:%d.\r\n", packet.payload_size);
-	// // xil_printf("0=%x 0=%x \r\n", 0,0);
-#endif
-#endif
 	if(packet->payload_size > MAX_ITEM)
     {
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-    pr_err("RKC-ISP-DRV %s %d \n",__func__,__LINE__);
 
     mutex_lock(&isp_dev->mlock);
     result = Send_Command (APU_2_RPU_MB_CMD_CREATE_INSTANCE,packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
@@ -144,7 +135,6 @@ RESULT VsiCamDeviceCreate
         kfree(packet);
         return result;
     }
-    pr_err("RKC-ISP-DRV %s %d \n",__func__,__LINE__);
     mbox_send_message(isp_dev->tx_chan,NULL);
 
     *pHandleCamDevice = hCamDevice;
@@ -195,7 +185,6 @@ RESULT VsiCamDeviceDestroy
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-#if 1
     mutex_lock(&isp_dev->mlock);
     ret = Send_Command (APU_2_RPU_MB_CMD_DESTORY , packet, packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
     if(0 != ret) {
@@ -205,15 +194,13 @@ RESULT VsiCamDeviceDestroy
     }
 	mbox_send_message(isp_dev->tx_chan,NULL);
 
-#endif
-
-
     xlnx_mbox_apu_wait_for_ack(isp_dev);
     mutex_unlock(&isp_dev->mlock);
 
     kfree(packet);
 	return result;
 }
+EXPORT_SYMBOL(VsiCamDeviceDestroy);
 
 RESULT VsiCamDeviceSetOutFormat
 (
@@ -241,13 +228,7 @@ RESULT VsiCamDeviceSetOutFormat
     if (NULL == pFmt) {
         return (RET_NULL_POINTER);
     }
-#ifdef DEBUG_FLAG
-	// xil_printf("APU set out format :%d.\r\n");
-    // xil_printf("out width: %d.\r\n", pFmt->outWidth);
-    // xil_printf("databits: %d.\r\n", pFmt->dataBits);
-    // xil_printf("outfmt: %d.\r\n", pFmt->outFormat);
-#endif
-    pCamDevCtx->cookie ++;
+   pCamDevCtx->cookie ++;
 
     packet = kzalloc(sizeof(payload_packet),GFP_KERNEL);
     if(!packet)
@@ -277,7 +258,6 @@ RESULT VsiCamDeviceSetOutFormat
         kfree(packet);
         return RET_OUTOFRANGE;
     }
-#if 1
     mutex_lock(&isp_dev->mlock);
     ret = Send_Command (APU_2_RPU_MB_CMD_SET_OUT_FORMAT, packet, packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
     if(0 != ret) {
@@ -287,7 +267,6 @@ RESULT VsiCamDeviceSetOutFormat
     }
     mbox_send_message(isp_dev->tx_chan,NULL);
 
-#endif
 
     xlnx_mbox_apu_wait_for_ack(isp_dev);
     mutex_unlock(&isp_dev->mlock);
@@ -295,7 +274,7 @@ RESULT VsiCamDeviceSetOutFormat
 	kfree(packet);
 	return result;
 }
-#if 1
+
 RESULT VsiCamDeviceSetInFormat
 (
     struct vvcam_isp_dev *isp_dev,    
@@ -365,7 +344,6 @@ RESULT VsiCamDeviceSetInFormat
 
 	return result;
 }
-#endif
 
 #if 0
 RESULT VsiCamDeviceGetOutFormat
@@ -733,7 +711,6 @@ RESULT VsiCamDeviceDisconnectCamera
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-#if 1
     mutex_lock(&isp_dev->mlock);
     ret = Send_Command(APU_2_RPU_MB_CMD_DISCONNECT_CAMERA , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
     if(0 != ret) {
@@ -742,7 +719,6 @@ RESULT VsiCamDeviceDisconnectCamera
         return ret;
     }
     mbox_send_message(isp_dev->tx_chan,NULL);
-#endif
     xlnx_mbox_apu_wait_for_ack(isp_dev);
     mutex_unlock(&isp_dev->mlock);
     kfree(packet);
@@ -849,7 +825,6 @@ RESULT VsiCamDeviceStartStreaming
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-#if 1
     mutex_lock(&isp_dev->mlock);
     result = Send_Command(APU_2_RPU_MB_CMD_START_STREAMING , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
     if(0 != result) {
@@ -859,8 +834,6 @@ RESULT VsiCamDeviceStartStreaming
         return result;
     }
     mbox_send_message(isp_dev->tx_chan,NULL);
-
-#endif
 
     xlnx_mbox_apu_wait_for_ack(isp_dev);
     mutex_unlock(&isp_dev->mlock);
@@ -982,7 +955,6 @@ RESULT VsiCamDeviceSetPathStreaming
     }
     mbox_send_message(isp_dev->tx_chan,NULL);
 
-
     xlnx_mbox_apu_wait_for_ack(isp_dev);
     mutex_unlock(&isp_dev->mlock);
     dev_info(isp_dev->dev , "[APU-Streamon] RKC-STREAM_ON_ACK_CNT \n");
@@ -1034,8 +1006,7 @@ RESULT VsiCamDeviceGetPathStreaming
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-#if 1
-    dev_info(isp_dev->dev , " [APU]-%sSEND COOKIE == %d payload_size=%d\n",__func__,packet->cookie,packet->payload_size);
+
     mutex_lock(&isp_dev->mlock);
     result = Send_Command( APU_2_RPU_MB_CMD_GET_PATH_STREAMING , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
     if(result != 0) {
@@ -1044,7 +1015,6 @@ RESULT VsiCamDeviceGetPathStreaming
         return result;
     }
     mbox_send_message(isp_dev->tx_chan,NULL);
-#endif
 
     __result = xlnx_mbox_apu_wait_for_data(isp_dev,packet->payload);
 	if(__result)
@@ -1131,7 +1101,7 @@ RESULT VsiCamDeviceAllocResMemory
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-#if 1
+
     mutex_lock(&isp_dev->mlock);
     result = Send_Command( APU_2_RPU_MB_CMD_ALLOC_RES_MEMORY , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
     if(0 != result) {
@@ -1140,8 +1110,6 @@ RESULT VsiCamDeviceAllocResMemory
         return result;
     }
     mbox_send_message(isp_dev->tx_chan,NULL);
-
-#endif
  
     __result = xlnx_mbox_apu_wait_for_data(isp_dev,packet->payload);
     if(__result)
