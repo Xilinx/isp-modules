@@ -625,12 +625,15 @@ int IspDeviceDestroy(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 int IspDestroyCamDevice(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 {
 
-	if (isp_dev->IspPorts[Port].RefCount) isp_dev->IspPorts[Port].RefCount--;
-
-	if (!isp_dev->IspPorts[Port].RefCount)
+	if (isp_dev->IspPorts[Port].RefCount)
+	{
+		isp_dev->IspPorts[Port].RefCount--;
+	}
+	// if (!isp_dev->IspPorts[Port].RefCount)
 	{
 		IspDeviceDestroy(isp_dev, Port, Chn);
 	}
+	isp_dev->IspPorts[Port].RefCount = 0;
 
 	return VSI_SUCCESS;
 }
@@ -652,7 +655,7 @@ int MediaIspStreamOff(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 
 	MediaIspDeviceCameraDisConnect(isp_dev, Port, Chn);
 
-//	IspDestroyPipeline(isp_dev, Port, Chn);
+	IspDestroyPipeline(isp_dev, Port, Chn);
 
 	return VSI_SUCCESS;
 }

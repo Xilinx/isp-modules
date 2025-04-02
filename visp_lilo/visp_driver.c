@@ -1747,8 +1747,12 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_data *pad_data = &isp_dev->pad_data[format->pad];
+	int Index = isp_dev->pads[format->pad].index;
+	int Port = Index / MEDIA_ISP_PORT_PAD_COUNT;
+	int RetVal;
 
-#if 0
+	Port=0;//for LILO
+#if 1
 	/*Create Instance*/
 	mutex_lock(&isp_dev->rpu->rpu_lock);
 
