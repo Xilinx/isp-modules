@@ -199,7 +199,8 @@ static int MediaIspDeviceMcmTerminate(struct vvcam_isp_dev *isp_dev, uint8_t Por
     uint8_t Chn = CAMDEV_BUFCHAIN_RDMA;
     MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
 
-    MediaIspDeviceDestroyBufPool(isp_dev, Port, Chn);
+    //MediaIspDeviceDestroyBufPool(isp_dev, Port, Chn);
+    MediaIspDeviceDestroyBufPool(isp_dev, 0, Chn);
     IspPort->McmAttr.NumBufs = 0;
 
     return RetVal;
@@ -317,7 +318,7 @@ int MediaIspDeviceCreateBufPool(struct vvcam_isp_dev *isp_dev, uint8_t Port, uin
                 MediaBuf *BufInfo = &IspPort->McmAttr.Bufs[i];
                 BufInfo->Planes[0].DmaSize = BufSize;
 
-		BufPoolCfg.pBaseAddrList[i] = isp_dev->ip_a[i];
+				BufPoolCfg.pBaseAddrList[i] = isp_dev->ip_a[i];
                 BufPoolCfg.pIplAddrList[i]   = (void *)pIplAddr;
 
                 dev_err(isp_dev->dev,"%s: Alloc mcm buffer[%d]: Phy_Addr:0x%x, size:0x%x",
@@ -521,9 +522,9 @@ int MediaIspStreamOff(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 
     MediaIspDeviceStreamOff(isp_dev, Port, Chn);
 
-    MediaIspDeviceCameraDisConnect(isp_dev, Port, Chn);
+ //   MediaIspDeviceCameraDisConnect(isp_dev, Port, Chn);
 
-    //IspDestroyPipeline(isp_dev, Port, Chn);
+    IspDestroyPipeline(isp_dev, Port, Chn);
     
     return VSI_SUCCESS;
 }

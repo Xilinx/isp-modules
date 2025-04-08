@@ -597,7 +597,7 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 		d[i] = dma_addr;
     }
 }
-
+static int on;
   void isp_mimo_device_run(void *priv)
 {
 #if 0
@@ -628,8 +628,11 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 	device->isp_dev->op_a[1]=output_addr[1];
 	device->isp_dev->op_a[2]=output_addr[2];
 	device->isp_dev->op_a[3]=output_addr[3];
-
-    MediaIspDeviceStreamOn(device->isp_dev, 0, 0);
+	if (!on)
+	{
+	    MediaIspDeviceStreamOn(device->isp_dev, 0, 0);
+		on = 1;
+	}
 	MediaIspDeviceDeque(device->isp_dev, 0);
 
 	device->isp_dev->apu_wait_for_isp_frame_done = 1;
@@ -650,7 +653,7 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 	src_vb->sequence = dst_vb->sequence = curr_ctx->sequence++;
 	v4l2_m2m_job_finish(device->m2m_dev, curr_ctx->fh.m2m_ctx);
 #if 1 //--TODO
-	MediaIspStreamOff(device->isp_dev, 0, 0);
+	//MediaIspStreamOff(device->isp_dev, 0, 0);
 #endif
 }
 
@@ -1901,7 +1904,10 @@ int isp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
                             			enum v4l2_buf_type type)
 {
 	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
-
+	if (on) {
+		MediaIspStreamOff(ctx->device->isp_dev, 0, 0);
+		on = 0;
+	}
 	return v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, type);
 }
 
@@ -2205,7 +2211,7 @@ int isp_mimo_release(struct file *file)
 	struct isp_mimo_ctx *ctx = file2ctx(file);
 
 	if (dev_open == 1) {
-		IspDeviceDistroyMIMO(device->isp_dev, 0);
+	//	IspDeviceDistroyMIMO(device->isp_dev, 0);
 		dev_open = 0;
 	}
 
