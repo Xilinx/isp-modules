@@ -2083,7 +2083,7 @@ static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
                  source->name, source_pad, sink->name, sink_pad);
 
         /* Update PortsMask */
-        isp_dev->PortsMask |= (1 << source_pad);
+        //isp_dev->PortsMask |= (1 << source_pad);
 		fwnode_handle_put(ep);
     }
 
