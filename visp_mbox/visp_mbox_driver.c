@@ -40,10 +40,17 @@
 
 #define RPU0_IPI_ID 3
 #define RPU1_IPI_ID 4
-#define RPU0 0
-#define RPU1 1
+#define RPU6 6
+#define RPU7 7
+#define RPU8 8
+#define RPU9 9
 #define MAX_ISP_INSTANCES 6
-#define MAX_RPU_ID 4
+#define MAX_RPU_ID 8
+
+#define RPU6_0 0
+#define RPU6_1 1
+#define RPU6_2 2
+#define RPU6_3 3
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
@@ -51,6 +58,29 @@ static LIST_HEAD(rpu_devices);
 static DECLARE_COMPLETION(mailbox_completion);
 int (*exported_func1)(void *, struct visp_dev *isp_dev);
 static void my_tasklet_function(void *data);
+
+int get_dest_cpu(int rpu_id) {
+    int dest_cpu;
+    switch (rpu_id) {
+        case 6:
+            dest_cpu = RPU6_0;
+            break;
+        case 7:
+            dest_cpu = RPU6_1;
+            break;
+        case 8:
+            dest_cpu = RPU6_2;
+            break;
+        case 9:
+            dest_cpu = RPU6_3;
+            break;
+        default:
+            // Handle invalid rpu_id (you might want to return an error code)
+            dest_cpu = -1; // Or another indicator of an invalid ID
+            break;
+    }
+    return dest_cpu;
+}
 
 static void handle_event_notified(struct work_struct *work)
 {
@@ -95,7 +125,7 @@ static void my_tasklet_function(void *data)
 
 	/* Read command ID and ISP ID from mailbox */
 	mutex_lock(&rpu->read_lock);
-	recv_cmd_id = apu_mailbox_read(rpu->rpu_id, &isp_id);
+	recv_cmd_id = apu_mailbox_read(get_dest_cpu(rpu->rpu_id), &isp_id);
 	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES)
 	{
 		pr_err("my_tasklet_function: Invalid isp_id %u\n", isp_id);
@@ -155,15 +185,15 @@ static int get_rpu_id(int ipi_id)
 	switch (ipi_id)
 	{
 		case RPU0_IPI_ID:
-			rpu_id = RPU0;
+			rpu_id = RPU6;
 			break;
 
 		case RPU1_IPI_ID:
-			rpu_id = RPU1;
+			rpu_id = RPU7;
 			break;
 
 		default:
-			rpu_id = 0; //-1; // Return an error code for invalid IPI ID
+			rpu_id = 6; //-1; // Return an error code for invalid IPI ID
 			break;
 	}
 
@@ -345,7 +375,7 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf,
 	mutex_lock(&rpu->write_lock); // Replaced spinlock with mutex
 	/* Send command and message */
 	ret = Send_Command(user_packet->cmd_id, packet, sizeof(payload_packet),
-					   rpu->rpu_id, MBOX_CORE_APU);
+					  get_dest_cpu(rpu->rpu_id), MBOX_CORE_APU);
 
 	if (ret < 0)
 	{
@@ -695,7 +725,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = Send_Command(cmd, data, size, dest_cpu, src_cpu);
+	result = Send_Command(cmd, data, size,get_dest_cpu(dest_cpu), src_cpu);
 	if (result != 0) {
 		pr_err("%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
 		goto unlock_and_exit;
@@ -745,7 +775,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = Send_Command(cmd, data, size, dest_cpu, src_cpu);
+	result = Send_Command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
 	if (result != 0) {
 		pr_err("%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
 		mutex_unlock(&rpu->write_lock);
