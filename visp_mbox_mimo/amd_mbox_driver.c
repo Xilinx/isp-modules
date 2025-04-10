@@ -40,17 +40,10 @@
 
 #define RPU0_IPI_ID 3
 #define RPU1_IPI_ID 4
-#define RPU6 6
-#define RPU7 7
-#define RPU8 8
-#define RPU9 9
+#define RPU0 0
+#define RPU1 1
 #define MAX_ISP_INSTANCES 6
-#define MAX_RPU_ID 8
-
-#define RPU6_0 0
-#define RPU6_1 1
-#define RPU6_2 2
-#define RPU6_3 3
+#define MAX_RPU_ID 4
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
@@ -58,7 +51,6 @@ static LIST_HEAD(rpu_devices);
 static DECLARE_COMPLETION(mailbox_completion);
 int (* exported_func1)(void *,struct vvcam_isp_dev *isp_dev);
 static void my_tasklet_function(void *data);
-int get_dest_cpu(int rpu_id);
 #if 0 
 static int event_notified_idr_cb(int id, void *data, void *isp_dev_ptr)
 {
@@ -70,28 +62,7 @@ static int event_notified_idr_cb(int id, void *data, void *isp_dev_ptr)
     return 0;
 }
 #endif
-int get_dest_cpu(int rpu_id) {
-    int dest_cpu;
-    switch (rpu_id) {
-        case 6:
-            dest_cpu = RPU6_0;
-            break;
-        case 7:
-            dest_cpu = RPU6_1;
-            break;
-        case 8:
-            dest_cpu = RPU6_2;
-            break;
-        case 9:
-            dest_cpu = RPU6_3;
-            break;
-        default:
-            // Handle invalid rpu_id (you might want to return an error code)
-            dest_cpu = -1; // Or another indicator of an invalid ID
-            break;
-    }
-    return dest_cpu;
-}
+
 static void handle_event_notified(struct work_struct *work)
 {
     //struct vvcam_isp_dev *isp_dev;
@@ -156,7 +127,7 @@ static void my_tasklet_function(void  *data) {
     }
 
     /* Read command ID and ISP ID from mailbox */
-    recv_cmd_id = apu_mailbox_read(get_dest_cpu(rpu->rpu_id), &isp_id);
+    recv_cmd_id = apu_mailbox_read(rpu->rpu_id, &isp_id);
     if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES) {
         pr_err("my_tasklet_function: Invalid isp_id %u\n", isp_id);
         return;
@@ -198,18 +169,18 @@ int get_rpu_id(int ipi_id)
     /* Determine the RPU ID based on the IPI ID */
     switch (ipi_id) {
         case RPU0_IPI_ID:
-            rpu_id = RPU6;
+            rpu_id = RPU0;
             pr_debug("get_rpu_id: Mapped IPI ID %d to RPU ID %d (RPU0)\n", ipi_id, rpu_id);
             break;
 
         case RPU1_IPI_ID:
-            rpu_id = RPU7;
+            rpu_id = RPU1;
             pr_debug("get_rpu_id: Mapped IPI ID %d to RPU ID %d (RPU1)\n", ipi_id, rpu_id);
             break;
 
         default:
             //rpu_id = -1; // Return an error code for invalid IPI ID
-            rpu_id = RPU6;
+            rpu_id = RPU0;
             break;
     }
 
@@ -389,7 +360,7 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf, size_t 
 
     /* Send command and message */
     mutex_lock(&rpu->lock); // Replaced spinlock with mutex
-    ret = Send_Command(user_packet->cmd_id, packet, sizeof(payload_packet),get_dest_cpu(rpu->rpu_id), MBOX_CORE_APU);
+    ret = Send_Command(user_packet->cmd_id, packet, sizeof(payload_packet), rpu->rpu_id, MBOX_CORE_APU);
     mutex_unlock(&rpu->lock);
 
     if (ret < 0) {

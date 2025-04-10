@@ -28,7 +28,6 @@
 #include <linux/kernel.h>
 #include <linux/ktime.h>
 
-#define RPU_6 6
 
 struct response_user_packet data_from_interrupt;
 EXPORT_SYMBOL_GPL(data_from_interrupt);
@@ -350,8 +349,7 @@ void mailbox_close(void)
 int Send_Command(MBCmdId_E cmd, void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu )
 {
     int ret=0;
-    dest_cpu = RPU_6; 
-    ret = write_mboxcmd(cmd, data,size,dest_cpu,src_cpu);
+    	ret = write_mboxcmd(cmd, data,size,dest_cpu,src_cpu);
     return ret;
 }
 EXPORT_SYMBOL_GPL(Send_Command);
