@@ -1,3 +1,56 @@
+/****************************************************************************
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ *
+ *****************************************************************************
+ *
+ * The GPL License (GPL)
+ *
+ * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program;
+ *
+ *****************************************************************************
+ *
+ * Note: This software is released under dual MIT and GPL licenses. A
+ * recipient may use this file under the terms of either the MIT license or
+ * GPL License. If you wish to use only one license not the other, you can
+ * indicate your decision by deleting one of the above license notices in your
+ * version of this file.
+ *
+ *****************************************************************************/
+ 
 #include <linux/arm-smccc.h>
 #include <linux/module.h>
 #include <linux/of_graph.h>
@@ -40,17 +93,10 @@
 
 #define RPU0_IPI_ID 3
 #define RPU1_IPI_ID 4
-#define RPU6 6
-#define RPU7 7
-#define RPU8 8
-#define RPU9 9
+#define RPU0 0
+#define RPU1 1
 #define MAX_ISP_INSTANCES 6
-#define MAX_RPU_ID 8
-
-#define RPU6_0 0
-#define RPU6_1 1
-#define RPU6_2 2
-#define RPU6_3 3
+#define MAX_RPU_ID 4
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
@@ -58,29 +104,6 @@ static LIST_HEAD(rpu_devices);
 static DECLARE_COMPLETION(mailbox_completion);
 int (*exported_func1)(void *, struct visp_dev *isp_dev);
 static void my_tasklet_function(void *data);
-
-int get_dest_cpu(int rpu_id) {
-    int dest_cpu;
-    switch (rpu_id) {
-        case 6:
-            dest_cpu = RPU6_0;
-            break;
-        case 7:
-            dest_cpu = RPU6_1;
-            break;
-        case 8:
-            dest_cpu = RPU6_2;
-            break;
-        case 9:
-            dest_cpu = RPU6_3;
-            break;
-        default:
-            // Handle invalid rpu_id (you might want to return an error code)
-            dest_cpu = -1; // Or another indicator of an invalid ID
-            break;
-    }
-    return dest_cpu;
-}
 
 static void handle_event_notified(struct work_struct *work)
 {
@@ -125,7 +148,7 @@ static void my_tasklet_function(void *data)
 
 	/* Read command ID and ISP ID from mailbox */
 	mutex_lock(&rpu->read_lock);
-	recv_cmd_id = apu_mailbox_read(get_dest_cpu(rpu->rpu_id), &isp_id);
+	recv_cmd_id = apu_mailbox_read(rpu->rpu_id, &isp_id);
 	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES)
 	{
 		pr_err("my_tasklet_function: Invalid isp_id %u\n", isp_id);
@@ -185,15 +208,15 @@ static int get_rpu_id(int ipi_id)
 	switch (ipi_id)
 	{
 		case RPU0_IPI_ID:
-			rpu_id = RPU6;
+			rpu_id = RPU0;
 			break;
 
 		case RPU1_IPI_ID:
-			rpu_id = RPU7;
+			rpu_id = RPU1;
 			break;
 
 		default:
-			rpu_id = 6; //-1; // Return an error code for invalid IPI ID
+			rpu_id = 0; //-1; // Return an error code for invalid IPI ID
 			break;
 	}
 
@@ -375,7 +398,7 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf,
 	mutex_lock(&rpu->write_lock); // Replaced spinlock with mutex
 	/* Send command and message */
 	ret = Send_Command(user_packet->cmd_id, packet, sizeof(payload_packet),
-					  get_dest_cpu(rpu->rpu_id), MBOX_CORE_APU);
+					   rpu->rpu_id, MBOX_CORE_APU);
 
 	if (ret < 0)
 	{
@@ -725,7 +748,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = Send_Command(cmd, data, size,get_dest_cpu(dest_cpu), src_cpu);
+	result = Send_Command(cmd, data, size, dest_cpu, src_cpu);
 	if (result != 0) {
 		pr_err("%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
 		goto unlock_and_exit;
@@ -775,7 +798,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = Send_Command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
+	result = Send_Command(cmd, data, size, dest_cpu, src_cpu);
 	if (result != 0) {
 		pr_err("%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
 		mutex_unlock(&rpu->write_lock);

@@ -2,7 +2,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2023 VeriSilicon Holdings Co., Ltd.
+ * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
  *
  * The GPL License (GPL)
  *
- * Copyright (c) 2023 VeriSilicon Holdings Co., Ltd.
+ * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -50,6 +50,7 @@
  * version of this file.
  *
  *****************************************************************************/
+ 
 #include <linux/module.h>
 #include <linux/of_graph.h>
 #include <linux/of_reserved_mem.h>
@@ -2083,7 +2084,7 @@ static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
                  source->name, source_pad, sink->name, sink_pad);
 
         /* Update PortsMask */
-        //isp_dev->PortsMask |= (1 << source_pad);
+        isp_dev->PortsMask |= (1 << source_pad);
 		fwnode_handle_put(ep);
     }
 
