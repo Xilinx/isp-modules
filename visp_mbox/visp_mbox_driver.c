@@ -93,10 +93,17 @@
 
 #define RPU0_IPI_ID 3
 #define RPU1_IPI_ID 4
-#define RPU0 0
-#define RPU1 1
+#define RPU6 6
+#define RPU7 7
+#define RPU8 8
+#define RPU9 9
 #define MAX_ISP_INSTANCES 6
-#define MAX_RPU_ID 4
+#define MAX_RPU_ID 8
+
+#define RPU6_0 0
+#define RPU6_1 1
+#define RPU6_2 2
+#define RPU6_3 3
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
@@ -104,6 +111,29 @@ static LIST_HEAD(rpu_devices);
 static DECLARE_COMPLETION(mailbox_completion);
 int (*exported_func1)(void *, struct visp_dev *isp_dev);
 static void my_tasklet_function(void *data);
+
+int get_dest_cpu(int rpu_id) {
+    int dest_cpu;
+    switch (rpu_id) {
+        case 6:
+            dest_cpu = RPU6_0;
+            break;
+        case 7:
+            dest_cpu = RPU6_1;
+            break;
+        case 8:
+            dest_cpu = RPU6_2;
+            break;
+        case 9:
+            dest_cpu = RPU6_3;
+            break;
+        default:
+            // Handle invalid rpu_id (you might want to return an error code)
+            dest_cpu = -1; // Or another indicator of an invalid ID
+            break;
+    }
+    return dest_cpu;
+}
 
 static void handle_event_notified(struct work_struct *work)
 {
@@ -148,7 +178,7 @@ static void my_tasklet_function(void *data)
 
 	/* Read command ID and ISP ID from mailbox */
 	mutex_lock(&rpu->read_lock);
-	recv_cmd_id = apu_mailbox_read(rpu->rpu_id, &isp_id);
+	recv_cmd_id = apu_mailbox_read(get_dest_cpu(rpu->rpu_id), &isp_id);
 	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES)
 	{
 		pr_err("my_tasklet_function: Invalid isp_id %u\n", isp_id);
@@ -208,15 +238,15 @@ static int get_rpu_id(int ipi_id)
 	switch (ipi_id)
 	{
 		case RPU0_IPI_ID:
-			rpu_id = RPU0;
+			rpu_id = RPU6;
 			break;
 
 		case RPU1_IPI_ID:
-			rpu_id = RPU1;
+			rpu_id = RPU7;
 			break;
 
 		default:
-			rpu_id = 0; //-1; // Return an error code for invalid IPI ID
+			rpu_id = -1; // Return an error code for invalid IPI ID
 			break;
 	}
 
@@ -228,7 +258,7 @@ static void visp_mb_rx_cb(struct mbox_client *cl, void *msg)
 	int rpu_id = 0;
 	struct rpu_dev *rpu = NULL;
 	/* Get RPU ID from the received message */
-	rpu_id = get_rpu_id(((struct zynqmp_ipi_message *)msg)->len);
+	rpu_id = get_rpu_id(((struct zynqmp_ipi_message *)msg)->remote_id);
 	/* Get RPU device pointer using the RPU ID */
 	rpu = get_rpu_dev(rpu_id);
 	if (rpu != NULL)
@@ -398,7 +428,7 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf,
 	mutex_lock(&rpu->write_lock); // Replaced spinlock with mutex
 	/* Send command and message */
 	ret = Send_Command(user_packet->cmd_id, packet, sizeof(payload_packet),
-					   rpu->rpu_id, MBOX_CORE_APU);
+					  get_dest_cpu(rpu->rpu_id), MBOX_CORE_APU);
 
 	if (ret < 0)
 	{
@@ -682,7 +712,7 @@ static void reserved_memory_exit(void)
 
 uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 {
-	int result = 0;
+	long result = 0;
 	struct rpu_dev *rpu = NULL;
 
 	if (!isp_dev)
@@ -706,17 +736,20 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 		return -EINVAL;
 	}
 
-	/* Lock the data mutex */
-	/* Wait for data to be available */
-	result = wait_for_completion_interruptible(&isp_dev->apu_wait_for_data);
-	if (result)
-	{
-		dev_err(isp_dev->dev, "Waiting for data interrupted. Error: %d\n",
-				result);
+	long timeout_jiffies = msecs_to_jiffies(1000*60*5);  // Timeout of 5000ms (5 seconds)
+	result = wait_for_completion_interruptible_timeout(&isp_dev->apu_wait_for_data, timeout_jiffies);
+	if (result == 0) {
+		pr_err("Timeout occurred while waiting for APU ACK\n");
 		isp_dev->k_apu_data_flag = 0; // Clear the data flag
 		//    mutex_unlock(&rpu->lock);
 		mutex_unlock(&rpu->read_lock);
-		return -EINTR; // Return specific error code for interrupted wait
+		return -1;
+	} else if (result < 0) {
+		pr_err("Wait interrupted\n");
+		isp_dev->k_apu_data_flag = 0; // Clear the data flag
+		//    mutex_unlock(&rpu->lock);
+		mutex_unlock(&rpu->read_lock);
+		return -1;
 	}
 
 	/* Copy the received data */
@@ -748,7 +781,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = Send_Command(cmd, data, size, dest_cpu, src_cpu);
+	result = Send_Command(cmd, data, size,get_dest_cpu(dest_cpu), src_cpu);
 	if (result != 0) {
 		pr_err("%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
 		goto unlock_and_exit;
@@ -798,7 +831,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = Send_Command(cmd, data, size, dest_cpu, src_cpu);
+	result = Send_Command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
 	if (result != 0) {
 		pr_err("%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
 		mutex_unlock(&rpu->write_lock);
@@ -815,30 +848,33 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 		return result;
 	}
 
-	xlnx_mbox_apu_wait_for_ack(isp_dev);
-
+	result = xlnx_mbox_apu_wait_for_ack(isp_dev);
+	if(result < 0)
+	{
+		pr_err("%s: Failed to get ack\n", __func__);
+		goto unlock_and_exit;
+	}
+unlock_and_exit:
 	mutex_unlock(&rpu->write_lock);
-
-	return 0; // Success
+	return result; // Success
 }
 EXPORT_SYMBOL(xlnx_send_mbox_acked_cmd);
 
-void xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
+uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 {
 	struct rpu_dev *rpu = NULL;
-	int result;
-
+	long result;
 	if (!isp_dev)
 	{
 		pr_err(
 			"xlnx_mbox_apu_wait_for_ack: Invalid ISP device (NULL pointer).\n");
-		return;
+		return -1;
 	}
 	rpu = isp_dev->rpu;
 	if (!rpu)
 	{
 		dev_err(isp_dev->dev, "RPU device is NULL in %s.\n", __func__);
-		return;
+		return -1;
 	}
 
 	/* Lock the acknowledgment mutex */
@@ -847,15 +883,14 @@ void xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 
 	//dev_err(isp_dev->dev, "%s %d acquired lock and waiting for ack to receive from rpu\n",__func__,__LINE__);
 	/* Wait for acknowledgment completion */
-	result = wait_for_completion_interruptible(&isp_dev->apu_wait_for_ack);
-	if (result)
-	{
-		dev_err(isp_dev->dev,
-				"Waiting for acknowledgment interrupted. Error: %d\n", result);
-		isp_dev->k_apu_ack_flag = 0; // Clear the acknowledgment flag
-		mutex_unlock(&rpu->read_lock);
-		//      mutex_unlock(&rpu->ack_lock);
-		return;
+	long timeout_jiffies = msecs_to_jiffies(1000*60*5);  // Timeout of 5000ms (5 seconds)
+	result = wait_for_completion_interruptible_timeout(&isp_dev->apu_wait_for_ack, timeout_jiffies);
+	if (result == 0) {
+		pr_err("Timeout occurred while waiting for APU ACK\n");
+		return -1;
+	} else if (result < 0) {
+		pr_err("Wait interrupted\n");
+		return -1;
 	}
 
 	/* Clear acknowledgment flag */
@@ -864,6 +899,8 @@ void xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 
 	/* Unlock the acknowledgment mutex */
 	mutex_unlock(&rpu->read_lock);
+
+	return data_from_interrupt.res_payload_pkt.resp_field.error_subcode_t;
 }
 EXPORT_SYMBOL(xlnx_mbox_apu_wait_for_ack);
 

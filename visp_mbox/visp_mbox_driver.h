@@ -60,7 +60,7 @@
 #define SUCCESS 0
 struct rpu_dev *get_rpu_dev(int rpu_id);
 extern struct response_user_packet data_from_interrupt;
-void xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev);
+uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev);
 int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 			void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu);
 int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,

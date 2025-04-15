@@ -107,8 +107,12 @@ RESULT VsiCamDeviceSensorOpen(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_OPEN, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_OPEN, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 
@@ -167,8 +171,12 @@ RESULT VsiCamDeviceSensorDrvHandleRegister(
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_REG, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_REG, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return result;
@@ -212,8 +220,12 @@ RESULT VsiCamDeviceSensorDrvHandleUnRegister(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_UNREG, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_UNREG, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return result;
@@ -258,9 +270,12 @@ RESULT VsiCamDeviceSensorClose(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_CLOSE, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_CLOSE, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
-
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 	kfree(packet);
 	return result;
 }
@@ -545,8 +560,12 @@ RESULT VsiCamDeviceSensorSetTestPattern(
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_SET_TP, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_SET_TP, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return result;
@@ -709,8 +728,12 @@ RESULT VsiCamDeviceSensorSetFrameRate(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_SET_FRAMERATE, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_SET_FRAMERATE, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 

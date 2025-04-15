@@ -943,7 +943,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__,
 						__LINE__);
 				// mutex_unlock(&isp_dev->port_lock[Port]);
-				mutex_unlock(&isp_dev->rpu->rpu_lock);
+				//mutex_unlock(&isp_dev->rpu->rpu_lock);
+				goto ERR_TO_CAMERA_DISCONNECT;
 				return ret;
 			}
 #endif
@@ -954,7 +955,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				dev_err(isp_dev->dev, "%s %d FAiled camera connect\n", __func__,
 						__LINE__);
 				//mutex_unlock(&isp_dev->port_lock[Port]);
-				mutex_unlock(&isp_dev->rpu->rpu_lock);
+				//mutex_unlock(&isp_dev->rpu->rpu_lock);
+				goto ERR_TO_CAMERA_DISCONNECT;
 				return ret;
 			}
 
@@ -965,7 +967,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__,
 						__LINE__);
 				// mutex_unlock(&isp_dev->port_lock[Port]);
-				mutex_unlock(&isp_dev->rpu->rpu_lock);
+				// mutex_unlock(&isp_dev->rpu->rpu_lock);
+				goto ERR_TO_CAMERA_DISCONNECT;
 				return ret;
 			}
 #endif
@@ -1368,10 +1371,11 @@ static long visp_return_rpu_id(struct v4l2_subdev *sd, void *arg)
         dev_err(isp_dev->dev, "%s %d NULL ARG \n",__func__,__LINE__);
     }
 
-    uint32_t *rpu=(uint32_t *)arg;
-    *rpu=isp_dev->isp_rpu;
+    struct isp_rpu *temp = (struct isp_rpu *)arg;
+    temp->rpu = isp_dev->isp_rpu;
+    temp->isp = isp_dev->id;
 
-    dev_info(isp_dev->dev, "%s %d returning RPU id: %d for ISP : %d\n",__func__,__LINE__,*rpu, isp_dev->id);
+    dev_info(isp_dev->dev, "%s %d returning RPU id: %d for ISP : %d\n",__func__,__LINE__, isp_dev->isp_rpu, isp_dev->id);
 
     return ret;
 }
@@ -2084,7 +2088,7 @@ static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
                  source->name, source_pad, sink->name, sink_pad);
 
         /* Update PortsMask */
-        isp_dev->PortsMask |= (1 << source_pad);
+        //isp_dev->PortsMask |= (1 << source_pad);
 		fwnode_handle_put(ep);
     }
 

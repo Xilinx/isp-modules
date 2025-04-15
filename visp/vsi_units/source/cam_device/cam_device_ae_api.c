@@ -89,8 +89,12 @@ RESULT VsiCamDeviceUnRegisterAeLib(struct visp_dev *isp_dev,
 	memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
 	packet->payload_size += sizeof(uint32_t);
 
-	xlnx_send_mbox_acked_cmd(isp_dev, RPU_2_APU_MB_CMD_UNREGISTER_AELIB, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, RPU_2_APU_MB_CMD_UNREGISTER_AELIB, packet,
 		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 
@@ -132,8 +136,12 @@ RESULT VsiCamDeviceAeDisable(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_AE_DISABLE, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_AE_DISABLE, packet,
 		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 

@@ -121,6 +121,11 @@ struct visp_ext_buf_info
 	struct visp_plane plane;
 };
 
+struct isp_rpu {
+    uint32_t rpu;
+    uint32_t isp;
+};
+
 #define VISP_IOC_BUFDONE _IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_buf)
 #define VISP_IOC_BUFFER_ALLOC \
 	_IOWR('I', BASE_VIDIOC_PRIVATE + 1, struct visp_ext_buf_info)
@@ -128,7 +133,7 @@ struct visp_ext_buf_info
 	_IOWR('I', BASE_VIDIOC_PRIVATE + 2, struct visp_ext_buf_info)
 
 #define VISP_GET_RPU_ID \
-    _IOWR('I', BASE_VIDIOC_PRIVATE + 3, uint32_t )
+    _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu  )
 
 #ifdef __KERNEL__
 #include "visp_driver.h"

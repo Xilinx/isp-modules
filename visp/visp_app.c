@@ -366,8 +366,12 @@ static int isp_send_atm_prop_to_rpu(struct visp_dev *isp, CamDeviceHandle_t hCam
     p_data += sizeof(int);
     packet->payload_size += sizeof(int);
 
-	xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_CMD_SET_ATM, packet,
+	result = xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_CMD_SET_ATM, packet,
             packet->payload_size + payload_extra_size, isp->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 	kfree(packet);
 
     return result;
@@ -1495,6 +1499,7 @@ int MediaIspDeviceSensorOpen(struct visp_dev *isp_dev, uint8_t Port)
 	{
 		dev_err(isp_dev->dev, "%s: get sensor mode failed, ret is %d", __func__,
 				RetVal);
+		return RetVal;
 	}
 #if 0 //Check it once again it is required or not
 	RetVal = MediaIspCalibGetSensorName(isp_dev, Port, SensorName);
@@ -1509,6 +1514,7 @@ int MediaIspDeviceSensorOpen(struct visp_dev *isp_dev, uint8_t Port)
 		dev_err(isp_dev->dev,
 				"CamDevice open sensor %s mode %d driver Failed, ret is %d",
 				SensorName, ModeIndex, RetVal);
+		return RetVal;
 	}
 
 	testPattern.enable = false;

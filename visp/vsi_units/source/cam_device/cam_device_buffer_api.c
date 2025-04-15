@@ -114,8 +114,12 @@ RESULT VsiCamDeviceInitBufChain(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_INIT_BUF_CHAIN, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_INIT_BUF_CHAIN, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return result;
@@ -161,8 +165,12 @@ RESULT VsiCamDeviceDeInitBufChain(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DEINIT_BUF_CHAIN, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DEINIT_BUF_CHAIN, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 
@@ -248,8 +256,12 @@ RESULT VsiCamDeviceCreateBufPool(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_CREATE_BUFFER_POOL, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_CREATE_BUFFER_POOL, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 
@@ -291,8 +303,12 @@ RESULT VsiCamDeviceDestroyBufPool(struct visp_dev *isp_dev,
 
 	if (packet->payload_size > MAX_ITEM) return RET_OUTOFRANGE;
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DESTORY_BUFFER_POOL, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DESTORY_BUFFER_POOL, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 
@@ -336,8 +352,12 @@ RESULT VsiCamDeviceSetupBufMgmt(struct visp_dev *isp_dev,
 
 	if (packet->payload_size > MAX_ITEM) return RET_OUTOFRANGE;
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SETUP_BUF_MGMT, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SETUP_BUF_MGMT, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 
@@ -387,8 +407,12 @@ RESULT VsiCamDeviceReleaseBufMgmt(struct visp_dev *isp_dev,
 
 	if (packet->payload_size > MAX_ITEM) return RET_OUTOFRANGE;
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_RELEASE_BUF_MGMT, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_RELEASE_BUF_MGMT, packet,
 		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 
@@ -639,8 +663,12 @@ RESULT VsiCamDeviceEnQueBuffer(struct visp_dev *isp_dev,
 
 	mutex_lock(&isp_dev->rpu->rpu_lock);
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
 		packet.payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
 

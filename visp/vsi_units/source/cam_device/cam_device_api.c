@@ -176,8 +176,12 @@ RESULT VsiCamDeviceCreate(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_CREATE_INSTANCE, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_CREATE_INSTANCE, packet,
 		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	*pHandleCamDevice = hCamDevice;
 	kfree(packet);
@@ -219,8 +223,12 @@ RESULT VsiCamDeviceDestroy(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DESTORY, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DESTORY, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return result;
@@ -286,8 +294,12 @@ RESULT VsiCamDeviceSetOutFormat(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SET_OUT_FORMAT, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SET_OUT_FORMAT, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return result;
@@ -342,8 +354,12 @@ RESULT VsiCamDeviceSetInFormat(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SET_IN_FORMAT, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SET_IN_FORMAT, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 
@@ -660,8 +676,12 @@ RESULT VsiCamDeviceConnectCamera(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_CONNECT_CAMERA, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_CONNECT_CAMERA, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 
@@ -703,8 +723,12 @@ RESULT VsiCamDeviceDisconnectCamera(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DISCONNECT_CAMERA, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DISCONNECT_CAMERA, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return result;
@@ -802,8 +826,12 @@ RESULT VsiCamDeviceStartStreaming(CamDeviceConfig_t *pCamConfig,
 		kfree(packet);
 		return RET_OUTOFRANGE;
 	}
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_START_STREAMING, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_START_STREAMING, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return result;
@@ -913,8 +941,12 @@ RESULT VsiCamDeviceSetPathStreaming(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SET_PATH_STREAMING, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SET_PATH_STREAMING, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return result;
@@ -1076,6 +1108,7 @@ RESULT VsiCamDeviceFreeResMemory(struct visp_dev *isp_dev,
 								 CamDeviceHandle_t hCamDevice,
 								 uint32_t baseAddress)
 {
+	RESULT result = RET_SUCCESS;
 	CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
 	uint8_t *p_data = NULL;
 	payload_packet *packet = NULL;
@@ -1111,8 +1144,12 @@ RESULT VsiCamDeviceFreeResMemory(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 
-	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_FREE_RES_MEMORY, packet,
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_FREE_RES_MEMORY, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 	kfree(packet);
 	return RET_SUCCESS;
