@@ -93,10 +93,19 @@
 
 #define RPU0_IPI_ID 3
 #define RPU1_IPI_ID 4
-#define RPU0 0
-#define RPU1 1
+#define RPU2_IPI_ID 5
+#define RPU3_IPI_ID 6
+#define RPU6 6
+#define RPU7 7
+#define RPU8 8
+#define RPU9 9
 #define MAX_ISP_INSTANCES 6
-#define MAX_RPU_ID 4
+#define MAX_RPU_ID 8
+
+#define RPU6_0 0
+#define RPU6_1 1
+#define RPU6_2 2
+#define RPU6_3 3
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
@@ -116,6 +125,43 @@ static int event_notified_idr_cb(int id, void *data, void *isp_dev_ptr)
 }
 #endif
 
+
+/* Callback declarations */
+static void visp_mb_rx_cb(struct mbox_client *cl, void *msg,int rpu_id);
+static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg);
+static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg);
+static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg);
+static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg);
+int get_dest_cpu(int rpu_id);
+int get_dest_cpu(int rpu_id) {
+    int dest_cpu;
+    switch (rpu_id) {
+        case 6:
+            dest_cpu = RPU6_0;
+            break;
+        case 7:
+            dest_cpu = RPU6_1;
+            break;
+        case 8:
+            dest_cpu = RPU6_2;
+            break;
+        case 9:
+            dest_cpu = RPU6_3;
+            break;
+        default:
+            // Handle invalid rpu_id (you might want to return an error code)
+            dest_cpu = -1; // Or another indicator of an invalid ID
+            break;
+    }
+    return dest_cpu;
+}
+static void (*visp_rx_callbacks[])(struct mbox_client *, void *) = {
+    visp_mb_rx_cb_0,
+    visp_mb_rx_cb_1,
+    visp_mb_rx_cb_2,
+    visp_mb_rx_cb_3
+};
+
 static void handle_event_notified(struct work_struct *work)
 {
     //struct vvcam_isp_dev *isp_dev;
@@ -124,7 +170,8 @@ static void handle_event_notified(struct work_struct *work)
     /* Get the vvcam_isp_dev structure from the work struct */
     rpu = container_of(work, struct rpu_dev, mbox_work);
     if (!rpu) {
-        pr_err("my_tasklet_function: rpu_dev is NULL\n");
+       // pr_err("my_tasklet_function: rpu_dev is NULL\n");
+        dev_err(rpu->dev,"my_tasklet_function: rpu_dev is NULL\n");
         return;
     }
     /* Send a message to the RX mailbox channel */
@@ -180,15 +227,15 @@ static void my_tasklet_function(void  *data) {
     }
 
     /* Read command ID and ISP ID from mailbox */
-    recv_cmd_id = apu_mailbox_read(rpu->rpu_id, &isp_id);
+    recv_cmd_id = apu_mailbox_read(get_dest_cpu(rpu->rpu_id), &isp_id);
     if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES) {
-        pr_err("my_tasklet_function: Invalid isp_id %u\n", isp_id);
+        dev_err(rpu->dev,"my_tasklet_function: Invalid isp_id %u\n", isp_id);
         return;
     }
     /* Retrieve the corresponding ISP device */
     isp_dev = rpu->isp_dev[isp_id];
     if (!isp_dev) {
-        pr_err("my_tasklet_function: ISP device is NULL for isp_id %u\n", isp_id);
+        dev_err(rpu->dev,"my_tasklet_function: ISP device is NULL for isp_id %u\n", isp_id);
         return;
     }
     /* Handle specific commands */
@@ -201,14 +248,14 @@ static void my_tasklet_function(void  *data) {
     } else if (recv_cmd_id ==  RPU_2_APU_CMD_DISPLAY_BUFFER) {
         exported_func1 = symbol_get(Handle_Frameout_Buffer);
         if (!exported_func1) {
-            pr_err("my_tasklet_function: Handle_Frameout_Buffer function not available\n");
+            dev_err(rpu->dev,"my_tasklet_function: Handle_Frameout_Buffer function not available\n");
             return;
         }
         exported_func1(data_from_interrupt.data, isp_dev);
 		isp_dev->apu_wait_for_isp_frame_done = 0;
 		wake_up(&isp_dev->wq_frame_done_finished);
     } else {
-        pr_err("my_tasklet_function: Unexpected command ID %d received\n", recv_cmd_id);
+        dev_err(rpu->dev,"my_tasklet_function: Unexpected command ID %d received\n", recv_cmd_id);
     }
 }
 
@@ -222,44 +269,62 @@ int get_rpu_id(int ipi_id)
     /* Determine the RPU ID based on the IPI ID */
     switch (ipi_id) {
         case RPU0_IPI_ID:
-            rpu_id = RPU0;
+            rpu_id = RPU6;
             pr_debug("get_rpu_id: Mapped IPI ID %d to RPU ID %d (RPU0)\n", ipi_id, rpu_id);
             break;
 
         case RPU1_IPI_ID:
-            rpu_id = RPU1;
+            rpu_id = RPU7;
             pr_debug("get_rpu_id: Mapped IPI ID %d to RPU ID %d (RPU1)\n", ipi_id, rpu_id);
             break;
+	case RPU2_IPI_ID:
+		rpu_id = RPU8;
+		break;
+
+	case RPU3_IPI_ID:
+		rpu_id = RPU9;
+		break;
+
 
         default:
-            //rpu_id = -1; // Return an error code for invalid IPI ID
-            rpu_id = RPU0;
+            rpu_id = -1; // Return an error code for invalid IPI ID
+            //rpu_id = RPU0;
             break;
     }
 
     return rpu_id;
 }
+static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg) {
+    visp_mb_rx_cb(cl, msg,6);
+}
 
-static void vvcam_isp_mb_rx_cb(struct mbox_client *cl, void *msg)
+static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg) {
+    visp_mb_rx_cb(cl, msg,7);
+}
+
+static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg) {
+    visp_mb_rx_cb(cl, msg,8);
+}
+
+static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg) {
+    visp_mb_rx_cb(cl, msg,9);
+}
+
+static void visp_mb_rx_cb(struct mbox_client *cl, void *msg,int rpu_id)
 {
-    int rpu_id = 0;
     struct rpu_dev *rpu = NULL;
-    /* Get RPU ID from the received message */
-    rpu_id = get_rpu_id(((struct zynqmp_ipi_message *)msg)->len);
-
     /* Get RPU device pointer using the RPU ID */
     rpu = get_rpu_dev(rpu_id);
 
     if (rpu != NULL) {
         /* Schedule work to handle the received event */
-        if (queue_work(system_wq, &rpu->mbox_work)) {
-            pr_debug("vvcam_isp_mb_rx_cb: Work scheduled for RPU ID %d\n", rpu_id);
+        if (queue_work_on(1, system_wq, &rpu->mbox_work)) {
         } else {
-            pr_err("vvcam_isp_mb_rx_cb: Failed to schedule work for RPU ID %d\n", rpu_id);
+            dev_err(rpu->dev,"vvcam_isp_mb_rx_cb: Failed to schedule work for RPU ID %d\n", rpu_id);
         }
 
     } else {
-        pr_err("vvcam_isp_mb_rx_cb: Failed to find RPU device for RPU ID %d\n", rpu_id);
+        dev_err(rpu->dev,"vvcam_isp_mb_rx_cb: Failed to find RPU device for RPU ID %d\n", rpu_id);
     }
 }
 
@@ -285,7 +350,8 @@ static int vvcam_isp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
     /* Setup RX mailbox channel client */
     mclient = &rpu->rx_mc;
     mclient->dev = rpu->dev;
-    mclient->rx_callback = vvcam_isp_mb_rx_cb; // Set the RX callback
+  //mclient->rx_callback = visp_mb_rx_cb; // Set the RX callback
+    mclient->rx_callback =  visp_rx_callbacks[get_dest_cpu(rpu->rpu_id)];//visp_mb_rx_cb; // Set the RX callback
     mclient->tx_block = false;
     mclient->knows_txdone = false;
 
@@ -335,7 +401,7 @@ static int char_dev_open(struct inode *inode, struct file *file)
 
     /* Set private_data for the file structure */
     file->private_data = rpu;
-    pr_info("%s: Open operation invoked successfully\n", __func__);
+    dev_info(rpu->dev,"%s: Open operation invoked successfully\n", __func__);
 
     return 0; // Indicate successful open
 }
@@ -351,7 +417,7 @@ static int char_dev_release(struct inode *inode, struct file *file)
     }
 
     /* Decrement reference count or perform other cleanup if needed */
-    pr_info("%s: Release operation invoked successfully\n", __func__);
+    dev_info(rpu->dev,"%s: Release operation invoked successfully\n", __func__);
 
     return 0; // Indicate successful release
 }
@@ -367,20 +433,20 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf, size_t 
 
     /* Validate input buffer size */
     if (lbuf < sizeof(payload_user_packet)) {
-        pr_err("%s: Insufficient input buffer size\n", __func__);
+        dev_err(rpu->dev,"%s: Insufficient input buffer size\n", __func__);
         return -EINVAL;
     }
 
     /* Allocate memory for user_packet */
     user_packet = kmalloc(sizeof(payload_user_packet), GFP_KERNEL);
     if (!user_packet) {
-        pr_err("%s: Failed to allocate memory for user_packet\n", __func__);
+        dev_err(rpu->dev,"%s: Failed to allocate memory for user_packet\n", __func__);
         return -ENOMEM;
     }
 
     /* Copy data from user space to kernel space */
     if (copy_from_user(user_packet, buf, sizeof(payload_user_packet))) {
-        pr_err("%s: copy_from_user failed\n", __func__);
+        dev_err(rpu->dev,"%s: copy_from_user failed\n", __func__);
         kfree(user_packet);
         return -EFAULT;
     }
@@ -388,7 +454,7 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf, size_t 
     /* Allocate memory for packet */
     packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
     if (!packet) {
-        pr_err("%s: Failed to allocate memory for packet\n", __func__);
+        dev_err(rpu->dev,"%s: Failed to allocate memory for packet\n", __func__);
         kfree(user_packet);
         return -ENOMEM;
     }
@@ -417,7 +483,7 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf, size_t 
     mutex_unlock(&rpu->lock);
 
     if (ret < 0) {
-        pr_err("%s: Send_Command failed with error: %d\n", __func__, ret);
+        dev_err(rpu->dev,"%s: Send_Command failed with error: %d\n", __func__, ret);
         kfree(packet);
         kfree(user_packet);
         return -EIO;
@@ -425,7 +491,7 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf, size_t 
 
     ret = mbox_send_message(rpu->tx_chan, NULL); // Updated to use NULL
     if (ret < 0) {
-        pr_err("%s: mbox_send_message() failed: %d\n", __func__, ret);
+        dev_err(rpu->dev,"%s: mbox_send_message() failed: %d\n", __func__, ret);
         kfree(packet);
         kfree(user_packet);
         return -EIO;
@@ -454,14 +520,14 @@ static ssize_t my_driver_read(struct file *file, char __user *buf, size_t count,
     /* Wait for completion interruptibly */
     result = wait_for_completion_interruptible(&mailbox_completion);
     if (result != 0) {
-        pr_err("%s: Completion wait interrupted, error code: %d\n", __func__, result);
+        dev_err(rpu->dev,"%s: Completion wait interrupted, error code: %d\n", __func__, result);
         mutex_unlock(&rpu->lock);
         return -ERESTARTSYS; // Return appropriate error for interruption
     }
 
     /* Copy data to user space */
     if (copy_to_user(buf, &data_from_interrupt, bytes_copied)) {
-        pr_err("%s: Failed to copy data to user space\n", __func__);
+        dev_err(rpu->dev,"%s: Failed to copy data to user space\n", __func__);
         mutex_unlock(&rpu->lock);
         return -EFAULT; // Handle the copy_to_user error
     }
@@ -491,7 +557,7 @@ struct rpu_dev *get_rpu_dev(int rpu_id)
 
     /* Check if the RPU devices list is empty */
     if (list_empty(&rpu_devices)) {
-        pr_warn("get_rpu_dev: RPU devices list is empty.\n");
+        dev_warn(rpu->dev,"get_rpu_dev: RPU devices list is empty.\n");
         mutex_unlock(&rpu_list_lock);
         return NULL;
     }
@@ -499,14 +565,14 @@ struct rpu_dev *get_rpu_dev(int rpu_id)
     /* Search for the RPU with the given ID */
     list_for_each_entry(rpu, &rpu_devices, node) {
         if (rpu->rpu_id == rpu_id) {
-            pr_debug("get_rpu_dev: Found RPU device with ID %d.\n", rpu_id);
+           dev_dbg(rpu->dev,"get_rpu_dev: Found RPU device with ID %d.\n", rpu_id);
             mutex_unlock(&rpu_list_lock);
             return rpu;
         }
     }
 
     /* RPU not found, log an informational message */
-    pr_info("get_rpu_dev: RPU device with ID %d not found.\n", rpu_id);
+    dev_info(rpu->dev,"get_rpu_dev: RPU device with ID %d not found.\n", rpu_id);
 
     /* Unlock the mutex before returning */
     mutex_unlock(&rpu_list_lock);
@@ -856,7 +922,7 @@ void rpu_remove(void)
         }
 
         /* Debug log the current RPU's reference count */
-        pr_debug("RPU ID %d - refcount = %d\n",
+        dev_dbg(rpu->dev,"RPU ID %d - refcount = %d\n",
                  rpu->rpu_id, atomic_read(&rpu->refcount.refcount.refs));
 
         /* Check if the device is safe to remove */
@@ -873,11 +939,11 @@ void rpu_remove(void)
             list_del(&rpu->node);
 
             /* Log successful removal */
-            pr_info("RPU with ID %d removed successfully.\n", rpu->rpu_id);
+            dev_info(rpu->dev,"RPU with ID %d removed successfully.\n", rpu->rpu_id);
         } else {
             /* If still in use, decrement reference and log */
             kref_put(&rpu->refcount, rpu_cleanup);
-            pr_warn("Cannot remove RPU with ID %d - still in use (refcount = %d).\n",
+            dev_warn(rpu->dev,"Cannot remove RPU with ID %d - still in use (refcount = %d).\n",
                     rpu->rpu_id, atomic_read(&rpu->refcount.refcount.refs));
         }
     }

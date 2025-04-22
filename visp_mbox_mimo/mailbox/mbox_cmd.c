@@ -78,6 +78,11 @@ EXPORT_SYMBOL_GPL(data_from_interrupt);
 typedef void (*kmbox_parse_process_t) (uint16_t cmd, void *data, uint32_t size);
 static kmbox_parse_process_t kmbox_parse_process = NULL;
 
+#define RPU6_0 0
+#define RPU6_1 1
+#define RPU6_2 2
+#define RPU6_3 3
+
 static MboxFifoCtrl *rpu0_fifo_ctrl = NULL;
 static MboxFifoCtrl *rpu1_fifo_ctrl = NULL;
 static MboxFifoCtrl *rpu2_fifo_ctrl = NULL;
@@ -381,6 +386,29 @@ void mailbox_close(void)
 	kfree(rmsg_apu);
 
 }
+int get_dest_cpu1(int rpu_id);
+int get_dest_cpu1(int rpu_id) {
+    int dest_cpu;
+    switch (rpu_id) {
+        case 6:
+            dest_cpu = RPU6_0;
+            break;
+        case 7:
+            dest_cpu = RPU6_1;
+            break;
+        case 8:
+            dest_cpu = RPU6_2;
+            break;
+        case 9:
+            dest_cpu = RPU6_3;
+            break;
+        default:
+            // Handle invalid rpu_id (you might want to return an error code)
+            dest_cpu = -1; // Or another indicator of an invalid ID
+            break;
+    }
+    return dest_cpu;
+}
 
 
 
@@ -389,7 +417,7 @@ void mailbox_close(void)
 int Send_Command(MBCmdId_E cmd, void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu )
 {
     int ret=0;
-    	ret = write_mboxcmd(cmd, data,size,dest_cpu,src_cpu);
+    ret = write_mboxcmd(cmd, data,size,get_dest_cpu1(dest_cpu),src_cpu);
     return ret;
 }
 EXPORT_SYMBOL_GPL(Send_Command);
@@ -400,7 +428,6 @@ int Send_Response(MBCmdId_E res,payload_packet *data, uint32_t size, uint8_t des
     int ret=0;
     struct arm_smccc_res ress;
     unsigned long a0,a1,a2,a3;
-
     ret = write_mboxcmd(res, data,size,dest_cpu,src_cpu);
 	a0 = SMC_IPI_MAILBOX_NOTIFY;
 	a1 = 5; //Local Id

@@ -93,6 +93,8 @@
 
 #define RPU0_IPI_ID 3
 #define RPU1_IPI_ID 4
+#define RPU2_IPI_ID 5
+#define RPU3_IPI_ID 6
 #define RPU6 6
 #define RPU7 7
 #define RPU8 8
@@ -111,7 +113,13 @@ static LIST_HEAD(rpu_devices);
 static DECLARE_COMPLETION(mailbox_completion);
 int (*exported_func1)(void *, struct visp_dev *isp_dev);
 static void my_tasklet_function(void *data);
-
+/* Callback declarations */
+static void visp_mb_rx_cb(struct mbox_client *cl, void *msg,int rpu_id);
+static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg);
+static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg);
+static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg);
+static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg);
+int get_dest_cpu(int rpu_id);
 int get_dest_cpu(int rpu_id) {
     int dest_cpu;
     switch (rpu_id) {
@@ -134,6 +142,12 @@ int get_dest_cpu(int rpu_id) {
     }
     return dest_cpu;
 }
+static void (*visp_rx_callbacks[])(struct mbox_client *, void *) = {
+    visp_mb_rx_cb_0,
+    visp_mb_rx_cb_1,
+    visp_mb_rx_cb_2,
+    visp_mb_rx_cb_3
+};
 
 static void handle_event_notified(struct work_struct *work)
 {
@@ -181,14 +195,14 @@ static void my_tasklet_function(void *data)
 	recv_cmd_id = apu_mailbox_read(get_dest_cpu(rpu->rpu_id), &isp_id);
 	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES)
 	{
-		pr_err("my_tasklet_function: Invalid isp_id %u\n", isp_id);
+		dev_err(rpu->dev,"my_tasklet_function: Invalid isp_id %u\n", isp_id);
 		return;
 	}
 	/* Retrieve the corresponding ISP device */
 	isp_dev = rpu->isp_dev[isp_id];
 	if (!isp_dev)
 	{
-		pr_err("my_tasklet_function: ISP device is NULL for isp_id %u\n",
+		dev_err(rpu->dev,"my_tasklet_function: ISP device is NULL for isp_id %u\n",
 			   isp_id);
 		return;
 	}
@@ -211,8 +225,7 @@ static void my_tasklet_function(void *data)
 		exported_func1 = symbol_get(Handle_Frameout_Buffer);
 		if (!exported_func1)
 		{
-			pr_err(
-				"my_tasklet_function: Handle_Frameout_Buffer function not "
+				dev_err(rpu->dev,"my_tasklet_function: Handle_Frameout_Buffer function not "
 				"available\n");
 			mutex_unlock(&rpu->read_lock);
 			return;
@@ -223,43 +236,33 @@ static void my_tasklet_function(void *data)
 	else
 	{
 		mutex_unlock(&rpu->read_lock);
-		pr_err("my_tasklet_function: Unexpected command ID %d received\n",
+		dev_err(rpu->dev,"my_tasklet_function: Unexpected command ID %d received\n",
 			   recv_cmd_id);
 	}
 	cnt++;
 	// mutex_unlock(&rpu->read_lock);
 }
 
-static int get_rpu_id(int ipi_id)
-{
-	int rpu_id;
-
-	/* Determine the RPU ID based on the IPI ID */
-	switch (ipi_id)
-	{
-		case RPU0_IPI_ID:
-			rpu_id = RPU6;
-			break;
-
-		case RPU1_IPI_ID:
-			rpu_id = RPU7;
-			break;
-
-		default:
-			rpu_id = -1; // Return an error code for invalid IPI ID
-			break;
-	}
-
-	return rpu_id;
+static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg) {
+    visp_mb_rx_cb(cl, msg,6);
 }
 
-static void visp_mb_rx_cb(struct mbox_client *cl, void *msg)
+static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg) {
+    visp_mb_rx_cb(cl, msg,7);
+}
+
+static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg) {
+    visp_mb_rx_cb(cl, msg,8);
+}
+
+static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg) {
+    visp_mb_rx_cb(cl, msg,9);
+}
+
+static void visp_mb_rx_cb(struct mbox_client *cl, void *msg,int rpu_id)
 {
-	int rpu_id = 0;
 	struct rpu_dev *rpu = NULL;
 	/* Get RPU ID from the received message */
-	rpu_id = get_rpu_id(((struct zynqmp_ipi_message *)msg)->remote_id);
-	/* Get RPU device pointer using the RPU ID */
 	rpu = get_rpu_dev(rpu_id);
 	if (rpu != NULL)
 	{
@@ -269,13 +272,13 @@ static void visp_mb_rx_cb(struct mbox_client *cl, void *msg)
 		}
 		else
 		{
-			pr_err("visp_mb_rx_cb: Failed to schedule work for RPU ID %d\n",
+			dev_err(rpu->dev,"visp_mb_rx_cb: Failed to schedule work for RPU ID %d\n",
 				   rpu_id);
 		}
 	}
 	else
 	{
-		pr_err("visp_mb_rx_cb: Failed to find RPU device for RPU ID %d\n",
+		dev_err(rpu->dev,"visp_mb_rx_cb: Failed to find RPU device for RPU ID %d\n",
 			   rpu_id);
 	}
 }
@@ -301,7 +304,8 @@ static int visp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
 	/* Setup RX mailbox channel client */
 	mclient = &rpu->rx_mc;
 	mclient->dev = rpu->dev;
-	mclient->rx_callback = visp_mb_rx_cb; // Set the RX callback
+	//mclient->rx_callback = visp_mb_rx_cb; // Set the RX callback
+	mclient->rx_callback =  visp_rx_callbacks[get_dest_cpu(rpu->rpu_id)];//visp_mb_rx_cb; // Set the RX callback
 	mclient->tx_block = false;
 	mclient->knows_txdone = false;
 
@@ -511,7 +515,7 @@ struct rpu_dev *get_rpu_dev(int rpu_id)
 	/* Check if the RPU devices list is empty */
 	if (list_empty(&rpu_devices))
 	{
-		pr_warn("get_rpu_dev: RPU devices list is empty.\n");
+		dev_warn(rpu->dev,"get_rpu_dev: RPU devices list is empty.\n");
 		mutex_unlock(&rpu_list_lock);
 		return NULL;
 	}
@@ -739,13 +743,13 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	long timeout_jiffies = msecs_to_jiffies(1000*60*5);  // Timeout of 5000ms (5 seconds)
 	result = wait_for_completion_interruptible_timeout(&isp_dev->apu_wait_for_data, timeout_jiffies);
 	if (result == 0) {
-		pr_err("Timeout occurred while waiting for APU ACK\n");
+		dev_err(rpu->dev,"Timeout occurred while waiting for APU ACK\n");
 		isp_dev->k_apu_data_flag = 0; // Clear the data flag
 		//    mutex_unlock(&rpu->lock);
 		mutex_unlock(&rpu->read_lock);
 		return -1;
 	} else if (result < 0) {
-		pr_err("Wait interrupted\n");
+		dev_err(rpu->dev,"Wait interrupted\n");
 		isp_dev->k_apu_data_flag = 0; // Clear the data flag
 		//    mutex_unlock(&rpu->lock);
 		mutex_unlock(&rpu->read_lock);
@@ -783,7 +787,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	result = Send_Command(cmd, data, size,get_dest_cpu(dest_cpu), src_cpu);
 	if (result != 0) {
-		pr_err("%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev,"%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
 		goto unlock_and_exit;
 	}
 
@@ -792,20 +796,20 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	result = mbox_send_message(isp_dev->tx_chan, NULL);
 	if (result < 0) {
-		pr_err("%s: mbox_send_message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev,"%s: mbox_send_message failed at line %d\n", __func__, __LINE__);
 		goto unlock_and_exit;
 	}
 
 	payload_packet *pkt = (payload_packet *)data;
 	if (!pkt) {
-		pr_err("%s: Payload data is NULL\n", __func__);
+		dev_err(rpu->dev,"%s: Payload data is NULL\n", __func__);
 		result = -EINVAL;
 		goto unlock_and_exit;
 	}
 
 	result = xlnx_mbox_apu_wait_for_data(isp_dev, pkt->payload);
 	if (result) {
-		pr_err("%s: Failed to get buffer data\n", __func__);
+		dev_err(rpu->dev,"%s: Failed to get buffer data\n", __func__);
 		goto unlock_and_exit;
 	}
 
@@ -833,7 +837,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	result = Send_Command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
 	if (result != 0) {
-		pr_err("%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev,"%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
 		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
@@ -843,7 +847,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	result = mbox_send_message(isp_dev->tx_chan, NULL);
 	if (result < 0) {
-		pr_err("%s: mbox_send_message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev,"%s: mbox_send_message failed at line %d\n", __func__, __LINE__);
 		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
@@ -851,7 +855,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 	result = xlnx_mbox_apu_wait_for_ack(isp_dev);
 	if(result < 0)
 	{
-		pr_err("%s: Failed to get ack\n", __func__);
+		dev_err(rpu->dev,"%s: Failed to get ack\n", __func__);
 		goto unlock_and_exit;
 	}
 unlock_and_exit:
@@ -886,10 +890,10 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 	long timeout_jiffies = msecs_to_jiffies(1000*60*5);  // Timeout of 5000ms (5 seconds)
 	result = wait_for_completion_interruptible_timeout(&isp_dev->apu_wait_for_ack, timeout_jiffies);
 	if (result == 0) {
-		pr_err("Timeout occurred while waiting for APU ACK\n");
+		dev_err(rpu->dev,"Timeout occurred while waiting for APU ACK\n");
 		return -1;
 	} else if (result < 0) {
-		pr_err("Wait interrupted\n");
+		dev_err(rpu->dev,"Wait interrupted\n");
 		return -1;
 	}
 
@@ -1013,7 +1017,7 @@ static void rpu_remove(void)
 		}
 
 		/* Debug log the current RPU's reference count */
-		pr_debug("RPU ID %d - refcount = %d\n", rpu->rpu_id,
+		dev_dbg(rpu->dev,"RPU ID %d - refcount = %d\n", rpu->rpu_id,
 				 atomic_read(&rpu->refcount.refcount.refs));
 
 		/* Check if the device is safe to remove */
@@ -1031,14 +1035,14 @@ static void rpu_remove(void)
 			list_del(&rpu->node);
 
 			/* Log successful removal */
-			pr_info("RPU with ID %d removed successfully.\n", rpu->rpu_id);
+			dev_info(rpu->dev,"RPU with ID %d removed successfully.\n", rpu->rpu_id);
 		}
 		else
 		{
 			/* If still in use, decrement reference and log */
 			kref_put(&rpu->refcount, rpu_cleanup);
-			pr_warn(
-				"Cannot remove RPU with ID %d - still in use (refcount = "
+			dev_warn(
+				rpu->dev,"Cannot remove RPU with ID %d - still in use (refcount = "
 				"%d).\n",
 				rpu->rpu_id, atomic_read(&rpu->refcount.refcount.refs));
 		}
