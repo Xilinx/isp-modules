@@ -84,33 +84,5 @@ int MediaIspDeviceCameraDisConnect(struct visp_dev *isp_dev, uint8_t Port,
 
 #define LOAD_CALIB_ENABLE 1
 
-#define ENABLE_LOG 1
 
-#ifdef ENABLE_LOG
-
-/* warning */
-#define logs(fmt, ...)                                              \
-	printk(KERN_ERR "%s %s:%d: " fmt, __FILE__, __func__, __LINE__, \
-		   ##__VA_ARGS__)
-
-/* warning */
-#define logi(fmt, ...) \
-	  printk(KERN_ERR  ("WARNING: %s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
-
-/* warning */
-#define logw(fmt, ...) \
-		printk(KERN_ERR  ("WARNING: %s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
-
-/* error */
-#define loge(fmt, ...) \
-	printk(KERN_ERR " %s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
-
-/* error */
-#define logr() printk(KERN_ERR " %s:%d:-R ", __func__, __LINE__)
-#else
-/* Disable log*/
-#define logs(fmt, ...)
-#define logw(fmt, ...)
-#define loge(fmt, ...)
-#endif
 #endif

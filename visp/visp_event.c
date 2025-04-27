@@ -87,7 +87,6 @@ static bool visp_event_subscribed(struct v4l2_subdev *sd, uint32_t type,
 
 static int visp_post_event(struct v4l2_subdev *sd, struct visp_event_pkg *event_pkg)
 {
-	//return 0;
 	struct v4l2_event event;
 	int timeout_ms = 6000000;
 	int i = 0;
@@ -155,7 +154,7 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	int Port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	CamDeviceHandle_t *readback = NULL;
 	MediaIspSensorInfo *readback_1 = NULL;
-	MediaIspPortAttr *IspPort = NULL; //&(isp_dev->IspPorts[Port]);
+	MediaIspPortAttr *IspPort = NULL;
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 	event_pkg->head.pad = pad;
@@ -165,7 +164,6 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
 	event_pkg->head.data_size = 0;
-	// event_pkg->head.data_size = sizeof(MediaIspPortAttr);
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
@@ -176,7 +174,6 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	struct  visp_subdev_dma_buf dma_buf ;
 	dma_buf.pa = isp_dev->reserve_mem.pa;
 	dma_buf.size = isp_dev->reserve_mem.size;
-	//pr_err("%s %d :%x %d\n",__func__,__LINE__ , dma_buf.pa, dma_buf.size);
 	memcpy(pdata, &dma_buf, sizeof(struct visp_subdev_dma_buf));
 	pdata += sizeof(struct visp_subdev_dma_buf);
 	event_pkg->head.data_size += sizeof(struct visp_subdev_dma_buf);
@@ -221,7 +218,6 @@ int visp_l_json_event(struct visp_dev *isp_dev, int pad)
 	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
 	event_pkg->head.data_size = 0;
-	// event_pkg->head.data_size = sizeof(MediaIspPortAttr);
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 

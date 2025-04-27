@@ -63,7 +63,6 @@
 #include <media/v4l2-mc.h>
 #include <media/videobuf2-dma-contig.h>
 #include "visp_v4l2_common.h"
-//RKC-TODO Check if below headers were required in M13
 #include "media_isp.h"
 #include <linux/kernel.h>
 #include <linux/of.h>
@@ -150,16 +149,6 @@ struct visp_event_shm
 	uint32_t size;
 };
 
-#if 0
-struct iba_info {
-   u32 ppc;
-   u32 vcid;
-   u32 frame_rate;
-   u32 data_format;
-   u32 max_width;
-   u32 max_height;
-};
-#endif
 typedef struct iba_info
 {
 	u32 baseaddress;
@@ -238,7 +227,11 @@ struct atm_prop {
     char node_name[50]; // Node name dynamically generated
 };
 
-
+struct visp_subdev_dma_buf
+{
+	uint64_t pa;
+	int size;
+};
 
 struct visp_isp_reserve_mem
 {
@@ -278,7 +271,6 @@ struct visp_dev
 	uint32_t ctrl_pad;
 
 	unsigned long pde;
-	//struct visp_sensor_info sensor_info[VISP_PORT_NR];
 	struct iba_info iba[MAX_IBA_PER_ISP];
 	enum visp_path_out_type_e output_type[VISP_PORT_NR][VISP_PORT_PAD_NR - 1];
 	enum visp_mcm_input_select_e mcm_input_select[VISP_PORT_NR];

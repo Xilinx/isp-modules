@@ -56,15 +56,10 @@
 #include <linux/types.h>
 
 #include "list.h"
-//#include "mc_oslayer.h"
 #include <linux/mutex.h>
 
-// Declare a mutex
-// struct mutex my_mutex;
 
 #define MEDIA_DEV_MAX 2
-//#define MEDIA_PAD_FL_SINK (1 << 0)
-//#define MEDIA_PAD_FL_SOURCE (1 << 1)
 
 #define VISP_VIDEO "visp-video"
 #define VISP "visp-isp"

@@ -56,12 +56,8 @@
 #include "visp_common.h"
 
 int visp_buf_done(struct v4l2_subdev *sd, void *arg);
-//int visp_buffer_free_public_wrapper(struct visp_dev *isp_dev, void *arg);
-//int visp_buffer_alloc_public(struct visp_dev *isp_dev, struct visp_ext_buf_info *ext_buf_info);
-//int visp_buffer_free_public_wrapper(struct visp_dev *isp_dev, void *arg);
 int visp_set_frame_interval_public(struct visp_dev *isp_dev, struct v4l2_subdev_frame_interval *fi);
 int visp_set_fmt_public(struct visp_dev *isp_dev, struct v4l2_subdev_format *format);
-//int visp_buffer_free_public(struct visp_dev *isp_dev, struct visp_ext_buf_info *ext_buf_info);
 int MediaIspDeviceSetFrameRate(struct visp_dev *isp_dev, uint8_t Port,  uint32_t *FrameRate);
 int MediaIspDeviceStreamOn(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
 int IspDeviceDestroy(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
@@ -96,5 +92,35 @@ RESULT VsiCamDeviceAeDisable(struct visp_dev *isp_dev,
                              CamDeviceHandle_t hCamDevice);
 RESULT VsiCamDeviceUnRegisterAeLib(struct visp_dev *isp_dev,
                                    CamDeviceHandle_t hCamDevice);
+
+
+
+
+#define VSI_SUCCESS 0
+#define VSI_FAILURE (-1)
+#define VSI_NULL ((void *)0)
+
+typedef enum ErrCode_E
+{
+	VSI_ERR_INVALID_DEVID = 1,
+	VSI_ERR_INVALID_PORTID = 2,
+	VSI_ERR_INVALID_CHNID = 3,
+	VSI_ERR_ILLEGAL_PARAM = 4,
+	VSI_ERR_EXIST = 5,
+	VSI_ERR_UNEXIST = 6,
+	VSI_ERR_NULL_PTR = 7,
+	VSI_ERR_NOT_CONFIG = 8,
+	VSI_ERR_NOT_SUPPORT = 9,
+	VSI_ERR_NOT_PERM = 10,
+	VSI_ERR_NOMEM = 11,
+	VSI_ERR_NOBUF = 12,
+	VSI_ERR_BUF_EMPTY = 13,
+	VSI_ERR_BUF_FULL = 14,
+	VSI_ERR_NOTREADY = 15,
+	VSI_ERR_BADADDR = 17,
+	VSI_ERR_BUSY = 18,
+	VSI_ERR_TIMEOUT = 19,
+	VSI_ERR_BUTT = 256
+} VSIErrCode_E;
 
 #endif

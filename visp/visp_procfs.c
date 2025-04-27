@@ -113,18 +113,6 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 					   type2str(isp_dev->output_type[port][1]),
 					   type2str(isp_dev->output_type[port][2]),
 					   type2str(isp_dev->output_type[port][3]));
-#if 0 
-			seq_printf(sfile, "sensor      : %s\n", isp_dev->sensor_info[port].sensor);
-			seq_printf(sfile, "mode        : %d\n", isp_dev->sensor_info[port].mode);
-			seq_printf(sfile, "xml         : %s\n", isp_dev->sensor_info[port].xml);
-			seq_printf(sfile, "manu_json   : %s\n", isp_dev->sensor_info[port].manu_json);
-			seq_printf(sfile, "auto_json   : %s\n", isp_dev->sensor_info[port].auto_json);
-			seq_printf(sfile, "one_json    : %s\n", isp_dev->sensor_info[port].one_json);
-			seq_printf(sfile, "vc_id       : %u\n", isp_dev->sensor_info[port].vc_id);
-			seq_printf(sfile, "sensor_id   : %u\n", isp_dev->sensor_info[port].sensor_id);
-			seq_printf(sfile, "buffer_type : %s\n", isp_dev->IspPorts[port].bufmode);
-			seq_printf(sfile, "*********************************\n");
-#endif
 			seq_printf(sfile, "sensor      : %s\n",
 					   isp_dev->IspPorts[port].SensorInfo.Name);
 			seq_printf(sfile, "mode        : %u\n",

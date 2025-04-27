@@ -56,30 +56,11 @@
 
 #include "cam_device_calibration.h"
 #include "cam_device_common.h"
-//#include "visp_driver.h"
-//#include <ebase/offline_trace.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
-	//typedef void* CamDeviceHandle_t;
-
-	/**
-	 * @defgroup cam_device_pipeline Cam Device Pipeline Definitions
-	 * @{
-	 *
-	 *
-	 */
-
-	//typedef struct CamDeviceStreamModeConfig_s {
-	//    uint8_t nop;
-	//}CamDeviceStreamModeConfig_t;
-	//
-	//typedef struct CamDeviceRdmaModeConfig_s {
-	//    uint8_t nop;
-	//}CamDeviceRdmaModeConfig_t;
 
 	/*****************************************************************************/
 	/**

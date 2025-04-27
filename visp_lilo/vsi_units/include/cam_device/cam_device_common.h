@@ -69,7 +69,7 @@
 
 #define CAMDEV_VIRTUAL_ID_MAX \
 	16 /**< Platform supported multiple input devices number of one ISP*/
-#define CAMDEV_HARDWARE_ID_MAX 5 /**< Platform supported ISP hardware number*/
+#define CAMDEV_HARDWARE_ID_MAX 6 /**< Platform supported ISP hardware number*/
 
 #define CAMDEV_INPUT_DEV_NAME_LEN 20  /**< Input device name length */
 #define CAM_DEVICE_ROI_WINDOWS_MAX 25 /**< Maximum ROI windows */

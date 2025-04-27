@@ -91,8 +91,7 @@ RESULT CamDeviceRequestInstance(uint32_t hwId, CamDeviceHandle_t *pCamDevhandle,
 	if (index < CAMDEV_VIRTUAL_ID_MAX)
 	{
 		gCamDevIspcore.hCamDevSet[hwId][index] =
-			/*malloc(sizeof(CamDeviceContext_t));*/ kzalloc(
-				sizeof(CamDeviceContext_t), GFP_KERNEL);
+			 kzalloc(sizeof(CamDeviceContext_t), GFP_KERNEL);
 		if (NULL == gCamDevIspcore.hCamDevSet[hwId][index])
 		{
 			return RET_OUTOFMEM;

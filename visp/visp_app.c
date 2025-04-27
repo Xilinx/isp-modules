@@ -57,7 +57,6 @@
 #include "iba.h"
 #include "media_isp.h"
 #include "media_isp_calib.h"
-#include "media_isp_device.h"
 #include "sensor_cmd.h"
 #include "visp_driver.h"
 #include "visp_event.h"
@@ -114,7 +113,7 @@ static int MediaIspHalAllocBuf(struct visp_dev *isp_dev, int Port, MediaBuf *Buf
 	if (RetVal)
 	{
 		dev_err(isp_dev->dev, "Port %d alloc dma buffer failed:  \n",
-				Port); // errno/*strerror(errno)*/);
+				Port);
 		return VSI_ERR_ILLEGAL_PARAM;
 	}
 
@@ -214,11 +213,11 @@ static int MediaIspDeviceUnRegister3aLib(struct visp_dev *isp_dev, uint8_t Port,
 #ifdef LOAD_CALIB_ENABLE
 
 	MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
-	VsiCamDeviceAeDisable(isp_dev, IspPort->CamDeviceHandle); //RKC-UNCOMMMENT
+	VsiCamDeviceAeDisable(isp_dev, IspPort->CamDeviceHandle);
 	VsiCamDeviceUnRegisterAeLib(isp_dev,
-								IspPort->CamDeviceHandle);	   //RKC-UNCOMMENT
-	VsiCamDeviceAwbDisable(isp_dev, IspPort->CamDeviceHandle); //UNCOMMENT
-	VsiCamDeviceUnRegisterAwbLib(isp_dev, IspPort->CamDeviceHandle); //UNCOMMENT
+								IspPort->CamDeviceHandle);
+	VsiCamDeviceAwbDisable(isp_dev, IspPort->CamDeviceHandle);
+	VsiCamDeviceUnRegisterAwbLib(isp_dev, IspPort->CamDeviceHandle);
 #endif
 
 	return VSI_SUCCESS;
@@ -265,7 +264,7 @@ int MediaIspDeviceCameraDisConnect(struct visp_dev *isp_dev, uint8_t Port,
 	{
 		MediaIspDeviceUnRegister3aLib(isp_dev, Port, Chn);
 		VsiCamDeviceDisconnectCamera(isp_dev, IspPort->CamDeviceHandle);
-		if (isp_dev->PortsMask != 0x01) //RKC-TODO Enable the logic during MCM
+		if (isp_dev->PortsMask != 0x01)
 		{
 			MediaIspDeviceMcmTerminate(isp_dev, Port);
 		}
@@ -289,7 +288,7 @@ static int isp_read_atm_properties(struct visp_dev *isp)
     // Locate the reserved memory node
     mem_np = of_find_node_by_name(NULL, isp->atm.node_name);
     if (!mem_np) {
-        dev_info(isp->dev, "Reserved memory '%s' not found, \
+        dev_dbg(isp->dev, "Reserved memory '%s' not found, \
 				defaulting to 32-bit memory\n", isp->atm.node_name);
         isp->atm.high_mem_addr = 0;
         isp->atm.is_64bit = false;
@@ -299,7 +298,7 @@ static int isp_read_atm_properties(struct visp_dev *isp)
     // Read the 'reg' property from the device tree
     prop = of_get_property(mem_np, "reg", NULL);
     if (!prop) {
-        dev_info(isp->dev, "Not found 'reg' property from '%s',\
+        dev_dbg(isp->dev, "Not found 'reg' property from '%s',\
 				defaulting to 32-bit memory\n", isp->atm.node_name);
         isp->atm.high_mem_addr = 0;
         isp->atm.is_64bit = false;
@@ -316,7 +315,7 @@ static int isp_read_atm_properties(struct visp_dev *isp)
     // Determine if it's 32-bit or 64-bit based on high address
     isp->atm.is_64bit = (isp->atm.high_mem_addr ? 1 : 0);
 
-    dev_info(isp->dev, "Extracted high 32-bit address from %s: \
+    dev_dbg(isp->dev, "Extracted high 32-bit address from %s: \
 					0x%X (%s-bit memory)\n", isp->atm.node_name,
 					isp->atm.high_mem_addr, isp->atm.is_64bit ? "64" : "32");
 
@@ -440,8 +439,7 @@ static int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port,
 			BufPoolCfg.pBaseAddrList[i] =
 				IspPort->IspChns[Chn].Bufs[i].Planes[0].DmaAddr;
 			BufPoolCfg.pIplAddrList[i] = VSI_NULL;
-			dev_info(isp_dev->dev,"Buf[%d] = 0x%x size 0x%x", i, BufPoolCfg.pBaseAddrList[i],
-                BufSize);
+
 			IspPort->IspChns[Chn].CamDeviceBufs[i]  = kzalloc(sizeof(OutputBuffer_t), GFP_KERNEL);
 		    OutputBuffer_t *pMediaBuffer = IspPort->IspChns[Chn].CamDeviceBufs[i];
 			if (!pMediaBuffer)
@@ -452,8 +450,8 @@ static int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port,
 		pMediaBuffer->index=i;
 		pMediaBuffer->baseAddress = IspPort->IspChns[Chn].Bufs[i].Planes[0].DmaAddr;
 
-		dev_err(isp_dev->dev, " %s %d idx:%d Add : %x\n", __func__, __LINE__, \
-                pMediaBuffer->index, pMediaBuffer->baseAddress);
+		dev_dbg(isp_dev->dev, " %s %d idx:%d Add : %x size 0x%x \n", __func__, __LINE__, \
+                pMediaBuffer->index, pMediaBuffer->baseAddress, BufSize);
 		}
 	}
 	else if (Chn == CAMDEV_BUFCHAIN_RDMA)
@@ -461,7 +459,6 @@ static int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port,
 		// create mcm buf pool by camdevice reserved memory
 		uint32_t PhyAddr = 0;
 		uint32_t *pIplAddr = VSI_NULL;
-		dev_err(isp_dev->dev, "RDMA CHN=%d\n", Chn);
 		RetVal = VsiCamDeviceGetBufferSize(isp_dev, IspPort->CamDeviceHandle,
 										   Chn, &BufSize);
 		if (RetVal != VSI_SUCCESS)
@@ -473,7 +470,6 @@ static int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port,
 			goto ERR_TO_DEINIT_CHAIN;
 		}
 		BufPoolCfg.bufSize = BufSize;
-		//RKC-Hardcoded
 		IspPort->McmAttr.InputSelect = MEDIA_ISP_MCM_INPUT_SELECT_APU;
 
 		if (IspPort->McmAttr.InputSelect == MEDIA_ISP_MCM_INPUT_SELECT_RPU)
@@ -690,10 +686,7 @@ int IspDestroyCamDevice(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 
 int IspDestroyPipeline(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 {
-	/*
-		if (IspEventDev->RefCount)
-			IspEventDev->RefCount--;
-	*/
+
 	IspDestroyCamDevice(isp_dev, Port, Chn);
 
 	return VSI_SUCCESS;
@@ -751,12 +744,6 @@ int MediaIspQBuf(struct visp_dev *isp_dev, int Pad_index, MediaBuf *Buf)
 		dev_err(isp_dev->dev, "got NULL BUFFER\n");
 		return -1;
 	}
-#if 0 //Debug
-	dev_info(isp_dev->dev,"%s %d Port %d Chn %d Qbuf[%d] DmaAddr 0x%x DmaSize %d",
-			   /*MediaEntity->DevName,*/ __func__,__LINE__,Port, Chn, Buf->Index,
-				Buf->Planes[0].DmaAddr, Buf->Planes[0].DmaSize);
-#endif
-
 	if (/*IspChn->ThreadStatus == MEDIA_THREAD_STOPPED*/ isp_dev
 			->streamon[Pad_index] == 0)
 	{
@@ -1324,7 +1311,7 @@ int MediaIspDeviceSetFormat(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 {
 	/************ STEP 2 Streamon --> SetOutFormat******************/
 	MediaIspPortAttr *IspPort =
-		&isp_dev->IspPorts[Port]; // &IspEventDev->IspPorts[Port];
+		&isp_dev->IspPorts[Port];
 
 	int RetVal = 0;
 
@@ -1355,7 +1342,7 @@ int MediaIspDeviceSetFormat(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 
 	return RetVal;
 ERR_TO_CAMERA_DISCONNECT:
-	// RANJITH ADD the cleanup later
+	// ADD the cleanup
 	return RetVal;
 }
 
@@ -1416,7 +1403,7 @@ static int MediaIspDeviceSubModuleInit(
 	if (ModeInfo.sensorType == CAMDEV_SENSOR_TYPE_STITCHING_HDR)
 	{
 		SubModuleInit->subCtrl.hdrEnable =
-			1; //RKC THIS somehow this is not working in our flow
+			1;
 	}
 
 	return RetVal;
@@ -1429,18 +1416,6 @@ int MediaIspCalibGetSensorName(struct visp_dev *isp_dev, uint8_t Port,
 	int RetVal = VSI_SUCCESS;
 
 	IspPort = &isp_dev->IspPorts[Port];
-
-	dev_info(isp_dev->dev, "ISPDRV_APP %s %d ", __func__, __LINE__);
-	dev_info(isp_dev->dev, "%s: isp : %d", __func__, isp_dev->id);
-	dev_info(isp_dev->dev, "%s: port: %d", __func__, Port);
-	dev_info(isp_dev->dev, "%s: name: %s", __func__, IspPort->SensorInfo.Name);
-	dev_info(isp_dev->dev, "%s: mode: %d", __func__, IspPort->SensorInfo.Mode);
-	dev_info(isp_dev->dev, "%s: xml : %s", __func__,
-			 IspPort->SensorInfo.CalibXml);
-	dev_info(isp_dev->dev, "%s: manu_json: %s", __func__,
-			 IspPort->SensorInfo.ManuJson);
-	dev_info(isp_dev->dev, "%s: auto_json: %s", __func__,
-			 IspPort->SensorInfo.AutoJson);
 
 	if (!SensorName || !isp_dev)
 	{
@@ -1501,12 +1476,7 @@ int MediaIspDeviceSensorOpen(struct visp_dev *isp_dev, uint8_t Port)
 				RetVal);
 		return RetVal;
 	}
-#if 0 //Check it once again it is required or not
-	RetVal = MediaIspCalibGetSensorName(isp_dev, Port, SensorName);
-	if (RetVal != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,"%s: get sensor name failed, ret is %d", __func__, RetVal);
-	}
-#endif
+
 	RetVal = VsiCamDeviceSensorOpen(isp_dev, IspPort->CamDeviceHandle,
 									(uint32_t)ModeIndex);
 	if (RetVal != VSI_SUCCESS)
@@ -1631,20 +1601,6 @@ static int MediaIspDeviceMcmCreateBufPool(struct visp_dev *isp_dev,
 	return RetVal;
 }
 
-#if 0
-static int MediaIspDeviceMcmDestroyBufPool(struct visp_dev *isp_dev ,  uint8_t Port)
-{
-	MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
-	int RetVal  = VSI_SUCCESS;
-	uint8_t Chn = CAMDEV_BUFCHAIN_RDMA;
-
-	MediaIspDeviceDestroyBufPool(isp_dev, Port, Chn);
-	IspPort->McmAttr.NumBufs = 0;
-
-	return RetVal;
-}
-#endif
-
 static int MediaIspDeviceMcmInit(struct visp_dev *isp_dev, uint8_t Port)
 {
 	int RetVal = VSI_SUCCESS;
@@ -1766,12 +1722,10 @@ int MediaIspHalBufDone(struct v4l2_subdev *sd, int pad, const MediaBuf *Buf)
 	}
 	KernelBuf.pad = pad;
 
-	//ioctl(HalHandle->IspFd, VISP_IOC_BUFDONE, &KernelBuf);
-
 	RetVal = visp_buf_done(sd, &KernelBuf);
 	if (RetVal != 0)
 	{
-		dev_err(isp_dev->dev, "Failed to signal BufDone\n");
+		dev_dbg(isp_dev->dev, "Failed to signal BufDone\n");
 		return RetVal;
 	}
 	return VSI_SUCCESS;
@@ -1787,7 +1741,7 @@ int Read_DQ_Bufinfo(void *data, struct visp_dev *isp_dev,
 
 	payload_packet *packet = data;
 	if (!packet) {
-	loge("NO Data in DQ Payload%s %d\n", __func__, __LINE__);
+		dev_err(isp_dev->dev, "NO Data in DQ Payload %s %d\n", __func__, __LINE__);
 		return -ENOMEM;
 	}
 
@@ -1799,7 +1753,6 @@ int Read_DQ_Bufinfo(void *data, struct visp_dev *isp_dev,
 	memcpy(info, p_data, sizeof(struct Chn_info));
 	p_data += sizeof(struct Chn_info);
 
-	//memcpy(&(addr), p_data, sizeof(uint32_t));
 	p_data += sizeof(uint32_t);
 
 	memcpy(&(idx), p_data, sizeof(uint8_t));
@@ -2035,49 +1988,46 @@ int MediaIspCalibLoadIspConfig(struct visp_dev *isp_dev, uint8_t Port)
 	IspPort = &isp_dev->IspPorts[Port];
 
 	snprintf(DevName, sizeof(DevName), "/proc/vsi/isp_subdev%d", isp_dev->id);
-	dev_info(isp_dev->dev, "%s: parse %s info:", __func__, DevName);
-	dev_info(isp_dev->dev, "%s: isp : %d", __func__, isp_dev->id);
-	dev_info(isp_dev->dev, "%s: port: %u", __func__, Port);
-	dev_info(isp_dev->dev, "%s: name: %s ", __func__, IspPort->SensorInfo.Name);
-	dev_info(isp_dev->dev, "SenNAme : %s\n", IspPort->SensorInfo.Name);
+	dev_dbg(isp_dev->dev, "%s: parse %s info:", __func__, DevName);
+	dev_dbg(isp_dev->dev, "%s: isp : %d", __func__, isp_dev->id);
+	dev_dbg(isp_dev->dev, "%s: port: %u", __func__, Port);
+	dev_dbg(isp_dev->dev, "%s: name: %s ", __func__, IspPort->SensorInfo.Name);
+	dev_dbg(isp_dev->dev, "Sensor name : %s\n", IspPort->SensorInfo.Name);
 
-	dev_info(isp_dev->dev, "%s: mode: %u", __func__, IspPort->SensorInfo.Mode);
-	dev_info(isp_dev->dev, "%s: xml : %s", __func__,
+	dev_dbg(isp_dev->dev, "%s: mode: %u", __func__, IspPort->SensorInfo.Mode);
+	dev_dbg(isp_dev->dev, "%s: xml : %s", __func__,
 			IspPort->SensorInfo.CalibXml);
-	dev_info(isp_dev->dev, "%s: manu_json: %s", __func__,
+	dev_dbg(isp_dev->dev, "%s: manu_json: %s", __func__,
 			IspPort->SensorInfo.ManuJson);
-	dev_info(isp_dev->dev, "%s: auto_json: %s", __func__,
+	dev_dbg(isp_dev->dev, "%s: auto_json: %s", __func__,
 			IspPort->SensorInfo.AutoJson);
-	dev_info(isp_dev->dev, "%zu %zu %zu\n", strlen(IspPort->SensorInfo.CalibXml),
-			strlen(IspPort->SensorInfo.ManuJson),
-			strlen(IspPort->SensorInfo.AutoJson));
 
-	dev_info(isp_dev->dev, "%s: sensor_id: %u", __func__,
+	dev_dbg(isp_dev->dev, "%s: sensor_id: %u", __func__,
 			IspPort->SensorInfo.sensor_id);
-	dev_info(isp_dev->dev, "%s: port: %u", __func__, Port);
-	dev_info(isp_dev->dev, "%s: buf_mode: %s", __func__, IspPort->bufmode);
-	dev_info(isp_dev->dev, "%s: port: %u", __func__, Port);
+	dev_dbg(isp_dev->dev, "%s: port: %u", __func__, Port);
+	dev_dbg(isp_dev->dev, "%s: buf_mode: %s", __func__, IspPort->bufmode);
+	dev_dbg(isp_dev->dev, "%s: port: %u", __func__, Port);
 
 	return RetVal;
 }
 
 int MediaIspSetFrameRate(
-	struct visp_dev *isp_dev, int Pad, /*float * */
-	uint32_t *FrameRate) //RKC-TODO Float to int due to compiler dependency
+	struct visp_dev *isp_dev, int Pad,
+	uint32_t *FrameRate)
 {
 	int Port = Pad / MEDIA_ISP_PORT_PAD_COUNT;
 	MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
 
-	if (*(uint32_t *)FrameRate < /*1.0f*/ 1 ||
+	if (*(uint32_t *)FrameRate <  1 ||
 		*(uint32_t *)FrameRate > IspPort->SensorInfo.ModeInfo.maxFps)
-	{ //RKC-TODO Float to int 1.0f to 1
+	{
 		dev_info(isp_dev->dev,
 				 " Port %d set FrameRate %d Out of range (1 ~ %d)", Port,
 				 *FrameRate, IspPort->SensorInfo.ModeInfo.maxFps);
 		*FrameRate = (*(uint32_t *)FrameRate < 1)
-						 ? /*1.0f*/ 1
+						 ?  1
 						 : IspPort->SensorInfo.ModeInfo
-							   .maxFps; //RKC-TODO Float to int 1.0f to 1
+							   .maxFps;
 	}
 	IspPort->SensorInfo.FrameRate = *FrameRate;
 
@@ -2087,8 +2037,8 @@ int MediaIspSetFrameRate(
 int visp_set_frame_interval_public(struct visp_dev *isp_dev,
 								   struct v4l2_subdev_frame_interval *fi);
 static int MediaIspHalSetFrameRate(
-	struct visp_dev *isp_dev, int Pad, /*float **/
-	uint32_t *FrameRate) //RKC-TODO Float to int due to compiler dependency
+	struct visp_dev *isp_dev, int Pad,
+	uint32_t *FrameRate)
 {
 	struct v4l2_subdev_frame_interval SdFi;
 
@@ -2113,9 +2063,7 @@ int IspDeviceCreate(struct visp_dev *isp_dev, uint8_t Port)
 
 	/*Enter Port Level Critical Section */
 
-	//mutex_lock(&isp_dev->port_lock[Port]);
-
-	memset(&CamConfig, 0, sizeof(CamConfig)); // RKC-UNDO to COMMENT
+	memset(&CamConfig, 0, sizeof(CamConfig));
 
 	CamConfig.ispHwId = isp_dev->id;
 	CamConfig.inputCfg.inputType = CAMDEV_INPUT_TYPE_SENSOR;
@@ -2173,12 +2121,10 @@ int IspDeviceCreate(struct visp_dev *isp_dev, uint8_t Port)
 	}
 
 	/*****Map the sensor*****/
-	//RetVal = VsiCamDeviceSensorMapping(isp_dev, IspPort->CamDeviceHandle, SensorPortInfo.name, &SensorDrvHandle);
 	RetVal = VsiCamDeviceSensorMapping(isp_dev, IspPort->CamDeviceHandle,
 									   SensorName, &SensorDrvHandle);
 	if (RetVal != VSI_SUCCESS || SensorDrvHandle == VSI_NULL)
 	{
-		//dev_err(isp_dev->dev ,"CamDevice sensor mapping %s Failed", SensorPortInfo.name);
 		dev_err(isp_dev->dev, "CamDevice sensor mapping %s Failed ret is %d",
 				SensorName, RetVal);
 		RetVal = VSI_ERR_TIMEOUT;
@@ -2189,13 +2135,14 @@ int IspDeviceCreate(struct visp_dev *isp_dev, uint8_t Port)
 	devSensorDrv.sensorDevId = IspPort->SensorInfo.sensor_id;
 
 	/***** FMC Config *****/
+	dev_info(isp_dev->dev, "Registering the SensorDrvHandle, this will take some time...\n");
 	RetVal = VsiCamDeviceSensorDrvHandleRegister(
-		isp_dev, IspPort->CamDeviceHandle, /*SensorDrvHandle*/ &devSensorDrv);
+		isp_dev, IspPort->CamDeviceHandle,  &devSensorDrv);
 	if (RetVal != VSI_SUCCESS)
 	{
 		dev_err(isp_dev->dev,
 				"CamDevice register sensor %s driver Failed, ret is %d",
-				/*SensorPortInfo.name*/ SensorName, RetVal);
+				 SensorName, RetVal);
 		RetVal = VSI_ERR_TIMEOUT;
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}

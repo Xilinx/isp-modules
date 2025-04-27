@@ -60,7 +60,6 @@
 #include <linux/spinlock.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
-//<REMOVED IN M13> #include <linux/arm-smccc.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
@@ -77,12 +76,10 @@
 #include "visp_procfs.h"
 #include "visp_v4l2_common.h"
 #include "visp_v4l2_std_exts.h"
-/*RKC-TODO Check below headers requirement in M13*/
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 
 #include "sensor_cmd.h"
-//#include "mailbox.h"
 #include "mbox_api.h"
 #include "mbox_cmd.h"
 #include "visp_app.h"
@@ -97,10 +94,7 @@
 #define VISP_DEFAULT_SENSOR_AUTO_JSON "/run/media/mmcblk0p1/auto.json"
 
 static uint32_t SensorDevId[VISP_PORT_NR] = {2, 6, 5, 10}; //Sesnor
-//static uint32_t SensorDevId[VISP_PORT_NR] = {0 ,1, 2, 3};     //SEMU
 
-//#define NMCM 0
-#define MCM 1
 
 struct visp_format visp_mp_fmts[] = {
 	{
@@ -706,7 +700,6 @@ static int visp_pad_requbufs(struct v4l2_subdev *sd, void *arg)
 
 	int Port = pad_requbufs->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int Chn = (pad_requbufs->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
-	/*RKC-TODO CHECK-M13*/
 	isp_dev->IspPorts[Port].IspChns[Chn].NumBufs = pad_requbufs->num_buffers;
 	return status;
 }
@@ -742,16 +735,12 @@ static int visp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
 		Buf.Planes[i].DmaSize = pad_buf->buf->planes[i].size;
 	}
 	//ENQUE BUFFER
-	//  MediaIspQBuf(isp_dev,pad_buf->pad ,  &Buf);
-	//RKC-TODO Check M13
-	if (/*IspChn->ThreadStatus == MEDIA_THREAD_STOPPED*/ isp_dev
-			->streamon[pad_buf->pad] == 0)
+	if ( isp_dev->streamon[pad_buf->pad] == 0)
 	{
 		memcpy(&IspChn->Bufs[Buf.Index], &Buf, sizeof(MediaBuf));
 	}
 	else
 	{
-		//RetVal = MediaIspDeviceQbuf(isp_dev, Port, Chn, &Buf);
 		OutputBuffer_t *pMediaBuffer = VSI_NULL;
 		pMediaBuffer = IspChn->CamDeviceBufs[Buf.Index];
 
@@ -768,7 +757,6 @@ static int visp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
 			dev_err(isp_dev->dev,"CamDevice queue buf failed, ret is %d\n", RetVal);
 			return VSI_ERR_TIMEOUT;
 		}
-		//  IspChn->CamDeviceBufs[pMediaBuffer->index] = VSI_NULL;
 	}
 
 	return RetVal;
@@ -838,7 +826,7 @@ int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev)
 				OutputBuffer ? OutputBuffer->baseAddress : 0);
 		goto error_free_buf;
 	}
-	//dev_err(isp_dev->dev,"[RKC-ISPDRV] Received DQ BUFF : Isp : %d Port : %d Path : %d BufAddr : 0x%x\n",info.HwId,info.VtId, info.path, OutputBuffer->baseAddress);
+	//dev_err(isp_dev->dev,"[ISPDRV] Received DQ BUFF : Isp : %d Port : %d Path : %d BufAddr : 0x%x\n",info.HwId,info.VtId, info.path, OutputBuffer->baseAddress);
 
 	/* Free allocated buffer after successful processing*/
 	return 0;
@@ -859,8 +847,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	int ret = 0;
 	int Port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int Chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
-	//RKC-TODO CHECK-M13
-	//	dev_info(isp_dev->dev ,"RKC_ISPDRV %s %d Pad=%d Status=%d Port  =%d Chn=%d\n",__func__,__LINE__,pad_stream->pad,pad_stream->status,Port,Chn);
+	//	dev_info(isp_dev->dev ,"ISPDRV %s %d Pad=%d Status=%d Port  =%d Chn=%d\n",__func__,__LINE__,pad_stream->pad,pad_stream->status,Port,Chn);
 	isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 
 	if (pad_stream->status == 0)
@@ -871,7 +858,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	if (pad_stream->status == 1) //streamon
 	{
 		/*ENTER PORT Level CRITICAL SECITON*/
-		//mutex_lock(&isp_dev->port_lock[0]);
 		mutex_lock(&isp_dev->rpu->rpu_lock);
 
 		if (isp_dev->IspPorts[Port].CameraConnectRefCnt == 0)
@@ -884,7 +870,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			{
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__,
 						__LINE__);
-				// mutex_unlock(&isp_dev->port_lock[Port]);
 				mutex_unlock(&isp_dev->rpu->rpu_lock);
 				return ret;
 			}
@@ -895,7 +880,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			{
 				dev_err(isp_dev->dev, "%s %d FAiled camera connect\n", __func__,
 						__LINE__);
-				//mutex_unlock(&isp_dev->port_lock[Port]);
 				mutex_unlock(&isp_dev->rpu->rpu_lock);
 				return ret;
 			}
@@ -906,7 +890,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			{
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__,
 						__LINE__);
-				// mutex_unlock(&isp_dev->port_lock[Port]);
 				mutex_unlock(&isp_dev->rpu->rpu_lock);
 				return ret;
 			}
@@ -1302,10 +1285,11 @@ static long visp_return_rpu_id(struct v4l2_subdev *sd, void *arg)
         dev_err(isp_dev->dev, "%s %d NULL ARG \n",__func__,__LINE__);
     }
 
-    uint32_t *rpu=(uint32_t *)arg;
-    *rpu=isp_dev->isp_rpu;
+    struct isp_rpu *temp = (struct isp_rpu *)arg;
+    temp->rpu = isp_dev->isp_rpu;
+    temp->isp = isp_dev->id;
 
-    dev_info(isp_dev->dev, "%s %d returning RPU id: %d for ISP : %d\n",__func__,__LINE__,*rpu, isp_dev->id);
+    dev_dbg(isp_dev->dev, "%s %d returning RPU id: %d for ISP : %d\n",__func__,__LINE__, isp_dev->isp_rpu, isp_dev->id);
 
     return ret;
 }
@@ -1394,7 +1378,7 @@ static struct v4l2_subdev_core_ops visp_core_ops = {
 };
 
 static int visp_set_frame_interval(
-	struct v4l2_subdev *sd /* struct visp_dev *isp_dev*/,
+	struct v4l2_subdev *sd ,
 	struct v4l2_subdev_state *sd_state,
 	struct v4l2_subdev_frame_interval *fi)
 {
@@ -1406,8 +1390,8 @@ static int visp_set_frame_interval(
 	int ret = 0;
 	int i = 0;
 	struct v4l2_fract *timeperframe;
-	/*float*/ uint32_t FrameRate =
-		0; //RKC-TODO  As there is compiling dependency for float types moving to int for now.
+	uint32_t FrameRate =
+		0;
 
 	sink_pad_index = fi->pad - (fi->pad % VISP_PORT_PAD_NR);
 	sink_pad = &isp_dev->pad_data[sink_pad_index];
@@ -1429,12 +1413,10 @@ static int visp_set_frame_interval(
 		fi->interval = sink_pad->timeperframe;
 	}
 
-	/* ret = visp_s_interval_event(isp_dev, fi->pad, &fi->interval);*/
 	timeperframe = &(fi->interval);
 	FrameRate =
-		/*(float)*/ timeperframe->denominator /
-		timeperframe
-			->numerator; //RKC-TODO  As there is compiling dependency for float types moving to int for now.
+		timeperframe->denominator /
+		timeperframe->numerator;
 
 	ret = MediaIspSetFrameRate(isp_dev, fi->pad, &FrameRate);
 	if (ret)
@@ -1488,23 +1470,7 @@ static struct v4l2_subdev_video_ops visp_video_ops = {
 
 int MediaIspHalMbusFmtToMediaFmt(uint32_t *Code, uint32_t *PixelFormat,
 								 uint32_t fourcc_code);
-/*
-xisp->formats[XVIP_PAD_SINK].field = V4L2_FIELD_NONE;
-	xisp->formats[XVIP_PAD_SINK].colorspace = V4L2_COLORSPACE_SRGB;
-	xisp->formats[XVIP_PAD_SINK].width = XISP_MIN_WIDTH;
-	xisp->formats[XVIP_PAD_SINK].height = XISP_MIN_HEIGHT;
-	xisp->formats[XVIP_PAD_SINK].code = MEDIA_BUS_FMT_SRGGB10_1X10;
 
-	// Source Pad has a fixed media bus format of RGB/
-	xisp->formats[XVIP_PAD_SOURCE].field = V4L2_FIELD_NONE;
-	xisp->formats[XVIP_PAD_SOURCE].colorspace = V4L2_COLORSPACE_SRGB;
-	xisp->formats[XVIP_PAD_SOURCE].width = XISP_MIN_WIDTH;
-	xisp->formats[XVIP_PAD_SOURCE].height = XISP_MIN_HEIGHT;
-	xisp->formats[XVIP_PAD_SOURCE].code = MEDIA_BUS_FMT_RBG888_1X24;
-
-	xisp->pads[XVIP_PAD_SINK].flags = MEDIA_PAD_FL_SINK;
-	xisp->pads[XVIP_PAD_SOURCE].flags = MEDIA_PAD_FL_SOURCE;
-*/
 static void set_default_pad_config(struct visp_dev *isp_dev)
 {
 	int i = 0;
@@ -1513,22 +1479,20 @@ static void set_default_pad_config(struct visp_dev *isp_dev)
 	source_pad = &isp_dev->pad_data[0];
 	source_pad->format.field = V4L2_FIELD_NONE;
 	source_pad->format.code =
-		MEDIA_BUS_FMT_SRGGB12_1X12; //MEDIA_BUS_FMT_SRGGB12_1X10;
+		MEDIA_BUS_FMT_SRGGB12_1X12;
 	source_pad->format.quantization = V4L2_QUANTIZATION_DEFAULT;
 	source_pad->format.colorspace = V4L2_COLORSPACE_SRGB;
-	; //V4L2_COLORSPACE_DEFAULT;
 	source_pad->format.width = 1920;
 	source_pad->format.height = 1080;
 
 	for (i = 1; i < VISP_PORT_PAD_NR; i++)
 	{
 		source_pad = &isp_dev->pad_data[i];
-		//		source_pad->format = format->format;
 		source_pad->format.field = V4L2_FIELD_NONE;
 		source_pad->format.code = MEDIA_BUS_FMT_RBG888_1X24;
 		source_pad->format.quantization = V4L2_QUANTIZATION_DEFAULT;
 		source_pad->format.colorspace =
-			V4L2_COLORSPACE_SRGB; //V4L2_COLORSPACE_DEFAULT;
+			V4L2_COLORSPACE_SRGB;
 		source_pad->format.width = 1920;
 		source_pad->format.height = 1080;
 	}
@@ -1761,7 +1725,6 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 	if (!isp_dev->IspPorts[Port].RefCount)
 	{
 		MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
-		//CamDeviceConfig_t* CamConfig;
 
 		if (IspPort->CamDeviceHandle)
 		{
@@ -1777,9 +1740,7 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 				RetVal = IspDeviceCreate(isp_dev, Port);
 				if (RetVal != VSI_SUCCESS)
 				{
-					//mutex_unlock(&isp_dev->port_lock[Port]);
 					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					//mutex_unlock(&isp_dev->r_lock);
 					dev_err(isp_dev->dev, "CamDevice Creat Isp , ret is %d",
 							RetVal);
 					return RetVal;
@@ -1790,9 +1751,7 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 				RetVal = IspDeviceCreate(isp_dev, Port);
 				if (RetVal != VSI_SUCCESS)
 				{
-					// mutex_unlock(&isp_dev->port_lock[Port]);
 					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					// mutex_unlock(&isp_dev->r_lock);
 					dev_err(isp_dev->dev, "CamDevice Creat Isp , ret is %d",
 							RetVal);
 					return RetVal;
@@ -2095,17 +2054,11 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 
 	return 0;
 }
-//
+
 static int parse_iba(struct visp_dev *isp_dev, struct device_node *np)
 {
 	int num_streams = isp_dev->num_streams;
 	int i;
-	/*
-	 *     if (of_property_read_u32(np, "xlnx,num_streams", &num_streams)) {
-	 *         dev_err(isp_dev->dev, "Failed to read xlnx,num_streams\n");
-	 *         return -EINVAL;
-	 *      }
-	 **/
 	if (num_streams > MAX_IBA_PER_ISP)
 	{
 		dev_err(isp_dev->dev, "num_streams exceeds maximum allowed (%d)\n",
@@ -2185,7 +2138,7 @@ static int parse_iba(struct visp_dev *isp_dev, struct device_node *np)
 			return -EINVAL;
 		}
 
-		dev_info(isp_dev->dev,
+		dev_dbg(isp_dev->dev,
 				 "IBA%d: ppc=%d, vcid=%d, frame_rate=%d, data_format=%d, "
 				 "max_width=%d, max_height=%d\n",
 				 iba_index, isp_dev->iba[iba_index].ppc,
@@ -2202,12 +2155,7 @@ static int parse_oba(struct visp_dev *isp_dev, struct device_node *np)
 {
 	int num_streams = isp_dev->num_streams;
 	int i;
-	/*
-	 *     if (of_property_read_u32(np, "xlnx,num_streams", &num_streams)) {
-	 *         dev_err(isp_dev->dev, "Failed to read xlnx,num_streams\n");
-	 *         return -EINVAL;
-	 *      }
-	 **/
+
 	if (num_streams > 1)
 	{
 		dev_err(isp_dev->dev, "num_streams exceeds maximum allowed (%d)\n",
@@ -2287,12 +2235,12 @@ static int parse_oba(struct visp_dev *isp_dev, struct device_node *np)
 			return -EINVAL;
 		}
 
-		dev_info(isp_dev->dev,
+		dev_dbg(isp_dev->dev,
 				 "OBA%d: ppc=%d, bpp=%d, data_format=%s \n",
 				 CAMDEV_BUFCHAIN_MP, isp_dev->oba[CAMDEV_BUFCHAIN_MP].ppc,
 				 isp_dev->oba[CAMDEV_BUFCHAIN_MP].bpp,
 				 isp_dev->oba[CAMDEV_BUFCHAIN_MP].data_format);
-        dev_info(isp_dev->dev,
+        dev_dbg(isp_dev->dev,
 				 "OBA%d: ppc=%d, bpp=%d, data_format=%s \n",
 				 CAMDEV_BUFCHAIN_SP1, isp_dev->oba[CAMDEV_BUFCHAIN_SP1].ppc,
 				 isp_dev->oba[CAMDEV_BUFCHAIN_SP1].bpp,
@@ -2302,7 +2250,7 @@ static int parse_oba(struct visp_dev *isp_dev, struct device_node *np)
 
 	return 0;
 }
-//
+
 static int visp_parse_params(struct visp_dev *isp_dev,
 							 struct platform_device *pdev)
 {
@@ -2341,7 +2289,6 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		dev_err(&pdev->dev, "Invalid ISP Id %d\n", isp_dev->id);
 		return -EINVAL;
 	}
-	dev_info(&pdev->dev, "Found visp device in device tree.\n");
 
 	// Read string property for SS-MODE-I0 (LIMO, etc.)
 	ret = of_property_read_string(node, "xlnx,io_mode", &isp_dev->ss_mode_i0);
@@ -2352,9 +2299,8 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	}
 	else
 	{
-		dev_info(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
+		dev_dbg(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
 	}
-	dev_info(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
 
 	// Read stream info (multi-stream, single-stream)
 	ret = of_property_read_u32(node, "xlnx,num_streams", &isp_dev->num_streams);
@@ -2365,7 +2311,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	}
 	else
 	{
-		dev_info(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
+		dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
 	}
 
 	ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
@@ -2376,7 +2322,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	}
 	else
 	{
-		dev_info(&pdev->dev, "xlnx,mem_inputs: %u\n", isp_dev->isp_mem);
+		dev_dbg(&pdev->dev, "xlnx,mem_inputs: %u\n", isp_dev->isp_mem);
 	}
 
 	ret = of_property_read_u32(node, "xlnx,rpu", &isp_dev->isp_rpu);
@@ -2387,7 +2333,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	}
 	else
 	{
-		dev_info(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
+		dev_dbg(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
 	}
 
 	if (parse_iba(isp_dev, node))
@@ -2420,7 +2366,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		if (!rmem) return -EINVAL;
 		isp_dev->reserve_mem.pa = rmem->base;
 		isp_dev->reserve_mem.size = rmem->size;
-        dev_info(isp_dev->dev, "%s %d pa:%llu size :%u\n", __func__, __LINE__, isp_dev->reserve_mem.pa, isp_dev->reserve_mem.size);
+        dev_dbg(isp_dev->dev, "%s %d pa:%llu size :%u\n", __func__, __LINE__, isp_dev->reserve_mem.pa, isp_dev->reserve_mem.size);
 	}
 
 	int len=strlen(isp_dev->ss_mode_i0);
@@ -2535,18 +2481,6 @@ static int visp_probe(struct platform_device *pdev)
 		goto err_register_procfs;
 	}
 
-#if 0
-	ret = of_reserved_mem_device_init(&pdev->dev);
-	if (ret)
-		dev_dbg(&pdev->dev, "of_reserved_mem_device_init: %d\n", ret);
- 
-	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
-	if (ret) {
-		dev_err(&pdev->dev, "dma_set_mask_and_coherent: %d\n", ret);
-		return -EINVAL;
-		//goto error;
-	}
-#endif
 	isp_dev->event_shm.virt_addr = (void *)__get_free_pages(GFP_KERNEL, 3);
 	isp_dev->event_shm.size = PAGE_SIZE * 8;
 	memset(isp_dev->event_shm.virt_addr, 0, isp_dev->event_shm.size);
@@ -2566,7 +2500,6 @@ static int visp_probe(struct platform_device *pdev)
 	}
 
 	isp_dev->PortsMask = isp_dev->num_streams;
-	//set_default_pad_config(isp_dev);
 	sensor_pipeline_init(isp_dev);
 	set_default_pad_config(isp_dev);
 
@@ -2605,7 +2538,6 @@ int sensor_pipeline_init(struct visp_dev *isp_dev)
 	if (!isp_dev->IspPorts[Port].RefCount)
 	{
 		MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
-		//CamDeviceConfig_t* CamConfig;
 
 		if (IspPort->CamDeviceHandle)
 		{
@@ -2619,14 +2551,11 @@ int sensor_pipeline_init(struct visp_dev *isp_dev)
 		{
 			if (isp_dev->num_streams == 1 /*NMCM*/)
 			{
-				dev_info(isp_dev->dev, "EXECUTING NON-MCM");
-				//isp_dev->PortsMask = 0x01;
+				dev_dbg(isp_dev->dev, "EXECUTING NON-MCM");
 				RetVal = IspDeviceCreate(isp_dev, Port);
 				if (RetVal != VSI_SUCCESS)
 				{
-					//mutex_unlock(&isp_dev->port_lock[Port]);
 					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					//mutex_unlock(&isp_dev->r_lock);
 					dev_err(isp_dev->dev, "CamDevice Creat Isp , ret is %d",
 							RetVal);
 					return RetVal;
@@ -2637,9 +2566,7 @@ int sensor_pipeline_init(struct visp_dev *isp_dev)
 				RetVal = IspDeviceCreate(isp_dev, Port);
 				if (RetVal != VSI_SUCCESS)
 				{
-					// mutex_unlock(&isp_dev->port_lock[Port]);
 					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					// mutex_unlock(&isp_dev->r_lock);
 					dev_err(isp_dev->dev, "CamDevice Creat Isp , ret is %d",
 							RetVal);
 					return RetVal;
@@ -2679,7 +2606,7 @@ static void visp_remove(struct platform_device *pdev)
 #endif
 	media_entity_cleanup(&isp_dev->sd.entity);
 	free_pages((unsigned long)isp_dev->event_shm.virt_addr,
-			   3); // RKC-avoid-shm-memory
+			   3);
 	visp_ctrl_destroy(isp_dev);
 	dev_info(&pdev->dev, "visp isp driver remove\n");
 

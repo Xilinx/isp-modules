@@ -1,8 +1,5 @@
-/****************************************************************************
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
+/*
+ * Copyright 2025 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -16,41 +13,14 @@
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
  *
- *****************************************************************************
- *
- * The GPL License (GPL)
- *
- * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program;
- *
- *****************************************************************************
- *
- * Note: This software is released under dual MIT and GPL licenses. A
- * recipient may use this file under the terms of either the MIT license or
- * GPL License. If you wish to use only one license not the other, you can
- * indicate your decision by deleting one of the above license notices in your
- * version of this file.
- *
- *****************************************************************************/
- 
+ */
+
 #include "sensor_cmd.h"
 #include "visp_mbox_driver.h"
 #include "cam_device.h"
@@ -64,7 +34,7 @@ static void print_iba_info(const iba_info_t *iba_info)
 		pr_err("IBA info is NULL\n");
 		return;
 	}
-
+#ifdef ENABLE_IBA_INFO
 	pr_err("IBA Info:\n");
 	pr_err("  Base Address: 0x%x\n", iba_info->baseaddress);
 	pr_err("  IBA ID: %u\n", iba_info->iba_id);
@@ -79,14 +49,15 @@ static void print_iba_info(const iba_info_t *iba_info)
 	pr_err("  PPC: %u\n", iba_info->ppc);
 	pr_err("  ISP ID: %u\n", iba_info->isp_id);
 	pr_err("  Frame Rate: %u\n", iba_info->frame_rate);
+#endif
 }
 
 int IBA_init_send_command(struct visp_dev *isp_dev,
 						  CamDeviceHandle_t hCamDevice)
 {
 	int result = 0;
-	payload_packet *packet; // = kmalloc(sizeof(payload_packet), GFP_KERNEL);
-	uint8_t *p_data;		// = packet->payload;
+	payload_packet *packet;
+	uint8_t *p_data;
 	CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
 	iba_info_t *iba_info;
 	uint32_t iba_id;
@@ -109,8 +80,9 @@ int IBA_init_send_command(struct visp_dev *isp_dev,
 		{
 			iba_id = (num_streams == 1) ? IBA_4 : IBA_3 + i;
 		}
-
+#ifdef ENABLE_IBA_INFO
 		pr_err("IBA %s %d iba_id/Vtid =%d\n", __func__, __LINE__, iba_id);
+#endif
 		iba_info = &isp_dev->iba[iba_id];
 		iba_info->baseaddress = 0xE8520000 + (0x1000 * iba_id);
 		iba_info->iba_id = iba_id;

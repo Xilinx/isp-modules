@@ -58,7 +58,6 @@
 #include <linux/string.h>
 
 #include "cam_device_common.h"
-//#include "cam_device_module_api.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -78,7 +77,6 @@ extern "C"
 
 	} CamDeviceIspcore_t;
 
-	//typedef HalMemHandle_t CamDeviceHalMemHandle_t;
 
 	/**
 	 *@ispcore api define

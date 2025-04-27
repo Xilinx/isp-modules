@@ -63,7 +63,6 @@
 #include <media/v4l2-mc.h>
 #include <media/videobuf2-dma-contig.h>
 #include "visp_v4l2_common.h"
-//RKC-TODO Check if below headers were required in M13
 #include "media_isp.h"
 #include <linux/kernel.h>
 #include <linux/of.h>
@@ -150,16 +149,6 @@ struct visp_event_shm
 
 #define MAX_IBA_PER_ISP 5
 
-#if 0
-struct iba_info {
-   u32 ppc;
-   u32 vcid;
-   u32 frame_rate;
-   u32 data_format;
-   u32 max_width;
-   u32 max_height;
-};
-#endif
 typedef struct iba_info
 {
 	u32 baseaddress;

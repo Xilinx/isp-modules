@@ -138,12 +138,6 @@ struct isp_rpu {
 #ifdef __KERNEL__
 #include "visp_driver.h"
 
-int visp_set_fmt_event(struct visp_dev *isp_dev, int pad,
-					   struct v4l2_mbus_framefmt *format);
-int visp_requebus_event(struct visp_dev *isp_dev, int pad,
-						uint32_t num_buffers);
-int visp_qbuf_event(struct visp_dev *isp_dev, int pad,
-					struct visp_vb2_buffer *buf);
 int visp_s_stream_event(struct visp_dev *isp_dev, int pad, uint32_t status);
 int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 					  struct v4l2_ctrl *ctrl);

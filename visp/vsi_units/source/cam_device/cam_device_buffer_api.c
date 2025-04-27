@@ -56,7 +56,6 @@
 #include "cam_device_buffer_api.h"
 #include "cam_device.h"
 #include "cam_device_api.h"
-// #include "mailbox.h"
 #include "visp_mbox_driver.h"
 #include "sensor_cmd.h"
 #include "visp_app.h"
@@ -214,14 +213,6 @@ RESULT VsiCamDeviceCreateBufPool(struct visp_dev *isp_dev,
 	memcpy(p_data, &bufId, sizeof(CamDeviceBufChainId_t));
 	packet->payload_size += sizeof(CamDeviceBufChainId_t);
 	p_data += sizeof(CamDeviceBufChainId_t);
-
-	//    memcpy(p_data, &(hBufferPoolSetupCfg->bufIo), sizeof(CamDeviceBufChainId_t));
-	//    packet.payload_size += sizeof(CamDeviceBufChainId_t);
-	//    p_data += sizeof(CamDeviceBufChainId_t);
-	//
-	//    memcpy(p_data, &(hBufferPoolSetupCfg->bufferChain), sizeof(CamDeviceBufChainConfig_t));
-	//	packet.payload_size += sizeof(CamDeviceBufChainConfig_t);
-	//	p_data += sizeof(CamDeviceBufChainConfig_t);
 
 	memcpy(p_data, &(hBufferPoolCfg->bufMode), sizeof(CamDeviceBufMode_t));
 	packet->payload_size += sizeof(CamDeviceBufMode_t);
@@ -506,31 +497,6 @@ RESULT VsiCamDeviceDeQueBuffer(struct visp_dev *isp_dev,
 	xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_DEQUE_BUFFER, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 
-#if 0
-	mutex_lock(&isp_dev->rpu->write_lock);
-	result = Send_Command(APU_2_RPU_MB_CMD_DEQUE_BUFFER, packet,
-						  packet->payload_size + payload_extra_size,
-						  isp_dev->isp_rpu, MBOX_CORE_APU);
-	if (0 != result)
-	{
-		kfree(packet);
-		mutex_unlock(&isp_dev->rpu->write_lock);
-		return result;
-	}
-	mbox_send_message(isp_dev->tx_chan, NULL);
-
-
-	__result = xlnx_mbox_apu_wait_for_data(isp_dev, packet->payload);
-	if (__result)
-	{
-		kfree(packet);
-		mutex_unlock(&isp_dev->rpu->write_lock);
-		dev_err(isp_dev->dev, "FAILED TO DEQUE BUFFER\n");
-		return __result;
-	}
-	mutex_unlock(&isp_dev->rpu->write_lock);
-#endif
-
 	p_data = packet->payload;
 	p_data += (sizeof(uint32_t) + sizeof(CamDeviceBufChainId_t));
 
@@ -651,13 +617,6 @@ RESULT VsiCamDeviceEnQueBuffer(struct visp_dev *isp_dev,
 	memcpy(p_data, &((pMediaBuf)->pOwner), sizeof(uint32_t));
 	packet.payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);
-// RANJITH THE BELOW CODE is ADDED due to some memcpy issue
-#if 0
-	memcpy(p_data, &((pMediaBuf)->pIplAddress), sizeof(uint32_t));
-	packet->payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-#endif
-
 
 	if (packet.payload_size > MAX_ITEM) return RET_OUTOFRANGE;
 
@@ -722,28 +681,6 @@ RESULT VsiCamDeviceGetBufferSize(struct visp_dev *isp_dev,
 	xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_GET_BUFFER_SIZE, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 
-#if 0
-	mutex_lock(&isp_dev->rpu->write_lock);
-	result = Send_Command(APU_2_RPU_MB_CMD_GET_BUFFER_SIZE, packet,
-						  packet->payload_size + payload_extra_size,
-						  isp_dev->isp_rpu, MBOX_CORE_APU);
-	if (0 != result)
-	{
-		kfree(packet);
-		mutex_unlock(&isp_dev->rpu->write_lock);
-		return result;
-	}
-	mbox_send_message(isp_dev->tx_chan, NULL);
-
-
-	__result = xlnx_mbox_apu_wait_for_data(isp_dev, packet->payload);
-	if (__result)
-	{
-		loge("FAiled to GET BUFFER SIZE\n");
-		return -1;
-	}
-	mutex_unlock(&isp_dev->rpu->write_lock);
-#endif
 	memcpy(pBufSize, p_data, sizeof(uint32_t));
 	if ((*pBufSize) == 0)
 	{
