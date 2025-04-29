@@ -103,7 +103,7 @@ enum visp_port_pad_e
 };
 
 #define VISP_PAD_NR (VISP_PORT_NR * VISP_PORT_PAD_NR)
-
+typedef int (*frameout_cb_t)(void *data, struct visp_dev *dev);
 enum visp_path_out_type_e
 {
 	VISP_PATH_OUT_TYPE_MEMORY = 0, /**< path out in memory type*/
@@ -209,7 +209,8 @@ struct rpu_dev
 	struct list_head node;
 	struct kref refcount;
 	struct tasklet_struct tasklet;
-	struct visp_dev *isp_dev[MAX_NO_ISP];
+	struct visp_common *isp_dev[MAX_NO_ISP];
+	//struct visp_dev *isp_dev[MAX_NO_ISP];
 	struct class *rpu_class[4];
 	struct mbox_client tx_mc;
 	struct mbox_client rx_mc;
@@ -240,6 +241,32 @@ struct visp_isp_reserve_mem
 	void *va;
 };
 
+enum isp_mode {
+    ISP_MODE_LIMO,
+    ISP_MODE_LILO,
+    ISP_MODE_MIMO,
+    ISP_MODE_UNKNOWN,
+};
+
+struct visp_common {
+    enum isp_mode mode;
+    void *isp_dev;  // pointer to specific driver struct
+};
+
+static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
+{
+    if (!mode_str)
+        return ISP_MODE_UNKNOWN;
+
+    if (strcmp(mode_str, "limo") == 0)
+        return ISP_MODE_LIMO;
+    else if (strcmp(mode_str, "lilo") == 0)
+        return ISP_MODE_LILO;
+    else if (strcmp(mode_str, "mimo") == 0)
+        return ISP_MODE_MIMO;
+
+    return ISP_MODE_UNKNOWN;
+}
 
 struct visp_dev
 {
@@ -312,7 +339,8 @@ struct visp_dev
 	int k_apu_ack_flag;
 	int k_apu_data_flag;
 	int app_wait_flag;
+	frameout_cb_t frameout_cb;
 };
 
-int Handle_Frameout_Buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);
+//int Handle_Frameout_Buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);
 #endif

@@ -119,6 +119,7 @@ static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg);
 static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg);
 static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg);
 static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg);
+typedef int (*frameout_cb_t)(void *data, struct visp_dev *dev);
 int get_dest_cpu(int rpu_id);
 int get_dest_cpu(int rpu_id) {
     int dest_cpu;
@@ -176,6 +177,20 @@ static void visp_mb_tx_done(struct mbox_client *cl, void *msg, int r)
 	return;
 }
 
+static inline struct visp_dev *get_limo_dev(struct rpu_dev *rpu, int isp_id)
+{
+    struct visp_common *vc;
+
+    if (!rpu || isp_id >= MAX_NO_ISP)
+        return NULL;
+
+    vc = rpu->isp_dev[isp_id];
+    if (!vc || vc->mode != ISP_MODE_LIMO)
+        return NULL;
+
+    return (struct visp_dev *)vc->isp_dev;
+}
+
 static void my_tasklet_function(void *data)
 {
 	struct rpu_dev *rpu = (struct rpu_dev *)data;
@@ -199,7 +214,7 @@ static void my_tasklet_function(void *data)
 		return;
 	}
 	/* Retrieve the corresponding ISP device */
-	isp_dev = rpu->isp_dev[isp_id];
+	isp_dev =  get_limo_dev(rpu, isp_id);//rpu->isp_dev[isp_id];
 	if (!isp_dev)
 	{
 		dev_err(rpu->dev,"my_tasklet_function: ISP device is NULL for isp_id %u\n",
@@ -222,15 +237,11 @@ static void my_tasklet_function(void *data)
 	}
 	else if (recv_cmd_id == RPU_2_APU_CMD_DISPLAY_BUFFER)
 	{
-		exported_func1 = symbol_get(Handle_Frameout_Buffer);
-		if (!exported_func1)
-		{
-				dev_err(rpu->dev,"my_tasklet_function: Handle_Frameout_Buffer function not "
-				"available\n");
-			mutex_unlock(&rpu->read_lock);
-			return;
+		if (isp_dev->frameout_cb) {
+			isp_dev->frameout_cb(data_from_interrupt.data, isp_dev);
+		} else {
+			pr_err("%s %d CALLBACK IS NULL\n",__func__,__LINE__);
 		}
-		exported_func1(data_from_interrupt.data, isp_dev);
 		mutex_unlock(&rpu->read_lock);
 	}
 	else

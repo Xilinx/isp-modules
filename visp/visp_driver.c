@@ -764,7 +764,8 @@ int MediaIspDeviceDqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 						MediaBuf *Buf, void *Enque_Buff_G,
 						OutputBuffer_t *OutputBuffer);
 
-int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev)
+
+static int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev)
 {
 	int RetVal = 0;
 	OutputBuffer_t *OutputBuffer = NULL;
@@ -831,7 +832,7 @@ error_free_buf:
 	/* Free buffer in case of any error*/
 	return RetVal;
 }
-EXPORT_SYMBOL_GPL(Handle_Frameout_Buffer);
+//EXPORT_SYMBOL_GPL(Handle_Frameout_Buffer);
 
 //
 
@@ -2357,8 +2358,8 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 
 	isp_dev->tx_chan = isp_dev->rpu->tx_chan;
 	isp_dev->rx_chan = isp_dev->rpu->rx_chan;
-	isp_dev->rpu->isp_dev[isp_dev->id] =
-		isp_dev; //Assigning isp_dev structure value to isp_dev present in rpu_dev struct
+	//isp_dev->rpu->isp_dev[isp_dev->id] =
+	//	isp_dev; //Assigning isp_dev structure value to isp_dev present in rpu_dev struct
 
 	return 0;
 }
@@ -2366,11 +2367,15 @@ static int visp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct visp_dev *isp_dev;
+	struct visp_common *visp_common_dev;
 	int ret;
 	int port = 0;
 
 	isp_dev = devm_kzalloc(&pdev->dev, sizeof(struct visp_dev), GFP_KERNEL);
 	if (!isp_dev) return -ENOMEM;
+
+	visp_common_dev = devm_kzalloc(&pdev->dev, sizeof(struct visp_dev), GFP_KERNEL);
+	if(!visp_common_dev) return -ENOMEM;
 
 	mutex_init(&isp_dev->mlock);
 	mutex_init(&isp_dev->ctrl_lock);
@@ -2389,6 +2394,10 @@ static int visp_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to init mbox\n");
 		return -EINVAL;
 	}
+	visp_common_dev->mode = get_isp_mode_from_str(isp_dev->ss_mode_i0);
+    visp_common_dev->isp_dev = (void *)isp_dev;
+
+	isp_dev->rpu->isp_dev[isp_dev->id] = visp_common_dev;
 	// store the instance pointer in the array
 
 	v4l2_subdev_init(&isp_dev->sd, &visp_subdev_ops);
@@ -2451,6 +2460,10 @@ static int visp_probe(struct platform_device *pdev)
 	}
 
 	isp_dev->PortsMask = isp_dev->num_streams;
+
+	/* Register Callback function*/
+	isp_dev->frameout_cb = Handle_Frameout_Buffer;
+	//sensor_pipeline_init(isp_dev);
 
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
 
