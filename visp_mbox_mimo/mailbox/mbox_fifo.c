@@ -61,34 +61,6 @@
 #include <linux/slab.h>
 #include <linux/ioport.h>
 #include <asm-generic/barrier.h>
-#if 0
-void fifo_info(FifoControl *fifo)
-{
-    pr_err("%s-%d\n",__func__,__LINE__);	
-    pr_err("\tbuffer_phy       (%llx) %llx\n", &fifo->buffer_phy, fifo->buffer_phy);
-    pr_err("\tbuffer_virt       (%llx) %llx\n", &fifo->buffer_virt, fifo->buffer_virt);
-    pr_err("\titem_size    (%llx) %lu\n", &fifo->item_size, fifo->item_size);
-    pr_err("\titem_total   (%llx) %lu\n", &fifo->item_total, fifo->item_total);
-    pr_err("\tbuffer_size  (%llx) %lu\n", &fifo->buffer_size, fifo->buffer_size);
-    pr_err("\titem_stored  (%llx) %lu\n", &fifo->item_stored, fifo->item_stored);
-    pr_err("\tread_offset  (%llx) %lu\n", &fifo->read_offset, fifo->read_offset);
-    pr_err("\twrite_offset (%llx) %lu\n", &fifo->write_offset, fifo->write_offset);
-}
-EXPORT_SYMBOL_GPL(fifo_info);
-void fifo_info(FifoControl *fifo)
-{
-    pr_err("%s-%d\n", __func__, __LINE__);
-    pr_err("\tbuffer_phy       (%p) %llx\n", (void*)&fifo->buffer_phy, fifo->buffer_phy);
-    pr_err("\tbuffer_virt      (%p) %llx\n", (void*)&fifo->buffer_virt, fifo->buffer_virt);
-    pr_err("\titem_size        (%p) %llu\n", (void*)&fifo->item_size, fifo->item_size);
-    pr_err("\titem_total       (%p) %llu\n", (void*)&fifo->item_total, fifo->item_total);
-    pr_err("\tbuffer_size      (%p) %llu\n", (void*)&fifo->buffer_size, fifo->buffer_size);
-    pr_err("\titem_stored      (%p) %llu\n", (void*)&fifo->item_stored, fifo->item_stored);
-    pr_err("\tread_offset      (%p) %llu\n", (void*)&fifo->read_offset, fifo->read_offset);
-    pr_err("\twrite_offset     (%p) %llu\n", (void*)&fifo->write_offset, fifo->write_offset);
-}
-EXPORT_SYMBOL_GPL(fifo_info);
-#endif
 
 void fifo_info(FifoControl *fifo)
 {   
@@ -128,16 +100,16 @@ EXPORT_SYMBOL_GPL(fifo_init);
 
 int fifo_write(MboxPostMsg *msg, FifoControl *fifo)
 {
-	//pr_err("[MBOX-FIFO] ");
 
     if (fifo == NULL || msg == NULL)
+    {
         return VPI_ERR_INVALID;
+    }
     if (fifo->item_stored >= fifo->item_total)
     {	pr_err("\n\n BUFFER FULL ERROR \n\n");
         return VPI_ERR_FULL;
     }
 
-   //memcpy((((uint64_t)fifo->buffer_virt) + fifo->write_offset), msg, ALIGN(sizeof(MboxPostMsg) - sizeof(payload_packet) + msg->size, 8));
    // fifo_info(fifo);
    memcpy(((uint8_t *)fifo->buffer_virt + fifo->write_offset), msg, ALIGN(sizeof(MboxPostMsg) - sizeof(payload_packet) + msg->size, 8));
     dmb(ish);
@@ -154,13 +126,12 @@ EXPORT_SYMBOL_GPL(fifo_write);
 int fifo_read(MboxPostMsg *msg, FifoControl *fifo)
 {
 
-     MboxPostMsg *fifo_msg;// =(MboxPostMsg *) (((char *)fifo->buffer_virt + fifo->read_offset));
+     MboxPostMsg *fifo_msg;
     if (fifo == NULL)
         return VPI_ERR_INVALID;
     if (fifo->item_stored == 0)
         return VPI_ERR_EMPTY;
     fifo_msg =(MboxPostMsg *) (((char *)fifo->buffer_virt + fifo->read_offset));
-//    memcpy(msg, fifo_msg,sizeof(MboxPostMsg)-sizeof(payload_packet)+((fifo_msg->size)+63) & ~63 );
 
     memcpy(msg, fifo_msg, sizeof(MboxPostMsg) - sizeof(payload_packet) + (((fifo_msg->size) + 63) & ~63));
     fifo->read_offset += fifo->item_size;
@@ -201,8 +172,6 @@ EXPORT_SYMBOL_GPL(fifo_is_full);
 
 bool fifo_is_empty(FifoControl *fifo)
 {
-//	xil_printf("fifo ctrl addresses %x,%x,%x,%x,->item stroed %x,read offset-> %x \n",&fifo->buffer,&fifo->item_size,&fifo->item_total,
-//			&fifo->buffer_size,&fifo->item_stored,&fifo->read_offset);
     return fifo->item_stored == 0 ? true : false;
 }
 EXPORT_SYMBOL_GPL(fifo_is_empty);

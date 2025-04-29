@@ -1,8 +1,5 @@
-/****************************************************************************
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
+/*
+ * Copyright 2025 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -16,40 +13,14 @@
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
  *
- *****************************************************************************
- *
- * The GPL License (GPL)
- *
- * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program;
- *
- *****************************************************************************
- *
- * Note: This software is released under dual MIT and GPL licenses. A
- * recipient may use this file under the terms of either the MIT license or
- * GPL License. If you wish to use only one license not the other, you can
- * indicate your decision by deleting one of the above license notices in your
- * version of this file.
- *
- *****************************************************************************/
+ */
+
 
 #include <linux/module.h>
 #include <linux/of_graph.h>
@@ -71,10 +42,13 @@
 #include <media/videobuf2-dma-contig.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
-
-
+#include <media/v4l2-device.h>
+#include <media/v4l2-subdev.h>
+#include <media/v4l2-event.h>
 #include <amd_isp_mimo_driver.h>
+#include <vvcam_video_event.h>
 #include <visp_v4l2_std_exts.h>
+#include <linux/miscdevice.h>
 
 #define DEBUG_ENABLE
 /* version 1.0 */
@@ -88,6 +62,7 @@
 #define visp_pr_err pr_err
 #endif
 #define visp_v4l2_dbg(fmt, ...) ;
+
 
 static int debug;
 module_param(debug, int, 0644);
@@ -173,273 +148,6 @@ struct visp_format visp_mp_fmts[] = {
 		.fourcc = V4L2_PIX_FMT_RGB24,
 		.code = MEDIA_BUS_FMT_RGB888_1X24,
 	},
-#if 0
-	{
-		.fourcc = V4L2_PIX_FMT_Y10BPACK,
-		.code = MEDIA_BUS_FMT_Y10_1X10,
-	},
-{
-		.fourcc = V4L2_PIX_FMT_RGB24DWA,
-		.code = MEDIA_BUS_FMT_RGB888_1X24,
-	},
-
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR14,
-		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG14,
-		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG14,
-		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB14,
-		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR16,
-		.code = MEDIA_BUS_FMT_SBGGR16_1X16,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG16,
-		.code = MEDIA_BUS_FMT_SGBRG16_1X16,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG16,
-		.code = MEDIA_BUS_FMT_SGRBG16_1X16,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB16,
-		.code = MEDIA_BUS_FMT_SRGGB16_1X16,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR24,
-		.code = MEDIA_BUS_FMT_SBGGR24_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG24,
-		.code = MEDIA_BUS_FMT_SGBRG24_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG24,
-		.code = MEDIA_BUS_FMT_SGRBG24_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB24,
-		.code = MEDIA_BUS_FMT_SRGGB24_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_P00BPACK,
-		.code = MEDIA_BUS_FMT_YUYV10_2X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_P00DWA,
-		.code = MEDIA_BUS_FMT_YUYV10_2X10,
-	},
-	// {
-	//     .fourcc    = V4L2_PIX_FMT_P02BPACK,
-	//     .code      = MEDIA_BUS_FMT_YUYV12_2X12,
-	// },
-	{
-		.fourcc = V4L2_PIX_FMT_P20BPACK,
-		.code = MEDIA_BUS_FMT_YUYV10_2X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_P20DWA,
-		.code = MEDIA_BUS_FMT_YUYV10_2X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_P210,
-		.code = MEDIA_BUS_FMT_YUYV10_2X10,
-	},
-	// {
-	//     .fourcc    = V4L2_PIX_FMT_P22BPACK,
-	//     .code      = MEDIA_BUS_FMT_YUYV12_2X12,
-	// },
-	{
-		.fourcc = V4L2_PIX_FMT_I20BPACK,
-		.code = MEDIA_BUS_FMT_YUYV10_2X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_I210,
-		.code = MEDIA_BUS_FMT_YUYV10_2X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_M48BPACK,
-		.code = MEDIA_BUS_FMT_YUV8_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_I48BPACK,
-		.code = MEDIA_BUS_FMT_YUV8_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_I48DWA,
-		.code = MEDIA_BUS_FMT_YUV8_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_I40DWA,
-		.code = MEDIA_BUS_FMT_YUV8_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_RGB24,
-		.code = MEDIA_BUS_FMT_RGB888_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_RGB24DWA,
-		.code = MEDIA_BUS_FMT_RGB888_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_RGB24P,
-		.code = MEDIA_BUS_FMT_RGB888_3X8,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR10BPACK,
-		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG10BPACK,
-		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG10BPACK,
-		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB10BPACK,
-		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR10DWA,
-		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG10DWA,
-		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG10DWA,
-		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB10DWA,
-		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR12BPACK,
-		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG12BPACK,
-		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG12BPACK,
-		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB12BPACK,
-		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR12DWA,
-		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG12DWA,
-		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG12DWA,
-		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB12DWA,
-		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR14BPACK,
-		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG14BPACK,
-		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG14BPACK,
-		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB14BPACK,
-		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR14DWA,
-		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG14DWA,
-		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG14DWA,
-		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB14DWA,
-		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR14,
-		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG14,
-		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG14,
-		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB14,
-		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR16,
-		.code = MEDIA_BUS_FMT_SBGGR16_1X16,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG16,
-		.code = MEDIA_BUS_FMT_SGBRG16_1X16,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG16,
-		.code = MEDIA_BUS_FMT_SGRBG16_1X16,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB16,
-		.code = MEDIA_BUS_FMT_SRGGB16_1X16,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SBGGR24,
-		.code = MEDIA_BUS_FMT_SBGGR24_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGBRG24,
-		.code = MEDIA_BUS_FMT_SGBRG24_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SGRBG24,
-		.code = MEDIA_BUS_FMT_SGRBG24_1X24,
-	},
-	{
-		.fourcc = V4L2_PIX_FMT_SRGGB24,
-		.code = MEDIA_BUS_FMT_SRGGB24_1X24,
-	},
-#endif
 };
 
 struct visp_format visp_sp_fmts[] = {
@@ -653,11 +361,6 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s, dma_add
 static int on;
   void isp_mimo_device_run(void *priv)
 {
-#if 0
-	static int a=0;
-	visp_pr_info("===== [VISP_M2M] %s : %d device run count [%d] \n",__func__, __LINE__,++a);
-#endif
-
 	struct isp_mimo_ctx *ctx = priv;
 	struct isp_mimo *device = ctx->device;
 	struct vb2_v4l2_buffer *src_vb, *dst_vb;
@@ -683,7 +386,18 @@ static int on;
 	device->isp_dev->op_a[3]=output_addr[3];
 	if (!on)
 	{
+        int ret;
+        ret = visp_l_calib_event(device, 0, VIDEO_EVENT_LOAD_CALIB);
+        if (ret != 0) {
+                pr_err("[EVENT_FAIL] %s %d\n", __func__,__LINE__);
+        }
 	    MediaIspDeviceStreamOn(device->isp_dev, 0, 0);
+
+        ret = visp_l_calib_event(device, 0, VIDEO_EVENT_LOAD_JSON);
+        if (ret != 0) {
+                pr_err("[EVENT_FAIL] %s %d\n", __func__,__LINE__);
+        }
+	    MediaIspDeviceStreamOnOut(device->isp_dev, 0, 0);
 		on = 1;
 	}
 	MediaIspDeviceDeque(device->isp_dev, 0);
@@ -705,9 +419,7 @@ static int on;
 	}
 	src_vb->sequence = dst_vb->sequence = curr_ctx->sequence++;
 	v4l2_m2m_job_finish(device->m2m_dev, curr_ctx->fh.m2m_ctx);
-#if 1 //--TODO
-	//MediaIspStreamOff(device->isp_dev, 0, 0);
-#endif
+
 }
 
 static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
@@ -2068,7 +1780,6 @@ void isp_mimo_buf_queue(struct vb2_buffer *vb)
 int isp_mimo_start_streaming(struct vb2_queue *q, unsigned int count)
 {
 	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(q);
-
 	ctx->sequence = 0;
 	return 0;
 }
@@ -2089,6 +1800,115 @@ void isp_mimo_stop_streaming(struct vb2_queue *q)
 	}
 }
 
+static int subdev_event_subscribe(struct v4l2_subdev *sd,
+                                  struct v4l2_fh *fh,
+                                  struct v4l2_event_subscription *sub)
+{
+    return v4l2_event_subscribe(fh, sub, 10, NULL);
+}
+
+static int subdev_s_stream(struct v4l2_subdev *sd, int enable)
+{
+    return 0;
+}
+
+static const struct v4l2_subdev_video_ops subdev_video_ops = {
+    .s_stream = subdev_s_stream,
+};
+
+
+static long visp_return_rpu_id(struct v4l2_subdev *sd, void *arg)
+{
+    long ret = 0;
+    if(!arg)
+    {
+        dev_err(sd->dev, "%s %d NULL ARG \n",__func__,__LINE__);
+    }
+
+    struct isp_mimo *device = v4l2_get_subdevdata(sd);
+    if(!device)
+    {
+        pr_err("%s %d NULLL\n", __func__, __LINE__);
+    }
+
+
+    struct isp_rpu *temp = (struct isp_rpu *)arg;
+
+    temp->rpu = device->isp_dev->isp_rpu;
+    temp->isp = device->isp_dev->id;
+
+    return ret;
+}
+
+static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+{
+	int ret = -EINVAL;
+	switch (cmd)
+	{
+		case VISP_GET_RPU_ID:
+			ret = visp_return_rpu_id(sd, arg);
+			break;
+		default:
+			break;
+	}
+	return ret;
+}
+
+
+
+
+static const struct v4l2_subdev_core_ops subdev_core_ops = {
+    .ioctl = visp_priv_ioctl,
+    .subscribe_event = subdev_event_subscribe,
+//    .unsubscribe_event = subdev_event_unsubscribe,
+};
+
+static const struct v4l2_subdev_ops subdev_ops = {
+    .video = &subdev_video_ops,
+    .core = &subdev_core_ops,
+};
+
+
+
+static int event_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+//struct isp_mimo *device = video_drvdata(filp);
+struct isp_mimo *device = filp->private_data;
+
+    unsigned long pfn = device->event_shm.phy_addr >> PAGE_SHIFT;
+    size_t size = vma->vm_end - vma->vm_start;
+
+    if (size > device->event_shm.size)
+        return -EINVAL;
+
+    vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+    return remap_pfn_range(vma,
+                           vma->vm_start,
+                           pfn,
+                           size,
+                           vma->vm_page_prot);
+}
+
+static int event_open(struct inode *inode, struct file *file)
+{
+ //   struct miscdevice *misc = container_of(file->f_inode->i_cdev, struct miscdevice, this_device->dev);
+struct miscdevice *misc = file->private_data;
+   struct isp_mimo *device = container_of(misc, struct isp_mimo, event_misc);
+    file->private_data = device;
+    return 0;
+}
+
+
+static const struct file_operations event_fops = {
+    .owner = THIS_MODULE,
+    .open = event_open,
+    .mmap = event_mmap,
+};
+
+
+
+
 static const struct v4l2_file_operations isp_mimo_fops = {
 	.owner		= THIS_MODULE,
 	.open		= isp_mimo_open,
@@ -2096,6 +1916,7 @@ static const struct v4l2_file_operations isp_mimo_fops = {
 	.poll		= v4l2_m2m_fop_poll,
 	.unlocked_ioctl	= video_ioctl2,
 	.mmap		= v4l2_m2m_fop_mmap,
+	//.mmap		= mmap_new,
 };
 
 /*
@@ -2120,6 +1941,8 @@ static const struct v4l2_ioctl_ops isp_mimo_ioctl_ops = {
 	.vidioc_expbuf		 = isp_mimo_v4l2_m2m_ioctl_expbuf,
 	.vidioc_streamon	 = isp_mimo_v4l2_m2m_ioctl_streamon,
 	.vidioc_streamoff	 = isp_mimo_v4l2_m2m_ioctl_streamoff,
+	//.vidioc_subscribe_event     = vvcam_videoc_subscribe_event,
+    //.vidioc_unsubscribe_event   = v4l2_event_unsubscribe,
 };
 
 static const struct video_device isp_mimo_video_dev = {
@@ -2212,7 +2035,7 @@ int isp_mimo_open(struct file *file)
 			rc = -ENOMEM;
 			goto open_unlock;
 		}
-
+        ctx->id = device_open_count;
 		v4l2_fh_init(&ctx->fh, video_devdata(file));
 		file->private_data = &ctx->fh;
 		ctx->device = device;
@@ -2264,7 +2087,6 @@ int isp_mimo_release(struct file *file)
 	struct isp_mimo_ctx *ctx = file2ctx(file);
 
 	if (dev_open == 1) {
-	//	IspDeviceDistroyMIMO(device->isp_dev, 0);
 		dev_open = 0;
 	}
 
@@ -2282,15 +2104,6 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
     int ret = 0;
     struct device_node *node = pdev->dev.of_node;
 
-#if 0
-	strncpy(isp_dev->IspPorts[port].SensorInfo.ManuJson, VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON,
-	strlen(VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON)+1);
-	// isp_dev->IspPorts[port].SensorInfo.ManuJson[strlen(VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON)] = '\0';
-
-	strncpy(isp_dev->IspPorts[port].SensorInfo.AutoJson, VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON,
-	strlen(VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON)+1);
-	// isp_dev->IspPorts[port].SensorInfo.AutoJson[strlen(VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON)] = '\0';
-#endif
     fwnode_property_read_u32(of_fwnode_handle(node),
             "isp_id", &isp_dev->id);
     if (!node) {
@@ -2303,7 +2116,7 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
         dev_err(&pdev->dev, "Invalid ISP Id %d\n",isp_dev->id);
         return -EINVAL;
     }
-    dev_info(&pdev->dev, "Found vvcam_isp device in device tree.\n");
+    dev_dbg(&pdev->dev, "Found vvcam_isp device in device tree.\n");
 
 	// Read string property for SS-MODE-I0 (LIMO, etc.)
     ret = of_property_read_string(node, "xlnx,io_mode", &isp_dev->ss_mode_i0);
@@ -2311,7 +2124,7 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
         dev_err(&pdev->dev, "Failed to read xlnx,io_mode\n");
         return ret;
     } else {
-        dev_info(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
+        dev_dbg(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
     }
 
 	// Read stream info (multi-stream, single-stream)
@@ -2320,16 +2133,16 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
         dev_err(&pdev->dev, "Failed to read xlnx,num_streams property\n");
         return ret;
     } else {
-        dev_info(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
+        dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
     }
-        dev_err(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
+        dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
 
     ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
     if (ret) {
         dev_err(&pdev->dev, "Failed to read xlnx,mem_inputs property\n");
         return ret;
     } else {
-        dev_info(&pdev->dev, "xlnx,mem_inputs: %u\n", isp_dev->isp_mem);
+        dev_dbg(&pdev->dev, "xlnx,mem_inputs: %u\n", isp_dev->isp_mem);
     }
 
     ret = of_property_read_u32(node, "xlnx,rpu", &isp_dev->isp_rpu);
@@ -2337,7 +2150,7 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
         dev_err(&pdev->dev, "Failed to read xlnx,rpu property\n");
         return ret;
     } else {
-        dev_info(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
+        dev_dbg(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
     }
 
 	return 0;
@@ -2354,6 +2167,7 @@ int isp_mimo_probe(struct platform_device *pdev)
 	struct video_device *vfd;
 	struct v4l2_device *v4l2_dev;
 	int ret = 0;
+	int num_mems = 0, i;
 
 	if(probe_cnt >= MAX_SUPPORTED_DEVICE_COUNT){
 		return 0;
@@ -2366,6 +2180,15 @@ int isp_mimo_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+    v4l2_subdev_init(&device->subdev, &subdev_ops);
+    strscpy(device->subdev.name, "visp-mimo-video-subdev", sizeof(device->subdev.name));
+
+    device->subdev.owner = THIS_MODULE;
+    device->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+    device->subdev.flags |= V4L2_SUBDEV_FL_HAS_EVENTS;
+
+    v4l2_set_subdevdata(&device->subdev, device);
+    device->subdev.dev = &pdev->dev;
 
 	ret = v4l2_device_register(&pdev->dev, &device->v4l2_dev);
 	if (ret) {
@@ -2373,12 +2196,23 @@ int isp_mimo_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+    ret = v4l2_device_register_subdev(&device->v4l2_dev, &device->subdev);
+    if (ret) {
+        dev_err(&pdev->dev, "Failed to register subdev\n");
+        return ret;
+    }
+    ret = v4l2_device_register_subdev_nodes(&device->v4l2_dev);
+    if (ret) {
+        dev_err(&pdev->dev, "Failed to register subdev\n");
+        return ret;
+    }
 	v4l2_dev = &device->v4l2_dev;
 	device->video_dev = isp_mimo_video_dev;
 	vfd = &device->video_dev;
 	vfd->lock = &device->lock;
 	vfd->v4l2_dev = &device->v4l2_dev;
 
+    device->video_dev.v4l2_dev = &device->v4l2_dev;
 	video_set_drvdata(vfd, device);
 	platform_set_drvdata(pdev, device);
 	snprintf(vfd->name, sizeof(vfd->name), "%s", MEM2MEM_NAME);
@@ -2409,11 +2243,53 @@ int isp_mimo_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to init mbox\n");
 		return -EINVAL;
 	}
+   num_mems = of_count_phandle_with_args(pdev->dev.of_node, "memory-region", NULL);
+    if (num_mems < 0) {
+        pr_err("%s no memory for calibration\n", __func__);
+        return -ENOMEM;
+    }
+
+    for (i = 0; i < num_mems; i++) {
+        struct device_node *node;
+        struct reserved_mem *rmem;
+
+        node = of_parse_phandle(pdev->dev.of_node, "memory-region", i);
+        if (!node) {
+                return -EINVAL;
+        }
+
+        rmem = of_reserved_mem_lookup(node);
+        if (!rmem)
+                return -EINVAL;
+        pr_debug("reserve name:%s base:%llx size:%llx\n", rmem->name, rmem->base, rmem->size);
+        device->reserve_mem.pa = rmem->base;
+        device->reserve_mem.size = rmem->size;
+    }
 	ret = video_register_device(vfd, VFL_TYPE_VIDEO, 0);
 	if (ret) {
 		v4l2_err(v4l2_dev, "Failed to register video device\n");
 		goto err_m2m;
 	}
+
+	device->event_shm.virt_addr = (void *)__get_free_pages(GFP_KERNEL, 0);
+    device->event_shm.size = PAGE_SIZE;
+    memset(device->event_shm.virt_addr, 9, device->event_shm.size);
+    device->event_shm.phy_addr = virt_to_phys(device->event_shm.virt_addr);
+    mutex_init(&device->event_shm.event_lock);
+	device->reserve_mem.va =
+        ioremap_wc(device->reserve_mem.pa, device->reserve_mem.size);
+
+    device->event_misc.minor = MISC_DYNAMIC_MINOR;
+    device->event_misc.name = "event_shm";
+    device->event_misc.fops = &event_fops;
+    device->event_misc.mode = 0666;
+    device->event_misc.parent = &pdev->dev;
+
+    ret = misc_register(&device->event_misc);
+    if (ret)
+    {
+        return ret;
+    }
 
 	probe_cnt +=1;
 

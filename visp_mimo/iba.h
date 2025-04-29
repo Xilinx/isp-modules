@@ -1,8 +1,5 @@
-/****************************************************************************
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
+/*
+ * Copyright 2025 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -16,40 +13,14 @@
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
  *
- *****************************************************************************
- *
- * The GPL License (GPL)
- *
- * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program;
- *
- *****************************************************************************
- *
- * Note: This software is released under dual MIT and GPL licenses. A
- * recipient may use this file under the terms of either the MIT license or
- * GPL License. If you wish to use only one license not the other, you can
- * indicate your decision by deleting one of the above license notices in your
- * version of this file.
- *
- *****************************************************************************/
+ */
+
 
 #ifndef __IBA_H__
 #define __IBA_H__
@@ -63,7 +34,6 @@
 #include "vvcam_isp_driver.h"
 #define MAX_IBA_PER_TILE     5UL
 
-//#define MAX_IBA_PER_ISP  4
 #define AMD_PLATFORM
 typedef enum iba_id{
 	IBA_0,
@@ -237,6 +207,4 @@ int IBA_init_send_command(struct vvcam_isp_dev *isp_dev,CamDeviceHandle_t hCamDe
 
 #define ISP_MCM_CTRL_OFFSET         0x1200
 
-//int Iba_Map_Load(iba_map_t *, VvbenchVvdev_t *);
-//int Iba_Map_init(iba_map_t *, VvbenchVvdev_t *);
 #endif

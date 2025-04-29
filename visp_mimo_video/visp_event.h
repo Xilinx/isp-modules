@@ -2,7 +2,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2023-2025 VeriSilicon Holdings Co., Ltd.
+ * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
  *
  * The GPL License (GPL)
  *
- * Copyright (c) 2023-2025 VeriSilicon Holdings Co., Ltd.
+ * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -51,37 +51,80 @@
  *
  *****************************************************************************/
 
-#ifndef __VVCAM_ISP_CNR_H__
-#define __VVCAM_ISP_CNR_H__
+#ifndef __VISP_EVENT_H__
+#define __VISP_EVENT_H__
+#include <media/v4l2-device.h>
+#include <media/v4l2-event.h>
 
-#include "vvcam_isp_ctrl.h"
+#define VISP_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 2000)
 
-#define VVCAM_ISP_CID_CNR_ENABLE            (VVCAM_ISP_CID_CNR_BASE + 0x0000)
-#define VVCAM_ISP_CID_CNR_RESET             (VVCAM_ISP_CID_CNR_BASE + 0x0001)
-#define VVCAM_ISP_CID_CNR_MODE              (VVCAM_ISP_CID_CNR_BASE + 0x0002)
-#define VVCAM_ISP_CID_CNR_AUTO_LEVEL        (VVCAM_ISP_CID_CNR_BASE + 0x0003)
-#define VVCAM_ISP_CID_CNR_AUTO_GAIN         (VVCAM_ISP_CID_CNR_BASE + 0x0004)
-#define VVCAM_ISP_CID_CNR_AUTO_ENABLE_TBL   (VVCAM_ISP_CID_CNR_BASE + 0x0005)
-#define VVCAM_ISP_CID_CNR_AUTO_STRENGTH     (VVCAM_ISP_CID_CNR_BASE + 0x0006)
-#define VVCAM_ISP_CID_CNR_AUTO_STRENGTH2    (VVCAM_ISP_CID_CNR_BASE + 0x0007)
-#define VVCAM_ISP_CID_CNR_AUTO_TEXTURE_MASK (VVCAM_ISP_CID_CNR_BASE + 0x0008)
-#define VVCAM_ISP_CID_CNR_AUTO_SIGMA_LAYER0 (VVCAM_ISP_CID_CNR_BASE + 0x0009)
-#define VVCAM_ISP_CID_CNR_AUTO_SIGMA_LAYER1 (VVCAM_ISP_CID_CNR_BASE + 0x000A)
-#define VVCAM_ISP_CID_CNR_AUTO_SIGMA_LAYER2 (VVCAM_ISP_CID_CNR_BASE + 0x000B)
-#define VVCAM_ISP_CID_CNR_AUTO_SIGMA_LAYER3 (VVCAM_ISP_CID_CNR_BASE + 0x000C)
-#define VVCAM_ISP_CID_CNR_MANU_SIGMA_LAYER  (VVCAM_ISP_CID_CNR_BASE + 0x000D)
-#define VVCAM_ISP_CID_CNR_MANU_STRENGTH     (VVCAM_ISP_CID_CNR_BASE + 0x000E)
-#define VVCAM_ISP_CID_CNR_MANU_STRENGTH2    (VVCAM_ISP_CID_CNR_BASE + 0x000F)
-#define VVCAM_ISP_CID_CNR_MANU_TEXTURE_MASK (VVCAM_ISP_CID_CNR_BASE + 0x0010)
-#define VVCAM_ISP_CID_CNR_STAT_SIGMA_LAYER  (VVCAM_ISP_CID_CNR_BASE + 0x0011)
-#define VVCAM_ISP_CID_CNR_STAT_STRENGTH     (VVCAM_ISP_CID_CNR_BASE + 0x0012)
-#define VVCAM_ISP_CID_CNR_STAT_STRENGTH2    (VVCAM_ISP_CID_CNR_BASE + 0x0013)
-#define VVCAM_ISP_CID_CNR_STAT_TEXTURE_MASK (VVCAM_ISP_CID_CNR_BASE + 0x0014)
+enum visp_vevent_id
+{
+	VISP_EVENT_SET_FMT,
+	VISP_EVENT_REQBUFS,
+	VISP_EVENT_QBUF,
+	VISP_EVENT_BUF_DONE,
+	VISP_EVENT_STREAMON,
+	VISP_EVENT_STREAMOFF,
+	VISP_EVENT_S_CTRL,
+	VISP_EVENT_G_CTRL,
+	VISP_EVENT_LOAD_CALIB,
+	VISP_EVENT_LOAD_JSON,
+	VISP_EVENT_S_INTERVAL,
+	VISP_EVENT_MAX,
+};
 
+struct visp_plane
+{
+	uint32_t dma_addr;
+	uint32_t size;
+};
 
+struct visp_buf
+{
+	uint32_t pad;
+	uint32_t index;
+	uint32_t num_planes;
+	struct visp_plane planes[VIDEO_MAX_PLANES];
+};
+
+struct visp_ctrl
+{
+	uint32_t cid;
+	uint32_t size;
 #ifdef __KERNEL__
-int vvcam_isp_cnr_ctrl_count(void);
-int vvcam_isp_cnr_ctrl_create(struct vvcam_isp_dev *isp_dev);
+	uint8_t data[0];
 #endif
+};
+
+struct visp_event_pkg_head
+{
+	uint32_t pad;
+	uint8_t dev;
+	uint32_t eid;
+	uint64_t shm_addr;
+	uint32_t shm_size;
+	uint32_t data_size;
+};
+
+struct visp_event_pkg
+{
+	struct visp_event_pkg_head head;
+	uint8_t ack;
+	int32_t result;
+	uint8_t data[2048];
+};
+
+struct visp_ext_buf_info
+{
+	uint8_t port;
+	struct visp_plane plane;
+};
+
+#define VISP_IOC_BUFDONE _IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_buf)
+#define VISP_IOC_BUFFER_ALLOC \
+	_IOWR('I', BASE_VIDIOC_PRIVATE + 1, struct visp_ext_buf_info)
+#define VISP_IOC_BUFFER_FREE \
+	_IOWR('I', BASE_VIDIOC_PRIVATE + 2, struct visp_ext_buf_info)
 
 #endif

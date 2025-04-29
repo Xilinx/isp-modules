@@ -50,7 +50,6 @@
  * version of this file.
  *
  *****************************************************************************/
- 
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
 #include <linux/delay.h>
@@ -117,13 +116,13 @@ int vvcam_isp_post_event(struct v4l2_subdev *sd, struct vvcam_isp_event_pkg *eve
 
     if (event_pkg->ack == 0) {
         dev_err(sd->dev, "post event %d time out\n", event.id);
-    pr_err("RKC_ISPDRV Status event timeout  %s %d\n",__func__,__LINE__);
+    pr_err("ISPDRV Status event timeout  %s %d\n",__func__,__LINE__);
         return -EIO;
     }
 
     if (event_pkg->result) {
         dev_err(sd->dev, "post event %d return error\n", event.id);
-    pr_err("RKC_ISPDRV STATUS EVENT FAIL %s %d\n",__func__,__LINE__);
+    pr_err("ISPDRV STATUS EVENT FAIL %s %d\n",__func__,__LINE__);
         return -EINVAL;
     }
 
@@ -190,14 +189,14 @@ int vvcam_isp_l_calib_event(struct vvcam_isp_dev *isp_dev, int pad)
     readback_1 = (MediaIspSensorInfo *)(event_pkg->data +sizeof(uint32_t));
     dev_info(isp_dev->dev,"%s %d %ld %s \n",__func__,__LINE__,sizeof(MediaIspPortAttr),readback_1->Name);
 
-    dev_info(isp_dev->dev, "RKC_ISPDRV %s %d Post Event \n",__func__,__LINE__);
+    dev_info(isp_dev->dev, "ISPDRV %s %d Post Event \n",__func__,__LINE__);
     ret = vvcam_isp_post_event(&isp_dev->sd, event_pkg);
     if(ret!=0)
     {
-        dev_info(isp_dev->dev, "[RKC-EVENT_FAIL] %s %d\n",__func__,__LINE__);	
+        dev_info(isp_dev->dev, "[EVENT_FAIL] %s %d\n",__func__,__LINE__);
         return ret;
     }
-    dev_info(isp_dev->dev, "RKC_ISPDRV %s %d Ack got for Event \n",__func__,__LINE__);
+    dev_info(isp_dev->dev, "ISPDRV %s %d Ack got for Event \n",__func__,__LINE__);
     mutex_unlock(&isp_dev->event_shm.event_lock);
     return ret;
 }
@@ -227,58 +226,19 @@ int vvcam_isp_l_json_event(struct vvcam_isp_dev *isp_dev, int pad)
     pdata+=sizeof(uint32_t);
     event_pkg->head.data_size += sizeof(uint32_t);
 
-	dev_err(isp_dev->dev , "RKC_ISPDRV %s %d Post Event \n",__func__,__LINE__);
+	dev_err(isp_dev->dev , "ISPDRV %s %d Post Event \n",__func__,__LINE__);
 	ret = vvcam_isp_post_event(&isp_dev->sd, event_pkg);
     if(ret!=0)
     {
-     dev_err(isp_dev->dev , "[RKC-EVENT_FAIL] %s %d\n",__func__,__LINE__);	
+     dev_err(isp_dev->dev , "[EVENT_FAIL] %s %d\n",__func__,__LINE__);
         return ret;
     }
-	dev_err(isp_dev->dev , "RKC_ISPDRV %s %d Ack got for Event \n",__func__,__LINE__);
+	dev_err(isp_dev->dev , "ISPDRV %s %d Ack got for Event \n",__func__,__LINE__);
 
     mutex_unlock(&isp_dev->event_shm.event_lock);
     return ret;
 }
 
-
-#if 0
-int vvcam_isp_s_stream_event(struct vvcam_isp_dev *isp_dev, int pad, uint32_t status)
-{
-    struct vvcam_isp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
-    int ret = 0;
-
-pr_err("RKC_ISPDRV %s %d\n",__func__,__LINE__);
-    mutex_lock(&isp_dev->event_shm.event_lock);
-    event_pkg->head.pad = pad;
-    event_pkg->head.dev = isp_dev->id;
-    if (status) {
-pr_err("RKC_ISPDRV %s %d\n",__func__,__LINE__);
-        event_pkg->head.eid = VVCAM_ISP_EVENT_STREAMON;
-    } else {
-pr_err("RKC_ISPDRV %s %d\n",__func__,__LINE__);
-        event_pkg->head.eid = VVCAM_ISP_EVENT_STREAMOFF;
-    }
-
-    event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
-    event_pkg->head.shm_size = isp_dev->event_shm.size;
-    event_pkg->head.data_size = 0;
-    event_pkg->head.data_size = sizeof(MediaIspPortAttr);
-    event_pkg->ack = 0;
-    event_pkg->result = 0;
-	pr_err("%s %d %s \n",__func__,__LINE__,isp_dev->IspPorts[0].SensorInfo.Name);
-    memcpy(event_pkg->data, &isp_dev->IspPorts[0], sizeof(MediaIspPortAttr));
-CamDeviceContext_t *pCamDevCtx1 = (CamDeviceContext_t *)&isp_dev->IspPorts[0].CamDeviceHandle;
-CamDeviceContext_t *pCamDevCtx2 = (CamDeviceContext_t *)&isp_dev->IspPorts[1].CamDeviceHandle;
-pr_err("%s %d cookie = %d VtID = %d  HWID=%d instANCE_ID = %d \n",__func__,__LINE__,pCamDevCtx2->cookie,pCamDevCtx2->ispVtId,pCamDevCtx2->ispHwId,pCamDevCtx1->instanceId);
-pr_err("%s %d cookie = %d VtID = %d  HWID=%d instANCE_ID = %d \n",__func__,__LINE__,pCamDevCtx1->cookie,pCamDevCtx1->ispVtId,pCamDevCtx1->ispHwId,pCamDevCtx1->instanceId);
-pr_err("RKC_ISPDRV %s %d Post Event \n",__func__,__LINE__);
-    ret = vvcam_isp_post_event(&isp_dev->sd, event_pkg);
-pr_err("RKC_ISPDRV %s %d Ack got for Event \n",__func__,__LINE__);
-
-    mutex_unlock(&isp_dev->event_shm.event_lock);
-    return ret;
-}
-#endif
 int vvcam_isp_s_ctrl_event(struct vvcam_isp_dev *isp_dev,
             int pad, struct v4l2_ctrl *ctrl)
 {

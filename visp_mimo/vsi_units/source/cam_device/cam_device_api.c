@@ -53,46 +53,14 @@
 
 #include "cam_device.h"
 #include "cam_device_api.h"
-//#include "mailbox.h"
 #include "sensor_cmd.h"
 #include <linux/delay.h>
 #include "vvcam_isp_driver.h"
 #include "vvcam_isp_app.h"
 #include "visp_common.h"
-//#include <linux/xlnx_isp_def.h>
 #include <linux/string.h>
 #include "kmbox.h"
-//#define __section_t(S)          __attribute__((__section__(#S)))
-//#define __cam_load_calib        __section_t(.camdevice_load_calib)
-//
-//uint8_t  cam_load_calib[160010] __attribute__((section(".cam_load_calib")));
 uint8_t  *cam_load_calib = NULL; //[160010] __attribute__((section(".cam_load_calib")));
-
-#if 0
-static RESULT MyMemcpy(
-	void* dest,
-	void* source,
-	uint32_t size
-)
-{
-    if (NULL == dest || NULL == source) {
-        return RET_NULL_POINTER;
-    }
-    if(size < 0)
-    	return RET_OUTOFRANGE;
-    if(source < dest && source + size > dest)
-    	return RET_FAILURE;
-
-    char* p_dest = dest;
-    char* p_source = source;
-	uint32_t i = 0;
-    for(; i < size; ++i){
-    	*p_dest++ = *p_source++;
-    }
-
-    return RET_SUCCESS;
-}
-#endif
 
 RESULT VsiCamDeviceCreate
 (
@@ -111,7 +79,7 @@ RESULT VsiCamDeviceCreate
     payload_packet *packet = NULL;
 
     if (NULL == pCamConfig || NULL == pHandleCamDevice) {
-    	dev_err(isp_dev->dev , "RKC-DRV %s %d\n",__func__,__LINE__);
+	dev_err(isp_dev->dev , "DRV %s %d\n",__func__,__LINE__);
         return RET_NULL_POINTER;
     }
 
@@ -152,7 +120,7 @@ RESULT VsiCamDeviceCreate
         return -ENOMEM;
     } 
 
-    packet->cookie = 0;//pCamDevCtx->cookie; //RKC UNDO
+    packet->cookie = 0;
     packet->type = CMD;
     packet->payload_size = 0;
 
@@ -260,7 +228,7 @@ RESULT VsiCamDeviceSetOutFormat
     CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
     if (pCamDevCtx==NULL || pFmt==NULL)
     {
-        dev_err(isp_dev->dev , "RKC-ISP_APP %s %d  \n",__func__,__LINE__);
+        dev_err(isp_dev->dev , "ISP_APP %s %d  \n",__func__,__LINE__);
         return 0;
     }
     if (NULL == pCamDevCtx) {
@@ -386,258 +354,6 @@ RESULT VsiCamDeviceSetInFormat
 	return result;
 }
 
-#if 0
-RESULT VsiCamDeviceGetOutFormat
-(
-    CamDeviceConfig_t *pCamConfig,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeOutPathType_t path,
-    CamDevicePipeOutFmt_t *pFmt
-)
-{
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
-    RESULT result = RET_SUCCESS;
-    uint8_t *p_data = NULL;
-
-    if (NULL == pCamDevCtx) {
-        return (RET_WRONG_HANDLE);
-    }
-
-    (pCamDevCtx->cookie)++;
-
-	payload_packet packet;
-	memset(&packet, 0, sizeof(payload_packet));
-
-	packet.cookie = pCamDevCtx->cookie;
-	packet.type = CMD;
-	packet.payload_size = 0;
-
-	p_data = packet.payload;
-	memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-	memcpy(p_data, &path, sizeof(CamDevicePipeOutPathType_t));
-	packet.payload_size += sizeof(CamDevicePipeOutPathType_t);
-	p_data += sizeof(CamDevicePipeOutPathType_t);
-	memcpy(p_data, pFmt, sizeof(CamDevicePipeOutFmt_t));
-	packet.payload_size += sizeof(CamDevicePipeOutFmt_t);
-
-#ifdef DEBUG_FLAG
-	// xil_printf("APU get out format payload cookie:%d.\r\n", packet.cookie);
-    // xil_printf("APU get out format payload size:%d.\r\n", packet.payload_size);
-#endif
-
-	    if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-#if 0 
-    os_lock_mutex(&mbox_lock);
-
-    result = Send_Command (APU_2_RPU_MB_CMD_GET_OUT_FORMAT, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-	if(RET_SUCCESS != result) {
-		os_unlock_mutex(&mbox_lock);
-		return RET_FAILURE;
-	}
-
-	    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
-    if (result) {
-	    os_unlock_mutex(&mbox_lock);
-	    return RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-#endif
-	memcpy(pFmt, p_data, sizeof(CamDevicePipeOutFmt_t));
-
-#ifdef DEBUG_FLAG
-	// xil_printf("APU get out format results:%d.\r\n");
-    // xil_printf("out width: %d.\r\n", pFmt->outWidth);
-    // xil_printf("databits: %d.\r\n", pFmt->dataBits);
-    // xil_printf("outfmt: %d.\r\n", pFmt->outFormat);
-#endif
-
-    return RET_SUCCESS;
-}
-
-RESULT VsiCamDeviceGetInFormat
-(
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeInPathType_t path,
-    CamDevicePipeInFmt_t *pFmt
-)
-{
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
-    RESULT result = RET_SUCCESS;
-    if (NULL == pCamDevCtx) {
-        return (RET_WRONG_HANDLE);
-    }
-
-    (pCamDevCtx->cookie)++;
-
-	payload_packet packet;
-	memset(&packet, 0, sizeof(payload_packet));
-
-	packet.cookie = pCamDevCtx->cookie;
-	packet.type = CMD;
-	packet.payload_size = 0;
-
-	uint8_t *p_data = packet.payload;
-	memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-	memcpy(p_data, &path, sizeof(CamDevicePipeInPathType_t));
-	packet.payload_size += sizeof(CamDevicePipeInPathType_t);
-	p_data += sizeof(CamDevicePipeInPathType_t);
-	memcpy(p_data, pFmt, sizeof(CamDevicePipeInFmt_t));
-	packet.payload_size += sizeof(CamDevicePipeInFmt_t);
-
-	    if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-
-    os_lock_mutex(&mbox_lock);
-
-    result = Send_Command (APU_2_RPU_MB_CMD_GET_IN_FORMAT, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-	if(RET_SUCCESS != result) {
-		os_unlock_mutex(&mbox_lock);
-		return RET_FAILURE;
-	}
-
-	    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
-    if (result) {
-	    os_unlock_mutex(&mbox_lock);
-	    return RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-
-	memcpy(pFmt, p_data, sizeof(CamDevicePipeInFmt_t));
-
-#ifdef DEBUG_FLAG
-	// xil_printf("APU get in format results:%d.\r\n");
-    // xil_printf("in width: %d.\r\n", pFmt->inWidth);
-    // xil_printf("infmt: %d.\r\n", pFmt->inFormat);
-#endif
-
-    return RET_SUCCESS;
-}
-
-RESULT VsiCamDeviceSetIspWindow
-(
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeOutPathType_t path,
-    const CamDevicePipeIspWindow_t *pIspWindow
-)
-{
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
-    RESULT result = RET_SUCCESS;
-    if (NULL == pCamDevCtx) {
-        return (RET_WRONG_HANDLE);
-    }
-    if (NULL == pIspWindow) {
-        return (RET_NULL_POINTER);
-    }
-#ifdef DEBUG_FLAG
-	// xil_printf("APU set isp window :%d.\r\n");
-    // xil_printf("cropWindow.hOffset: %d.\r\n", pIspWindow->cropWindow.hOffset);
-    // xil_printf("cropWindow.height: %d.\r\n", pIspWindow->cropWindow.height);
-#endif
-
-    (pCamDevCtx->cookie)++;
-
-	payload_packet packet;
-	memset(&packet, 0, sizeof(payload_packet));
-
-	packet.cookie = pCamDevCtx->cookie;
-	packet.type = CMD;
-	packet.payload_size = 0;
-
-	uint8_t *p_data = packet.payload;
-	memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-	memcpy(p_data, &path, sizeof(CamDevicePipeOutPathType_t));
-	packet.payload_size += sizeof(CamDevicePipeOutPathType_t);
-	p_data += sizeof(CamDevicePipeOutPathType_t);
-	memcpy(p_data, pIspWindow, sizeof(CamDevicePipeIspWindow_t));
-	packet.payload_size += sizeof(CamDevicePipeIspWindow_t);
-
-	    if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-
-    os_lock_mutex(&mbox_lock);
-
-    result = Send_Command (APU_2_RPU_MB_CMD_SET_ISP_WINDOW, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-	if(RET_SUCCESS != result) {
-		os_unlock_mutex(&mbox_lock);
-		return RET_FAILURE;
-	}
-
-	result = apu_wait_for_ACK(packet.cookie);
-    if (result) {
-        result = RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-
-    return RET_SUCCESS;
-}
-
-RESULT VsiCamDeviceGetIspWindow
-(
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeOutPathType_t path,
-    CamDevicePipeIspWindow_t *pIspWindow
-){
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
-    RESULT result = RET_SUCCESS;
-    if (NULL == pCamDevCtx) {
-        return (RET_WRONG_HANDLE);
-    }
-
-    (pCamDevCtx->cookie)++;
-
-	payload_packet packet;
-	memset(&packet, 0, sizeof(payload_packet));
-
-	packet.cookie = pCamDevCtx->cookie;
-	packet.type = CMD;
-	packet.payload_size = 0;
-
-	uint8_t *p_data = packet.payload;
-	memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-	memcpy(p_data, &path, sizeof(CamDevicePipeOutPathType_t));
-	packet.payload_size += sizeof(CamDevicePipeOutPathType_t);
-	p_data += sizeof(CamDevicePipeOutPathType_t);
-	memcpy(p_data, pIspWindow, sizeof(CamDevicePipeIspWindow_t));
-	packet.payload_size += sizeof(CamDevicePipeIspWindow_t);
-
-	if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-
-    os_lock_mutex(&mbox_lock);
-
-    result = Send_Command (APU_2_RPU_MB_CMD_GET_ISP_WINDOW, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-	if(RET_SUCCESS != result) {
-		os_unlock_mutex(&mbox_lock);
-		return RET_FAILURE;
-	}
-
-	    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
-    if (result) {
-	    os_unlock_mutex(&mbox_lock);
-	    return RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-
-	memcpy(pIspWindow, p_data, sizeof(CamDevicePipeIspWindow_t));
-
-    return RET_SUCCESS;
-}
-#endif
-
-
 RESULT VsiCamDeviceConnectCamera
 (
     struct vvcam_isp_dev *isp_dev,    
@@ -654,7 +370,7 @@ RESULT VsiCamDeviceConnectCamera
 
 	if (pCamDevCtx==NULL || pSubCtrl==NULL)
 	{
-		dev_err(isp_dev->dev , "RKC-ISP_APP NULL HANDLE %s %d  \n",__func__,__LINE__);
+		dev_err(isp_dev->dev , "ISP_APP NULL HANDLE %s %d  \n",__func__,__LINE__);
         return (RET_WRONG_HANDLE);
 	}
     if (NULL == pCamDevCtx) {
@@ -663,12 +379,6 @@ RESULT VsiCamDeviceConnectCamera
     if (NULL == pSubCtrl) {
         return (RET_NULL_POINTER);
     }
-#ifdef DEBUG_FLAG
-	// xil_printf("APU connect camera :%d.\r\n");
-    // xil_printf("aeEnable: %d.\r\n", pSubCtrl->subCtrl.aeEnable);
-    // xil_printf("aeEnable: %d.\r\n", pSubCtrl->subCtrl.aeEnable);
-    // xil_printf("aeEnable: %d.\r\n", pSubCtrl->subCtrl.aeEnable);
-#endif
     pCamDevCtx->cookie ++;
 
     packet = kzalloc(sizeof(payload_packet),GFP_KERNEL);
@@ -708,7 +418,7 @@ RESULT VsiCamDeviceConnectCamera
 
 #endif
 
-    xlnx_mbox_apu_wait_for_ack(isp_dev);//RKC CHECK THIS
+    xlnx_mbox_apu_wait_for_ack(isp_dev);
     mutex_unlock(&isp_dev->mlock);
     kfree(packet);
 
@@ -766,57 +476,6 @@ RESULT VsiCamDeviceDisconnectCamera
 	return result;
 
 }
-#if 0
-RESULT VsiCamDeviceGetSoftwareVersion
-(
-    CamDeviceHandle_t   hCamDevice,
-    char                *pVersionId
-)
-{
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
-    RESULT result = RET_SUCCESS;
-
-    if (NULL == pCamDevCtx) {
-        return (RET_WRONG_HANDLE);
-    }
-    if (NULL == pVersionId) {
-        return (RET_NULL_POINTER);
-    }
-
-    char *version = "V6.0.0";
-    memcpy(pVersionId, version, strlen(version));
-
-//    pCamDevCtx->cookie ++;
-//
-//	payload_packet packet;
-//	memset(&packet, 0, sizeof(payload_packet));
-//
-//	packet.cookie = pCamDevCtx->cookie;
-//	packet.type = CMD;
-//	packet.payload_size = 0;
-//
-//	uint8_t *p_data = packet.payload;
-//	memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-//	packet.payload_size += sizeof(uint32_t);
-//	p_data += sizeof(uint32_t);
-//	memcpy(p_data, pVersionId, sizeof(char));
-//	packet.payload_size += sizeof(char);
-
-//	    if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-
-//    result = Send_Command (APU_2_RPU_MB_CMD_GET_SOFTWARE_VERSION, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-//	if(RET_SUCCESS != result) {
-//		return RET_FAILURE;
-//	}
-//	result = apu_wait_for_ACK(packet.cookie);
-    if (result) {
-        result = RET_FAILURE;
-    }
-
-	return result;
-}
-#endif
 RESULT VsiCamDeviceStartStreaming
 (
     CamDeviceConfig_t *pCamConfig,
@@ -882,61 +541,6 @@ RESULT VsiCamDeviceStartStreaming
 	return result;
 }
 
-#if 0
-RESULT VsiCamDeviceStopStreaming
-(
-    CamDeviceConfig_t *pCamConfig,
-    CamDeviceHandle_t hCamDevice
-)
-{
-    RESULT result = RET_SUCCESS;
-
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
-    if (NULL == pCamDevCtx) {
-        return (RET_WRONG_HANDLE);
-    }
-    // uint32_t hwId = pCamDevCtx->ispHwId;
-
-    /*
-     * AMD : Multi-Core Changes
-     * Verifying Multi-core
-     */
-    // // xil_printf("%s %d ispHwId=%x \n\r",__func__,__LINE__,hwId);
-    // selectDestinationCore(hwId);
-
-    pCamDevCtx->cookie ++;
-
-    payload_packet packet;
-    memset(&packet, 0, sizeof(payload_packet));
-
-    packet.cookie = pCamDevCtx->cookie;
-    packet.type = CMD;
-    packet.payload_size = 0;
-
-    uint8_t *p_data = packet.payload;
-    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-    packet.payload_size += sizeof(uint32_t);
-
-        if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-#if 0
-    os_lock_mutex(&mbox_lock);
-
-    result = Send_Command (APU_2_RPU_MB_CMD_STOP_STREAMING,&packet,sizeof(packet), dest_cpu_id, src_cpu_id);
-	if(RET_SUCCESS != result) {
-		os_unlock_mutex(&mbox_lock);
-		return RET_FAILURE;
-	}
-    result = apu_wait_for_ACK(packet.cookie);
-    if (result) {
-        result = RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-#endif
-	return result;
-}
-#endif
 RESULT VsiCamDeviceSetPathStreaming
 (
     struct vvcam_isp_dev *isp_dev,    
@@ -969,7 +573,6 @@ RESULT VsiCamDeviceSetPathStreaming
     packet->payload_size = 0;
 
     p_data = packet->payload;
-	dev_info(isp_dev->dev , "RKC %s %d pCamDevCtx->instanceId %d\n",__func__,__LINE__,pCamDevCtx->instanceId);
 
     *(packet->payload) =pCamDevCtx->instanceId;//(int *)0x0;
     packet->payload_size += sizeof(uint32_t);
@@ -979,7 +582,6 @@ RESULT VsiCamDeviceSetPathStreaming
     *(p_data) = path_enable;//(int *)pConfig->outPathEnable;//0x1;
 
     packet->payload_size += sizeof(uint32_t);
-    dev_info(isp_dev->dev , "RKC-p_data->outPathEnable=%d\n",*((int *)p_data));
     p_data += sizeof(uint32_t);
     
     if(packet->payload_size > MAX_ITEM)
@@ -998,7 +600,6 @@ RESULT VsiCamDeviceSetPathStreaming
 
     xlnx_mbox_apu_wait_for_ack(isp_dev);
     mutex_unlock(&isp_dev->mlock);
-    dev_info(isp_dev->dev , "[APU-Streamon] RKC-STREAM_ON_ACK_CNT \n");
     kfree(packet);
 	return result;
 }
@@ -1067,7 +668,6 @@ RESULT VsiCamDeviceGetPathStreaming
     }
 	memcpy(pConfig, p_data, sizeof(CamDevicePathStreamingCfg_t));
     mutex_unlock(&isp_dev->mlock);
-    dev_info(isp_dev->dev , " [APU]->GET Pathstreaming = %d\n",pConfig->outPathEnable);
     kfree(packet);
 	return result;
 }
@@ -1135,7 +735,7 @@ RESULT VsiCamDeviceAllocResMemory
 	p_data += sizeof(uint32_t);
 	memcpy(p_data, pBaseAddress, sizeof(uint32_t));
 	packet->payload_size += 2 * sizeof(uint32_t);
-    dev_info(isp_dev->dev , "[RKC-ISP] %s %d %d %p\n",__func__,__LINE__,byteSize,pBaseAddress);
+    dev_info(isp_dev->dev , "[ISP] %s %d %d %p\n",__func__,__LINE__,byteSize,pBaseAddress);
 
 	if(packet->payload_size > MAX_ITEM)
     {
@@ -1161,7 +761,7 @@ RESULT VsiCamDeviceAllocResMemory
         return -1;
     }
 
-    dev_info(isp_dev->dev , "[RKC-ISP] %s %d %x %x\n",__func__,__LINE__,*p_data,*(p_data+sizeof(uint32_t)));
+    dev_info(isp_dev->dev , "[ISP] %s %d %x %x\n",__func__,__LINE__,*p_data,*(p_data+sizeof(uint32_t)));
     memcpy(pBaseAddress, p_data, sizeof(uint32_t));
 	p_data += sizeof(uint32_t);
 	memcpy(pIplAddress, p_data, sizeof(uint32_t));
@@ -1231,256 +831,3 @@ RESULT VsiCamDeviceFreeResMemory
     return RET_SUCCESS;
 }
 
-#if 0
-RESULT VsiCamDeviceWriteRegister
-(
-    CamDeviceHandle_t    hCamDevice,
-    uint32_t             address,
-    uint32_t             value
-)
-{
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
-    RESULT result = RET_SUCCESS;
-    if (NULL == pCamDevCtx) {
-		return (RET_WRONG_HANDLE);
-	}
-	pCamDevCtx->cookie ++;
-
-	payload_packet packet;
-	memset(&packet, 0, sizeof(payload_packet));
-
-	packet.cookie = pCamDevCtx->cookie;
-	packet.type = CMD;
-	packet.payload_size = 0;
-
-	uint8_t *p_data = packet.payload;
-	memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-	memcpy(p_data, &address, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-	memcpy(p_data, &value, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-
-	    if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-
-    os_lock_mutex(&mbox_lock);
-
-    result = Send_Command (APU_2_RPU_MB_CMD_WRITE_REGISTER, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-	if(RET_SUCCESS != result) {
-		os_unlock_mutex(&mbox_lock);
-		return RET_FAILURE;
-	}
-	result = apu_wait_for_ACK(packet.cookie);
-    if (result) {
-        result = RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-
-    return RET_SUCCESS;
-}
-
-RESULT VsiCamDeviceReadRegister
-(
-    CamDeviceHandle_t    hCamDevice,
-    uint32_t             address,
-    uint32_t             *value
-)
-{
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
-    RESULT result = RET_SUCCESS;
-    if (NULL == pCamDevCtx) {
-		return (RET_WRONG_HANDLE);
-	}
-	pCamDevCtx->cookie ++;
-
-	payload_packet packet;
-	memset(&packet, 0, sizeof(payload_packet));
-
-	packet.cookie = pCamDevCtx->cookie;
-	packet.type = CMD;
-	packet.payload_size = 0;
-
-	uint8_t *p_data = packet.payload;
-	memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-	memcpy(p_data, &address, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-	memcpy(p_data, value, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-
-	    if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-
-    os_lock_mutex(&mbox_lock);
-
-    result = Send_Command (APU_2_RPU_MB_CMD_READ_REGISTER, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-	if(RET_SUCCESS != result) {
-		os_unlock_mutex(&mbox_lock);
-		return RET_FAILURE;
-	}
-	    result = apu_wait_for_mb_data(packet.cookie, packet.payload);
-    if (result) {
-	    os_unlock_mutex(&mbox_lock);
-	    return RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-
-	memcpy(value, p_data, sizeof(uint32_t));
-
-    return RET_SUCCESS;
-}
-
-RESULT VsiCamDeviceImageSetMetadata
-(
- CamDeviceHandle_t     hCamDevice,
- CamDeviceMetadataConfig_t *pMetadata
-)
-{
-    RESULT result = RET_SUCCESS;
-
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
-    if (NULL == pCamDevCtx) {
-        return (RET_WRONG_HANDLE);
-    }
-    if (NULL == pMetadata) {
-        return (RET_NULL_POINTER);
-    }
-    pCamDevCtx->cookie ++;
-
-    payload_packet packet;
-    memset(&packet, 0, sizeof(payload_packet));
-
-    packet.cookie = pCamDevCtx->cookie;
-    packet.type = CMD;
-    packet.payload_size = 0;
-
-    uint8_t *p_data = packet.payload;
-    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-    packet.payload_size += sizeof(uint32_t);
-    p_data += sizeof(uint32_t);
-    memcpy(p_data, &pMetadata, sizeof(CamDeviceMetadataConfig_t));
-    p_data += sizeof(CamDeviceMetadataConfig_t);
-    packet.payload_size += sizeof(CamDeviceMetadataConfig_t);
-
-	if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-
-    os_lock_mutex(&mbox_lock);
-
-    result = Send_Command (APU_2_RPU_MB_CMD_IMAGE_SET_METADATA, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-    if(RET_SUCCESS != result) {
-		os_unlock_mutex(&mbox_lock);
-		return RET_FAILURE;
-	}
-    result = apu_wait_for_ACK(packet.cookie);
-    if (result) {
-        result = RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-
-	return result;
-}
-
-
-RESULT VsiCamDeviceNrRelocEnable
-(
- CamDeviceHandle_t     hCamDevice
-)
-{
-    RESULT result = RET_SUCCESS;
-    int ret = 0;
-
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
-    if (NULL == pCamDevCtx) {
-        return (RET_WRONG_HANDLE);
-    }
-    pCamDevCtx->cookie ++;
-
-    payload_packet packet;
-    memset(&packet, 0, sizeof(payload_packet));
-
-    packet.cookie = pCamDevCtx->cookie;
-    packet.type = CMD;
-    packet.payload_size = 0;
-
-    uint8_t *p_data = packet.payload;
-    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-    packet.payload_size += sizeof(uint32_t);
-
-	if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-
-    os_lock_mutex(&mbox_lock);
-
-    ret = Send_Command (APU_2_RPU_MB_CMD_NrRelocEnable, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-    if(0 != ret) {
-		os_unlock_mutex(&mbox_lock);
-        return RET_FAILURE;
-    }
-
-    result = apu_wait_for_ACK(packet.cookie);
-    if (result) {
-        result = RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-
-	return result;
-}
-
-
-RESULT VsiCamDeviceNrRelocDisable
-(
- CamDeviceHandle_t     hCamDevice
-)
-{
-    RESULT result = RET_SUCCESS;
-    int ret = 0;
-
-    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
-    if (NULL == pCamDevCtx) {
-        return (RET_WRONG_HANDLE);
-    }
-    pCamDevCtx->cookie ++;
-
-    payload_packet packet;
-    memset(&packet, 0, sizeof(payload_packet));
-
-    packet.cookie = pCamDevCtx->cookie;
-    packet.type = CMD;
-    packet.payload_size = 0;
-
-    uint8_t *p_data = packet.payload;
-    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-    packet.payload_size += sizeof(uint32_t);
-
-        if(packet.payload_size > MAX_ITEM)
-    	return RET_OUTOFRANGE;
-
-    os_lock_mutex(&mbox_lock);
-
-    ret = Send_Command (APU_2_RPU_MB_CMD_NrRelocDisable, &packet, packet.payload_size + payload_extra_size, dest_cpu_id, src_cpu_id);
-    if(0 != ret) {
-		os_unlock_mutex(&mbox_lock);
-        return RET_FAILURE;
-    }
-
-    result = apu_wait_for_ACK(packet.cookie);
-    if (result) {
-        result = RET_FAILURE;
-    }
-
-    os_unlock_mutex(&mbox_lock);
-
-	return result;
-}
-}
-#endif

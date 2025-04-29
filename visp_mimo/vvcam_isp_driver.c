@@ -50,7 +50,6 @@
  * version of this file.
  *
  *****************************************************************************/
- 
 #include <linux/module.h>
 #include <linux/version.h>
 #include <linux/platform_device.h>
@@ -60,7 +59,6 @@
 #include <linux/spinlock.h>
 #include <linux/slab.h>
 #include <linux/pm_runtime.h>
-//<REMOVED IN M13> #include <linux/arm-smccc.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-fh.h>
@@ -77,11 +75,9 @@
 #include "vvcam_isp_ctrl.h"
 #include "vvcam_isp_procfs.h"
 #include "vvcam_v4l2_std_exts.h"
-/*RKC-TODO Check below headers requirement in M13*/
 #include <linux/interrupt.h>
 #include<linux/delay.h>
 #include "sensor_cmd.h"
-//#include "mailbox.h"
 #include "mbox_api.h"
 #include "mbox_cmd.h"
 #include "vvcam_isp_app.h"
@@ -97,8 +93,6 @@ static uint32_t SensorDevId[VVCAM_ISP_PORT_NR] = {9, 2, 5, 10};
 int MediaIspDeviceDqbuf_out(struct vvcam_isp_dev *isp_dev, struct Chn_info *info, MediaBuf *Buf, void * Packet_from_RPU, MediaBuffer_t *pMediaBuffer);
 int vvcam_isp_buf_done(struct v4l2_subdev *sd, void *arg);
 
-//#define NMCM 0
-#define MCM 1
 
 struct vvcam_isp_format vvcam_isp_mp_fmts[] = {
     {
@@ -706,7 +700,6 @@ static int vvcam_isp_pad_requbufs(struct v4l2_subdev *sd, void *arg)
 
         int Port = pad_requbufs->pad / MEDIA_ISP_PORT_PAD_COUNT;
         int Chn  = (pad_requbufs->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
-	/*RKC-TODO CHECK-M13*/
 	isp_dev->IspPorts[Port].IspChns[Chn].NumBufs=pad_requbufs->num_buffers;
 	return status;
 }
@@ -739,18 +732,13 @@ static int vvcam_isp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
     for (i = 0; i < Buf.NumPlanes; i++) {
     	Buf.Planes[i].DmaAddr = pad_buf->buf->planes[i].dma_addr;
        	Buf.Planes[i].DmaSize = pad_buf->buf->planes[i].size;
-//		dev_info(isp_dev->dev ," %d %d %x %x \n",Buf.Index,Buf.NumPlanes, Buf.Planes[i].DmaAddr, Buf.Planes[i].DmaSize );
     }   	
-	//ENQUE BUFFER
 #if 1
 
-	//  MediaIspQBuf(isp_dev,pad_buf->pad ,  &Buf);
-    //RKC-TODO Check M13
-    if (/*IspChn->ThreadStatus == MEDIA_THREAD_STOPPED*/isp_dev->streamon[pad_buf->pad]==0) {
+    if (isp_dev->streamon[pad_buf->pad]==0) {
        	memcpy(&IspChn->Bufs[Buf.Index], &Buf, sizeof(MediaBuf));
     }
     else {
-       	//RetVal = MediaIspDeviceQbuf(isp_dev, Port, Chn, &Buf);
     	MediaBuffer_t *pMediaBuffer = VSI_NULL;
     	pMediaBuffer = IspChn->CamDeviceBufs[Buf.Index];
 
@@ -764,8 +752,6 @@ static int vvcam_isp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
        		loge("CamDevice queue buf failed, ret is %d", RetVal);
        		return  VSI_ERR_TIMEOUT;
 	    }    
-        pr_err("RKC-ISP-DRV ENQ Successfull\n");
-		//  IspChn->CamDeviceBufs[pMediaBuffer->index] = VSI_NULL;
     }  
 
 #endif	
@@ -815,25 +801,6 @@ int Handle_Frameout_Buffer(void *Packet_from_RPU, struct vvcam_isp_dev *isp_dev)
         goto error_free_buf;
     }
 
-#if 0
-    /* Calculate the pad index */
-    pad = (info.VtId * MEDIA_ISP_PORT_PAD_COUNT) + (info.path + 1);
-    if (pad <= 0) {
-        dev_err(isp_dev->dev ,"Handle_Frameout_Buffer: Invalid pad value %d\n", pad);
-        RetVal = -EINVAL;
-        goto error_free_buf;
-    }
-
-    /* Mark buffer as done*/
-    RetVal = MediaIspHalBufDone(&isp_dev->sd, pad, Buf);
-    if (RetVal != 0) {
-        dev_err(isp_dev->dev ,"Handle_Frameout_Buffer: MediaIspHalBufDone failed with error %d\n", RetVal);
-        dev_err(isp_dev->dev,
-                "Skip Buf: RetVal=%d, ISP=%d, Port=%d, Chn=%d, BUF=0x%x\n",
-                RetVal, isp_dev->id, info.VtId, info.path, pMediaBuffer ? pMediaBuffer->baseAddress : 0);
-        goto error_free_buf;
-    }
-#endif
     /* Free allocated buffer after successful processing*/
     kfree(Buf);
     return 0;
@@ -851,11 +818,10 @@ int MediaIspDeviceCameraConnect(struct vvcam_isp_dev *isp_dev , uint8_t Index);
 int MediaIspDeviceSetFormat(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
 int MediaIspDeviceStreamOn(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
 int MediaIspStreamOff(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
-//int MediaIspStreamOn(struct vvcam_isp_dev *isp_dev , int Index /*  MediaPadAttr *Pad*/);
 int IspDeviceCreate(struct vvcam_isp_dev *isp_dev , uint8_t Port);
 
-int MediaIspDeviceSetFrameRate(struct vvcam_isp_dev *isp_dev, uint8_t Port, /*float * */int * FrameRate); //RKC-TODO float to int
-int MediaIspSetFrameRate(struct vvcam_isp_dev *isp_dev, int Pad, /*float * */int * FrameRate); //RKC-TODO Float * to int * 
+int MediaIspDeviceSetFrameRate(struct vvcam_isp_dev *isp_dev, uint8_t Port, int * FrameRate);
+int MediaIspSetFrameRate(struct vvcam_isp_dev *isp_dev, int Pad, int * FrameRate);
 
 static int vvcam_isp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 {
@@ -864,8 +830,6 @@ static int vvcam_isp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
     int ret=0;
     int Port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
     int Chn  = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
-//RKC-TODO CHECK-M13
-//	dev_info(isp_dev->dev ,"RKC_ISPDRV %s %d Pad=%d Status=%d Port  =%d Chn=%d\n",__func__,__LINE__,pad_stream->pad,pad_stream->status,Port,Chn);
     isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 
     if (pad_stream->status == 0 ) {
@@ -886,7 +850,7 @@ static int vvcam_isp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
             ret = vvcam_isp_l_calib_event(isp_dev, pad_stream->pad);
             if(ret!=0)
             {
-                dev_err(isp_dev->dev ,"[RKC-EVENT_FAIL] %s %d\n",__func__,__LINE__);	
+                dev_err(isp_dev->dev ,"[EVENT_FAIL] %s %d\n",__func__,__LINE__);
                 return ret;
             }
             #endif
@@ -903,9 +867,9 @@ static int vvcam_isp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
             ret = vvcam_isp_l_json_event(isp_dev, pad_stream->pad);
             if(ret!=0)
             {
-                dev_err(isp_dev->dev ,"[RKC-EVENT_FAIL] %s %d\n",__func__,__LINE__);	
-                dev_err(isp_dev->dev ,"[RKC-EVENT_FAIL] %s %d\n",__func__,__LINE__);	
-                dev_err(isp_dev->dev ,"[RKC-EVENT_FAIL] %s %d\n",__func__,__LINE__);	
+                dev_err(isp_dev->dev ,"[EVENT_FAIL] %s %d\n",__func__,__LINE__);
+                dev_err(isp_dev->dev ,"[EVENT_FAIL] %s %d\n",__func__,__LINE__);
+                dev_err(isp_dev->dev ,"[EVENT_FAIL] %s %d\n",__func__,__LINE__);
                 return ret;
             } 
             #endif
@@ -918,7 +882,7 @@ static int vvcam_isp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
         /*EXIT PORT Level CRITICAL SECITON*/
         mutex_unlock(&isp_dev->port_lock[Port]);
 
-        /*RKC-TODO Set Frame Rate */
+        /*Set Frame Rate */
         ret = MediaIspDeviceSetFrameRate(isp_dev, Port, &isp_dev->IspPorts[Port].SensorInfo.FrameRate);
         if (ret != VSI_SUCCESS) {
             dev_err(isp_dev->dev ,"Port %d Chn %d Set FrameRate failed, ret is %d",
@@ -945,8 +909,6 @@ static int vvcam_isp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
     else //streamoff
     {
-    //RKC-TODO to get camdevrefcnt-- here.
-	//dev_info(isp_dev->dev ,"STREAM OFF CALLED REFCNT= %d\n",isp_dev->IspPorts[Port].CameraConnectRefCnt);
 
 	    MediaIspStreamOff(isp_dev, Port, Chn);
 	    isp_dev->streamon[pad_stream->pad]=0;
@@ -977,19 +939,14 @@ int vvcam_isp_buf_done(struct v4l2_subdev *sd, void *arg)
 
     memcpy(&ubuf, arg, sizeof(struct vvcam_isp_buf));
     cur_pad = &isp_dev->pad_data[ubuf.pad];
-    /*if (list_empty(&cur_pad->queue) || (cur_pad->stream == 0))
-        return -EINVAL;*/
     if (list_empty(&cur_pad->queue) )
     {
-	//	loge("EMPTY LISt\n");
        		return -EINVAL;
     }
     if ( (cur_pad->stream == 0))
     {
-	//	loge("Stream===0\n");
         	return -EINVAL;
     }
-//    dev_info(isp_dev->dev ," RKC DEBUG %d %d \n",ubuf.pad,cur_pad->stream);
 
     spin_lock_irqsave(&cur_pad->qlock, flags);
     list_for_each_entry_safe(pos, next, &cur_pad->queue, list) {
@@ -1002,7 +959,6 @@ int vvcam_isp_buf_done(struct v4l2_subdev *sd, void *arg)
     spin_unlock_irqrestore(&cur_pad->qlock, flags);
 
     if (buf) {
-//dev_info(isp_dev->dev ,"%s %d \n",__func__,__LINE__);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
         pad = media_pad_remote_pad_first(&isp_dev->pads[ubuf.pad]);
 #else
@@ -1022,7 +978,6 @@ int vvcam_isp_buf_done(struct v4l2_subdev *sd, void *arg)
             video = media_entity_to_video_device(pad->entity);
             if (buf->sequence < video->queue->max_num_buffers) {
                 if (buf->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE) {
- //   dev_info(isp_dev->dev ," RKC DEBUG %d %d \n",ubuf.pad,cur_pad->stream);
                     vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_DONE);
                 }
             }
@@ -1314,7 +1269,7 @@ static long vvcam_isp_priv_ioctl(struct v4l2_subdev *sd,
             ret = vvcam_isp_pad_requbufs(sd, arg);
             break;
         case VVCAM_PAD_BUF_QUEUE:
-		    dev_info(isp_dev->dev ,"RKC-ISP_DRV case VVCAM_PAD_BUF_QUEUE \n");
+		    dev_info(isp_dev->dev ,"ISP_DRV case VVCAM_PAD_BUF_QUEUE \n");
             ret = vvcam_isp_pad_buf_queue(sd, arg);
             break;
         case VVCAM_PAD_S_STREAM:
@@ -1393,7 +1348,7 @@ static struct v4l2_subdev_core_ops vvcam_isp_core_ops = {
 	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
 };
 
-static int vvcam_isp_set_frame_interval(struct v4l2_subdev *sd/* struct vvcam_isp_dev *isp_dev*/,  struct v4l2_subdev_state *sd_state, struct v4l2_subdev_frame_interval *fi)
+static int vvcam_isp_set_frame_interval(struct v4l2_subdev *sd,  struct v4l2_subdev_state *sd_state, struct v4l2_subdev_frame_interval *fi)
 {
     struct vvcam_isp_dev *isp_dev = v4l2_get_subdevdata(sd);
     struct vvcam_isp_pad_data *cur_pad = &isp_dev->pad_data[fi->pad];
@@ -1403,7 +1358,7 @@ static int vvcam_isp_set_frame_interval(struct v4l2_subdev *sd/* struct vvcam_is
     int ret = 0;
     int i = 0;
 	struct v4l2_fract *timeperframe;
-    /*float*/int FrameRate = 0.; //RKC-TODO  As there is compiling dependency for float types moving to int for now.
+    int FrameRate = 0.;
 
     sink_pad_index = fi->pad - (fi->pad % VVCAM_ISP_PORT_PAD_NR);
     sink_pad = &isp_dev->pad_data[sink_pad_index];
@@ -1422,9 +1377,8 @@ static int vvcam_isp_set_frame_interval(struct v4l2_subdev *sd/* struct vvcam_is
         fi->interval = sink_pad->timeperframe;
     }
 
-    /* ret = vvcam_isp_s_interval_event(isp_dev, fi->pad, &fi->interval);*/
     timeperframe = &(fi->interval);
-    FrameRate = /*(float)*/timeperframe->denominator / timeperframe->numerator; //RKC-TODO  As there is compiling dependency for float types moving to int for now.
+    FrameRate = timeperframe->denominator / timeperframe->numerator;
    
     ret = MediaIspSetFrameRate(isp_dev, fi->pad,  &FrameRate);
     if (ret) {
@@ -1491,8 +1445,6 @@ static int vvcam_isp_set_fmt(struct v4l2_subdev *sd,
 
     sink_pad_index = format->pad - (format->pad % VVCAM_ISP_PORT_PAD_NR);
     sink_pad = &isp_dev->pad_data[sink_pad_index];
-    dev_info(isp_dev->dev ,"RKC_ISPDRV %s %d\n",__func__,__LINE__);
-    dev_info(isp_dev->dev , "RKC-%s %d sink pad_index=%d \n",__func__,__LINE__,sink_pad_index);
 
     if (sink_pad == cur_pad) {
         cur_pad->sink_detected = 1;
@@ -1540,13 +1492,10 @@ static int vvcam_isp_set_fmt(struct v4l2_subdev *sd,
         memcpy(format->format.reserved, &cur_pad->fmts[0].fourcc, sizeof(uint32_t));
     }
 
-	dev_info(isp_dev->dev ,"RKC_ISPDRV %s %d\n",__func__,__LINE__);
     if (ret)
         return ret;
 
     memset(&Format_media, 0, sizeof(Format_media));
-	//format->pad = Pad; // RKC-Is this required or handled above ? 
-	//format->which = V4L2_SUBDEV_FORMAT_ACTIVE;
 
     MBusFormat = (struct v4l2_mbus_framefmt *)&format->format;
     Format_media.Width = MBusFormat->width;
@@ -1562,7 +1511,6 @@ static int vvcam_isp_set_fmt(struct v4l2_subdev *sd,
     }
     MediaIspHalMbusFmtToMediaFmt(&MBusFormat->code, &Format_media.PixelFormat,fourcc_code);
 
-    dev_info(isp_dev->dev ,"RKC_ISPDRV %s %d\n",__func__,__LINE__);
 
     mediapad_t = &isp_dev->pads[format->pad];
     MediaIspSetFormat(isp_dev,mediapad_t->index, &Format_media);
@@ -1571,7 +1519,6 @@ static int vvcam_isp_set_fmt(struct v4l2_subdev *sd,
         return ret;
     }
 
-	dev_info(isp_dev->dev ,"RKC_ISPDRV %s %d\n",__func__,__LINE__);
     cur_pad->format = format->format;
 
     return 0;
@@ -1646,8 +1593,6 @@ int vvcam_isp_set_fmt_public(struct vvcam_isp_dev *isp_dev,struct v4l2_subdev_fo
         return ret;
 
     memset(&Format_media, 0, sizeof(Format_media));
-	//format->pad = Pad; // RKC-Is this required or handled above ? 
-	//format->which = V4L2_SUBDEV_FORMAT_ACTIVE;
 
     MBusFormat = (struct v4l2_mbus_framefmt *)&format->format;
     Format_media.Width = MBusFormat->width;
@@ -1728,9 +1673,8 @@ static int vvcam_isp_enum_mbus_code(struct v4l2_subdev *sd,
 		if (!isp_dev->IspPorts[Port].RefCount)
 	 	{		
 
-            //isp_dev->PortsMask |= (1 << Port);
 
-			if(isp_dev->num_streams==1/*NMCM*/)
+			if(isp_dev->num_streams==1)
 			{			
 				dev_err(isp_dev->dev ,"EXECUTING NON-MCM PortsMask=%d\n",isp_dev->PortsMask);
 				RetVal = IspDeviceCreate(isp_dev, Port);
@@ -1740,13 +1684,12 @@ static int vvcam_isp_enum_mbus_code(struct v4l2_subdev *sd,
                     return RetVal;
                 }
 			}
-			else if(isp_dev->num_streams>1/*MCM*/)
+			else if(isp_dev->num_streams>1)
 			{
 				dev_err(isp_dev->dev ,"EXECUTING MCM PortsMask=%d\n",isp_dev->PortsMask);
                 if(isp_dev->PortsMask<0x2)
                 {
                     pr_err("%s %d\n",__func__,__LINE__);
-				    isp_dev->PortsMask = 0xF;//REad this value from dt  
                 }
 
 				RetVal = IspDeviceCreate(isp_dev, Port);
@@ -1794,10 +1737,6 @@ static int vvcam_isp_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	mutex_lock(&isp_dev->mlock);
 
 	isp_dev->refcnt++;
-#if 0  //RKC-DISABLE-PM
-	pm_runtime_get_sync(sd->dev);
-#endif
-        //sensor_pipeline_init(isp_dev);
 
 	mutex_unlock(&isp_dev->mlock);
 	return 0;
@@ -1829,9 +1768,6 @@ static int vvcam_isp_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
         }
     }
 
-#if 0  //RKC-DISABLE-PM
-	pm_runtime_put_sync(sd->dev);
-#endif
 	mutex_unlock(&isp_dev->mlock);
 
 	return 0;
@@ -1872,7 +1808,6 @@ static int vvcam_isp_notifier_bound(struct v4l2_async_notifier *notifier,
 	unsigned int source_pad, sink_pad;
 
     while(1) {
-        dev_err(isp_dev->dev , "[RKC-ISP-DRV] %s %d\n",__func__,__LINE__);
         ep = fwnode_graph_get_next_endpoint(sd->fwnode, ep);
         if (!ep)
 			break;
@@ -1945,7 +1880,6 @@ static int vvcam_isp_async_notifier(struct vvcam_isp_dev *isp_dev)
         return 0;
 
     for (pad = 0; pad < VVCAM_ISP_PAD_NR; pad++) {
-        dev_err(isp_dev->dev , "[RKC-ISP-DRV] %s %d\n",__func__,__LINE__);
 
         if (isp_dev->pads[pad].flags != MEDIA_PAD_FL_SINK)
             continue;
@@ -1954,13 +1888,11 @@ static int vvcam_isp_async_notifier(struct vvcam_isp_dev *isp_dev)
                                         pad, 0, FWNODE_GRAPH_ENDPOINT_NEXT);
         if (!ep)
             continue;
-        dev_err(isp_dev->dev , "[RKC-ISP-DRV] %s %d\n",__func__,__LINE__);
         remote_ep = fwnode_graph_get_remote_endpoint(ep);
         if (!remote_ep) {
             fwnode_handle_put(ep);
             continue;
         }
-        dev_err(isp_dev->dev , "[RKC-ISP-DRV] %s %d\n",__func__,__LINE__);
         fwnode_handle_put(remote_ep);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
         asc = v4l2_async_nf_add_fwnode_remote(&isp_dev->notifier,
@@ -1971,7 +1903,6 @@ static int vvcam_isp_async_notifier(struct vvcam_isp_dev *isp_dev)
 #endif
 
         fwnode_handle_put(ep);
-        dev_err(isp_dev->dev , "[RKC-ISP-DRV] %s %d\n",__func__,__LINE__);
 
         if (IS_ERR(asc)) {
             ret = PTR_ERR(asc);
@@ -1987,15 +1918,7 @@ static int vvcam_isp_async_notifier(struct vvcam_isp_dev *isp_dev)
     }
 
 	ret = v4l2_async_nf_register(&isp_dev->notifier);
-#if 0
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
-        ret = v4l2_async_subdev_nf_register(&isp_dev->sd,
-						  &isp_dev->notifier);
-#else
-        ret = v4l2_async_subdev_notifier_register(&isp_dev->sd,
-						  &isp_dev->notifier);
-#endif
-#endif
+
     if (ret) {
         dev_err(isp_dev->dev, "Async notifier register error\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
@@ -2012,7 +1935,6 @@ int vvcam_isp_pads_init(struct vvcam_isp_dev *isp_dev);
 int vvcam_isp_pads_init(struct vvcam_isp_dev *isp_dev)
 {
     int pad = 0;
-    dev_info(isp_dev->dev ,"RKC_ISPDRV %s %d ISP_PAD_NR=%d\n",__func__,__LINE__,VVCAM_ISP_PAD_NR);
     for (pad = 0; pad < VVCAM_ISP_PAD_NR; pad++) {
         if ((pad % VVCAM_ISP_PORT_PAD_NR) == VVCAM_ISP_PORT_PAD_SINK) {
             isp_dev->pads[pad].flags = MEDIA_PAD_FL_SINK;
@@ -2054,12 +1976,7 @@ EXPORT_SYMBOL(vvcam_isp_pads_init);
 static int parse_iba(struct vvcam_isp_dev *isp_dev, struct device_node *np) {
     int num_streams  = isp_dev->num_streams;
     int i;
-/*
- *     if (of_property_read_u32(np, "xlnx,num_streams", &num_streams)) {
- *         dev_err(isp_dev->dev, "Failed to read xlnx,num_streams\n");
- *         return -EINVAL;
- *      }
- **/
+
     if (num_streams > MAX_IBA_PER_ISP) {
         dev_err(isp_dev->dev, "num_streams exceeds maximum allowed (%d)\n", MAX_IBA_PER_ISP);
         return -EINVAL;
@@ -2127,38 +2044,21 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
     int ret = 0;
     const char *formats;
     struct device_node *node = pdev->dev.of_node;
-#if 0
-    for (port = 0; port < VVCAM_ISP_PORT_NR; port++) {
-        strncpy(isp_dev->sensor_info[port].sensor, VVCAM_ISP_DEFAULT_SENSOR,
-            strlen(VVCAM_ISP_DEFAULT_SENSOR));
-        strncpy(isp_dev->sensor_info[port].xml, VVCAM_ISP_DEFAULT_SENSOR_XML,
-            strlen(VVCAM_ISP_DEFAULT_SENSOR_XML));
-        isp_dev->sensor_info[port].mode = VVCAM_ISP_DEFAULT_SENSOR_MODE;
-        strncpy(isp_dev->sensor_info[port].manu_json, VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON,
-            strlen(VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON));
-        strncpy(isp_dev->sensor_info[port].auto_json, VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON,
-            strlen(VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON));
-    }
-#endif
     for (port = 0; port < VVCAM_ISP_PORT_NR; port++) {
         strncpy(isp_dev->IspPorts[port].SensorInfo.Name, VVCAM_ISP_DEFAULT_SENSOR,
             strlen(VVCAM_ISP_DEFAULT_SENSOR)+1);
-       // isp_dev->IspPorts[port].SensorInfo.Name[strlen(strlen(VVCAM_ISP_DEFAULT_SENSOR))] = '\0';
 
         strncpy(isp_dev->IspPorts[port].SensorInfo.CalibXml, VVCAM_ISP_DEFAULT_SENSOR_XML,
             strlen(VVCAM_ISP_DEFAULT_SENSOR_XML)+1);
-       // isp_dev->IspPorts[port].SensorInfo.CalibXml[strlen(VVCAM_ISP_DEFAULT_SENSOR_XML)] = '\0';
 
         isp_dev->IspPorts[port].SensorInfo.Mode = VVCAM_ISP_DEFAULT_SENSOR_MODE;
         isp_dev->IspPorts[port].SensorInfo.sensor_id = SensorDevId[port];
 
         strncpy(isp_dev->IspPorts[port].SensorInfo.ManuJson, VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON,
             strlen(VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON)+1);
-       // isp_dev->IspPorts[port].SensorInfo.ManuJson[strlen(VVCAM_ISP_DEFAULT_SENSOR_MANU_JSON)] = '\0'; 
 
         strncpy(isp_dev->IspPorts[port].SensorInfo.AutoJson, VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON,
             strlen(VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON)+1);
-       // isp_dev->IspPorts[port].SensorInfo.AutoJson[strlen(VVCAM_ISP_DEFAULT_SENSOR_AUTO_JSON)] = '\0';
     }
 
     fwnode_property_read_u32(of_fwnode_handle(node),
@@ -2172,7 +2072,7 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
         dev_err(&pdev->dev, "Invalid ISP Id %d\n",isp_dev->id);
         return -EINVAL;
     }
-    dev_info(&pdev->dev, "Found vvcam_isp device in device tree.\n");
+    dev_dbg(&pdev->dev, "Found vvcam_isp device in device tree.\n");
     
 	// Read string property for SS-MODE-I0 (LIMO, etc.)
     ret = of_property_read_string(node, "xlnx,io_mode", &isp_dev->ss_mode_i0);
@@ -2182,7 +2082,7 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
     } else {
         dev_info(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
     }
-        dev_err(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
+        dev_dbg(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
 
     // Read stream info (multi-stream, single-stream)
     ret = of_property_read_u32(node, "xlnx,num_streams", &isp_dev->num_streams);
@@ -2192,14 +2092,14 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
     } else {
         dev_info(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
     }
-        dev_err(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
+        dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
 
     ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
     if (ret) {
         dev_err(&pdev->dev, "Failed to read xlnx,mem_inputs property\n");
         return ret;
     } else {
-        dev_info(&pdev->dev, "xlnx,mem_inputs: %u\n", isp_dev->isp_mem);
+        dev_dbg(&pdev->dev, "xlnx,mem_inputs: %u\n", isp_dev->isp_mem);
     }
  
     ret = of_property_read_u32(node, "xlnx,rpu", &isp_dev->isp_rpu);
@@ -2207,7 +2107,7 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
         dev_err(&pdev->dev, "Failed to read xlnx,rpu property\n");
         return ret;
     } else {
-        dev_info(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
+        dev_dbg(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
     }
  
     ret = of_property_read_u32(node, "xlnx,dma-align", &isp_dev->dma_align);
@@ -2215,7 +2115,7 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
         dev_err(&pdev->dev, "Failed to read xlnx,dma-align property\n");
         return ret;
     } else {
-        dev_info(&pdev->dev, "xlnx,dma-align: %u\n", isp_dev->dma_align);
+        dev_dbg(&pdev->dev, "xlnx,dma-align: %u\n", isp_dev->dma_align);
     }
  
     // Read multiple strings property
@@ -2224,14 +2124,14 @@ static int vvcam_isp_parse_params(struct vvcam_isp_dev *isp_dev, struct platform
         isp_dev->vid_formats = formats;
         dev_info(&pdev->dev, "xlnx,vid-formats: %s\n", isp_dev->vid_formats);
     } else {
-        dev_err(&pdev->dev, "Failed to read xlnx,vid-formats property\n");
+        dev_dbg(&pdev->dev, "Failed to read xlnx,vid-formats property\n");
     }
  
     // Read boolean properties
     isp_dev->tile0_enable_mp0 = of_property_read_bool(node, "xlnx,tile0-enable-mp0");
-    dev_info(&pdev->dev, "xlnx,tile0-enable-mp0: %s\n", isp_dev->tile0_enable_mp0 ? "true" : "false");
+    dev_dbg(&pdev->dev, "xlnx,tile0-enable-mp0: %s\n", isp_dev->tile0_enable_mp0 ? "true" : "false");
     isp_dev->tile0_enable_sp0 = of_property_read_bool(node, "xlnx,tile0-enable-sp0");
-    dev_info(&pdev->dev, "xlnx,tile0-enable-sp0: %s\n", isp_dev->tile0_enable_sp0 ? "true" : "false");
+    dev_dbg(&pdev->dev, "xlnx,tile0-enable-sp0: %s\n", isp_dev->tile0_enable_sp0 ? "true" : "false");
  
     if (parse_iba(isp_dev, node)) {
         dev_err(&pdev->dev, "Failed to parse IBA parameters\n");
@@ -2335,19 +2235,7 @@ static int vvcam_isp_probe(struct platform_device *pdev)
         goto err_register_procfs;
     }
 
-#if 0
-    ret = of_reserved_mem_device_init(&pdev->dev);
-    if (ret)
-        dev_dbg(&pdev->dev, "of_reserved_mem_device_init: %d\n", ret);
- 
-    ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
-    if (ret) {
-        dev_err(&pdev->dev, "dma_set_mask_and_coherent: %d\n", ret);
-        return -EINVAL;
-        //goto error;
-    }
-#endif
-#if 1 //RKC-avoid-shm-memory
+#if 1
     isp_dev->event_shm.virt_addr = (void *)__get_free_pages(GFP_KERNEL, 3);
     isp_dev->event_shm.size = PAGE_SIZE * 8;
     memset(isp_dev->event_shm.virt_addr, 0, isp_dev->event_shm.size);
@@ -2355,19 +2243,14 @@ static int vvcam_isp_probe(struct platform_device *pdev)
     mutex_init(&isp_dev->event_shm.event_lock);
 #endif
 
-#if 0  //RKC-DISABLE-PM
-    pm_runtime_enable(&pdev->dev);
-#endif
     vvcam_isp_ctrl_init(isp_dev);
 
     for (port = 0; port < VVCAM_ISP_PORT_NR; port++) {
         mutex_init(&isp_dev->port_lock[port]);
         INIT_LIST_HEAD(&isp_dev->mcm_input[port]);
     }
-    dev_err(isp_dev->dev, "[RKC-ISP-DRV] PortMask=%d\n",isp_dev->PortsMask);
 
     isp_dev->PortsMask = isp_dev->num_streams;
-    //sensor_pipeline_init(isp_dev);
 
     dev_info(isp_dev->dev ,"[VVCAM-ISP-DRV] %s %d\n",__func__,__LINE__);
 
@@ -2394,67 +2277,6 @@ err_async_notifier:
     return ret;
 }
 
-#if 0 // OLD-VERSION Need to upadte to use
-int sensor_pipeline_init(struct vvcam_isp_dev *isp_dev)
-{
-    int Port = 0;
-    int RetVal = VSI_SUCCESS;
-
-    dev_info(isp_dev->dev, "Port = %d  Refcnt= %d \n", Port, isp_dev->IspPorts[Port].RefCount);
-		
-    if (!isp_dev->IspPorts[Port].RefCount) {
-
-	    MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
-        if (IspPort->CamDeviceHandle) {
-                return VSI_SUCCESS; 
-        } 
-
-        if (!isp_dev->IspPorts[Port].RefCount)
-        {		
-            /*Create Instance*/
-            if(isp_dev->num_streams==1)
-            {			
-                dev_err(isp_dev->dev, "EXECUTING NON-MCM");
-                //isp_dev->PortsMask = 0x01;
-                RetVal = IspDeviceCreate(isp_dev, Port);
-                if (RetVal != VSI_SUCCESS) {
-                    dev_err(isp_dev->dev,"CamDevice Creat Isp , ret is %d", RetVal);
-                    return RetVal;
-                }
-            }
-            else if(isp_dev->num_streams>1)
-            {
-                dev_err(isp_dev->dev ,"EXECUTING MCM %d:%d",isp_dev->PortsMask,isp_dev->num_streams);
-                //isp_dev->PortsMask = 0x03;//REad this value from dt  
-
-                RetVal = IspDeviceCreate(isp_dev, 0);
-                if (RetVal != VSI_SUCCESS) {
-                    dev_err(isp_dev->dev,"CamDevice Creat Isp , ret is %d", RetVal);
-                    return RetVal;
-                }
-
-                RetVal = IspDeviceCreate(isp_dev, 1);
-                if (RetVal != VSI_SUCCESS) {
-                    dev_err(isp_dev->dev,"CamDevice Creat Isp , ret is %d", RetVal);
-                    return RetVal;
-                }
-
-                /*RetVal = IspDeviceCreate(isp_dev, 2);
-                RetVal = IspDeviceCreate(isp_dev, 3);*/
-            }	
-            else
-            {
-                dev_err(isp_dev->dev ,"Check the Mode %d (1:Non-MCM 2:MCM)\n",isp_dev->num_streams);
-            }
-
-        }
-    }
-    isp_dev->IspPorts[Port].RefCount++;
-    return RetVal;
-}
-#endif
-
-
 static void vvcam_isp_remove(struct platform_device *pdev)
 {
     struct vvcam_isp_dev *isp_dev;
@@ -2471,23 +2293,15 @@ static void vvcam_isp_remove(struct platform_device *pdev)
 	            v4l2_async_notifier_cleanup(&isp_dev->notifier);
 #endif
     media_entity_cleanup(&isp_dev->sd.entity);
-#if 0  //RKC-DISABLE-PM
-    pm_runtime_disable(&pdev->dev);
-#endif
-    free_pages((unsigned long)isp_dev->event_shm.virt_addr, 3); // RKC-avoid-shm-memory
+    free_pages((unsigned long)isp_dev->event_shm.virt_addr, 3);
     vvcam_isp_ctrl_destroy(isp_dev);
     dev_info(&pdev->dev, "vvcam isp driver remove\n");
 
-//    vvcam_mailbox_unregister(isp_dev->mbox);
 
     return;
 }
 
 static const struct dev_pm_ops vvcam_isp_pm_ops = {
-#if 0  //RKC-DISABLE-PM
-	SET_SYSTEM_SLEEP_PM_OPS(vvcam_isp_system_suspend, vvcam_isp_system_resume)
-	SET_RUNTIME_PM_OPS(vvcam_isp_runtime_suspend, vvcam_isp_runtime_resume, NULL)
-#endif
 };
 
 static const struct of_device_id vvcam_isp_of_match[] = {
@@ -2506,9 +2320,6 @@ static struct platform_driver vvcam_isp_driver = {
 		.owner          = THIS_MODULE,
         .of_match_table = vvcam_isp_of_match,
 
-#if 0  //RKC-DISABLE-PM
-        .pm             = &vvcam_isp_pm_ops,
-#endif
 	}
 };
 

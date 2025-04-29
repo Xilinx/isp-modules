@@ -55,15 +55,12 @@
 #define __MEDIA_ISP_H__
 
 #include "media_device.h"
-#include "media_event.h"
-#include "vsi_errno.h"
-#include "log.h"
 #include "cam_device_api.h"
 #include "mc_isp_hal.h"
 #include "cam_device_buffer_api.h"
 #include "cam_device_common.h"
 #include "cam_device_sensor_api.h"
-//#include "vvcam_isp_event.h"
+#include "vsi_errno.h"
 
 #define MEDIA_ISP_BUF_FRAME_MAX 32
 #define MEDIA_ISP_CHAR_LENGTH_MAX 64
@@ -94,9 +91,6 @@ int MediaIspEventDestroy(MediaEntityAttr *MediaEntity);
 
 typedef struct MediaIspChn_s
 {
-	//os_pthread_attr_t PthreadAttr;
-    //os_pthread_t Pthread;
-   // MediaThreadStatus ThreadStatus;
 	MediaFmt Format;
 	uint8_t NumBufs;
 	MediaBuf Bufs[MEDIA_ISP_BUF_FRAME_MAX];
@@ -118,7 +112,6 @@ typedef struct MediaIspSensorInfo_s
 	char ManuJson[MEDIA_ISP_PATH_LENGTH_MAX];
 	char AutoJson[MEDIA_ISP_PATH_LENGTH_MAX];
 	char OneJson[MEDIA_ISP_PATH_LENGTH_MAX];
-    //struct CamDeviceSensorModeInfo_t ModeInfo;
     struct CamDeviceSensorModeInfo_s ModeInfo;
 	uint32_t FrameRate;
     uint8_t vc_id;
@@ -151,9 +144,6 @@ typedef struct MediaIspEventDev_s
 	uint32_t RefCount;
 	MediaIspPortAttr IspPorts[MEDIA_ISP_PORT_MAX];
 	McIspHalHandle HalHandle;
-//	os_pthread_attr_t PthreadAttr;
- //   os_pthread_t      Pthread;
-//    MediaThreadStatus ThreadStatus;
 	MediaEntityAttr *MediaEntity;
 } MediaIspEventDev;
 

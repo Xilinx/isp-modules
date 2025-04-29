@@ -84,13 +84,11 @@ int mbox_mem_map(MboxFifoCtrl *mbox_fifo, MboxCoreId core_id,
 	
     init_fifo = (FifoInitData *)kmalloc(sizeof(FifoInitData),GFP_KERNEL);
 
-    pr_err("mbox_mem_map entering... coreid %d \n",core_id);
     if (NULL == init_fifo)
         return VPI_ERR_NOMEM;
 
     init_fifo->item_size = sizeof(MboxPostMsg);
     init_fifo->buffer_size = shm_block_size - ((sizeof(FifoControl) + 7) / 8 * 8);
-//    pr_err("%s-%d init_fifo->buffer_size : 0x%llx\n",__func__,__LINE__,init_fifo->buffer_size);
     init_fifo->item_total = init_fifo->buffer_size / init_fifo->item_size;
 
     mlist = 0;
@@ -135,10 +133,9 @@ int mbox_mem_map(MboxFifoCtrl *mbox_fifo, MboxCoreId core_id,
                 (mbox_fifo + mlist)->fifo =
                     (FifoControl *)(uint64_t)(buffer_addr_virt); //buffer_addr == 0 for first time
 
-               pr_err(" buffer addr sender_id -%d,receiver_id-%d, buffadd %llx\n",sender_id ,receiver_id, (mbox_fifo + mlist)->buffer_address_phy);
+               pr_debug(" buffer addr sender_id -%d,receiver_id-%d, buffadd %llx\n",sender_id ,receiver_id, (mbox_fifo + mlist)->buffer_address_phy);
                 init_fifo->buffer_addr_virt = (mbox_fifo + mlist)->buffer_address_virt;
                 init_fifo->buffer_addr_phy = (mbox_fifo + mlist)->buffer_address_phy;
-		pr_err("%s-%d\n",__func__,__LINE__);
                 ret = fifo_init((mbox_fifo + mlist)->fifo, init_fifo);
   //              fifo_info((mbox_fifo + mlist)->fifo);
                 if (ret != VPI_SUCCESS)
@@ -156,91 +153,19 @@ int mbox_mem_map(MboxFifoCtrl *mbox_fifo, MboxCoreId core_id,
 EXPORT_SYMBOL_GPL(mbox_mem_map);
 
 
-
-#if 0
-int mbox_mem_map(MboxFifoCtrl *mbox_fifo, MboxCoreId core_id,
-                        uint64_t shm_start_addr,uint64_t shm_start_addr_phy, uint32_t shm_block_size)
-{
-    MboxCoreId i, j;
-    uint32_t mlist, ret;
-    uint64_t buffer_addr_virt = shm_start_addr; //Virtual Address 
-    uint64_t buffer_addr_phy = shm_start_addr_phy;
- 
-   FifoInitData *init_fifo = NULL;
-	
-    init_fifo = (FifoInitData *)kmalloc(sizeof(FifoInitData),GFP_KERNEL);
-
-    pr_err("mbox_mem_map entering... coreid %d \n",core_id);
-    if (NULL == init_fifo)
-        return VPI_ERR_NOMEM;
-
-    init_fifo->item_size = sizeof(MboxPostMsg);
-    init_fifo->buffer_size = shm_block_size - ((sizeof(FifoControl) + 7) / 8 * 8);
-//    pr_err("%s-%d init_fifo->buffer_size : 0x%llx\n",__func__,__LINE__,init_fifo->buffer_size);
-    init_fifo->item_total = init_fifo->buffer_size / init_fifo->item_size;
-
-    mlist = 0;
-    for (i = 0; i < MBOX_CORE_MAX; i++)
-        for (j = 0; j < MBOX_CORE_MAX; j++) {
-//		pr_err("AJAY::%s-%d i=%d j=%d mlist=%dbuffer_addr=0x%llxshm_block_size=0x%llxsizeof(FifoControl):%d \n",__func__,__LINE__,i,j,mlist,buffer_addr_virt,shm_block_size,sizeof(FifoControl));
-            if (i == j) /*self to self is not need*/
-                continue;
-            if (i == MBOX_CORE_RPU0 && j == i + 1) /*RPU0 to RPU1 is not need*/
-                continue;
-            if (i == MBOX_CORE_RPU1 && j == i - 1) /*RPU1 to RPU0 is not need*/
-                continue;
-
-            if (i == core_id || j == core_id) {
-                g_mem_list[i][j] = mlist;
-                (mbox_fifo + mlist)->core_id = core_id;
-                (mbox_fifo + mlist)->buffer_address_phy =
-                    buffer_addr_phy + ((sizeof(FifoControl) ) ); //Storing phy addr here as RPU will read this adrress from register
-                (mbox_fifo + mlist)->buffer_address_virt =
-                    buffer_addr_virt + ((sizeof(FifoControl) ) ); //Storing phy addr here as RPU will read this adrress from register
-//pr_err("%s-%d mlist : %d buffer_addr_virt : 0x%x mlist : 0x%llx size of FIFO_CTL : 0x%llx  \n",__func__,__LINE__,mlist,(buffer_addr_virt + ((sizeof(FifoControl)))),(mbox_fifo + mlist)->buffer_address_virt,sizeof(FifoControl));
-                (mbox_fifo + mlist)->sender_id   = i;
-                (mbox_fifo + mlist)->receiver_id = j;
-                (mbox_fifo + mlist)->fifo =
-                    (FifoControl *)(uint64_t)(buffer_addr_virt); //buffer_addr == 0 for first time
-
-                pr_err(" buffer addr i-%d,j-%d, buffadd %llx\n",i,j, (mbox_fifo + mlist)->buffer_address_phy);
-
-                init_fifo->buffer_addr_virt = (mbox_fifo + mlist)->buffer_address_virt;
-                init_fifo->buffer_addr_phy = (mbox_fifo + mlist)->buffer_address_phy;
-		pr_err("%s-%d\n",__func__,__LINE__);
-                ret = fifo_init((mbox_fifo + mlist)->fifo, init_fifo);
-  //              fifo_info((mbox_fifo + mlist)->fifo);
-                if (ret != VPI_SUCCESS)
-                    return ret;
-                mlist++;
-            }
-            buffer_addr_virt += shm_block_size;
-	    buffer_addr_phy += shm_block_size;
-        }
-
-    kfree(init_fifo);
-
-    return VPI_SUCCESS;
-}
-EXPORT_SYMBOL_GPL(mbox_mem_map);
-#endif
 MboxFifoCtrl *vpi_mbox_init(MboxCoreId core_id, uint64_t shm_addr,uint64_t shm_addr_phy,
                             uint64_t shm_block_size)
 {
     MboxFifoCtrl *mbox_fifo = NULL;
 
-//    pr_err("%s-%d Virtual Address shm_addr : 0x%llx\n",__func__,__LINE__,shm_addr);
-  //  pr_err("vpi_mbox_init coreid -> %d \n",core_id);
     if (core_id < 0 || core_id >= MBOX_CORE_MAX)
         return NULL;
 
     mbox_fifo = (MboxFifoCtrl *)kmalloc(sizeof(MboxFifoCtrl) *
                                            ((MBOX_CORE_MAX - 1) * 2),GFP_KERNEL);
 
-    //pr_err("%x <- mbox_fifo \n",mbox_fifo);
     if (NULL == mbox_fifo)
         return NULL;
-    //pr_err("%s-%d shm_addr=%llx,shm_addr_phy=%llx",shm_addr,shm_addr_phy);	
     if (VPI_SUCCESS !=
         mbox_mem_map(mbox_fifo, core_id, shm_addr,shm_addr_phy, shm_block_size))
     {
@@ -281,16 +206,21 @@ int vpi_mbox_post(MboxFifoCtrl *mbox_fifo, MboxPostMsg *msg, MboxCoreId receiver
                   MboxDriverCb mbox_driver_cb)
 {
     uint16_t ret;
- //   MboxPostMsg msg1;
-   // MboxFifoCtrl mbox_fifo1;
 
     if (VPI_ERR_UNINITED == mbox_fifoctrl_init_check(mbox_fifo))
+    {
         return VPI_ERR_UNINITED;
+    }
+
     if (NULL == msg)
+    {
         return VPI_ERR_INVALID;
+    }
     if (VPI_ERR_INVALID ==
         mbox_core_id_check(mbox_fifo, mbox_fifo->core_id, receiver_id))
+        {
         return VPI_ERR_INVALID;
+        }
 
 	
     ret = fifo_write(msg,
@@ -298,9 +228,13 @@ int vpi_mbox_post(MboxFifoCtrl *mbox_fifo, MboxPostMsg *msg, MboxCoreId receiver
                         ->fifo);
 	
     if (ret != VPI_SUCCESS)
+    {
         return ret;
+    }
     if (!mbox_driver_cb)
+    {
         return VPI_ERR_INVALID;
+    }
     mbox_driver_cb(receiver_id);
     return VPI_SUCCESS;
 }

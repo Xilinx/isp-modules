@@ -1,8 +1,5 @@
-/****************************************************************************
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
+/*
+ * Copyright 2025 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -16,41 +13,19 @@
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
  *
- *****************************************************************************
- *
- * The GPL License (GPL)
- *
- * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program;
- *
- *****************************************************************************
- *
- * Note: This software is released under dual MIT and GPL licenses. A
- * recipient may use this file under the terms of either the MIT license or
- * GPL License. If you wish to use only one license not the other, you can
- * indicate your decision by deleting one of the above license notices in your
- * version of this file.
- *
- *****************************************************************************/
- 
+ */
+
+
+#ifndef __AMD_ISP_MIMO_H__
+#define __AMD_ISP_MIMO_H__
+
+
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/syscalls.h>
@@ -72,6 +47,9 @@
 #include "mbox_cmd.h"
 #include "vvcam_isp_app.h"
 #include "amd_mbox_driver.h"
+#include <media/v4l2-device.h>
+#include <media/v4l2-subdev.h>
+#include <linux/miscdevice.h>
 
 #define MAX_SUPPORTED_DEVICE_COUNT 1
 #define MEM2MEM_NAME		"isp_m2m"
@@ -99,12 +77,32 @@
 #define DEFAULT_WIDTH	(1920)
 #define DEFAULT_HEIGHT	(1080)
 
+struct vvcam_video_event_shm {
+    struct mutex event_lock;
+    uint64_t phy_addr;
+    void *virt_addr;
+    uint32_t size;
+};
+
+struct vvcam_video_reserve_mem {
+    dma_addr_t pa;
+    int size;
+    void *va;
+};
+
+
 struct isp_mimo {
 	struct v4l2_device	v4l2_dev;
 	struct video_device	video_dev;
+     struct v4l2_subdev subdev;
 	struct v4l2_m2m_dev	*m2m_dev;
 	struct mutex 		lock;
     struct vvcam_isp_dev 	*isp_dev;
+    struct media_device mdev;
+	struct vvcam_video_reserve_mem reserve_mem;
+    struct vvcam_video_event_shm event_shm;
+    struct work_struct event_work;
+    struct miscdevice event_misc;
 };
 
 struct visp_format
@@ -119,10 +117,12 @@ struct isp_mimo_ctx {
 	struct isp_mimo	*device;
 	struct v4l2_format 	fmt[2];
 	uint64_t 		sequence;
+    int id;
 };
 
 extern int MediaIspHalSetFmt(struct vvcam_isp_dev *isp_dev, int Pad, MediaFmt *Format);
 extern int MediaIspDeviceStreamOn(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
+extern int MediaIspDeviceStreamOnOut(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
 extern int MediaIspStreamOff(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
 extern int MediaIspDeviceDeque(struct vvcam_isp_dev *isp_dev, uint8_t Port);
 extern int vvcam_isp_pads_init(struct vvcam_isp_dev *isp_dev);
@@ -186,3 +186,4 @@ int isp_mimo_open(struct file *file);
   int queue_init(void *priv, struct vb2_queue *src_vq,
 		      				struct vb2_queue *dst_vq);
 
+#endif

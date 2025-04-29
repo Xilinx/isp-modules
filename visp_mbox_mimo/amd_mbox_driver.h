@@ -63,7 +63,6 @@ void xlnx_mbox_apu_wait_for_ack(struct vvcam_isp_dev *isp_dev);
 void mailbox_init(uint32_t cpu,uint64_t MBOX_FIFO_START_ADDR,uint64_t MBOX_FIFO_START_ADDR_PHY);
 uint8_t xlnx_mbox_apu_wait_for_data(struct vvcam_isp_dev *isp_dev,void *data);
 extern int Handle_Frameout_Buffer(void * Enque_Buff_L, struct vvcam_isp_dev *isp_dev);
-//int (* exported_func1)(void *,struct vvcam_isp_dev *isp_dev);
 #if 1
 typedef struct payload_user_template {
 

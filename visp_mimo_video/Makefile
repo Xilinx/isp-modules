@@ -9,6 +9,7 @@ obj-m := $(TARGET).o
 #  $(CC) $(CFLAGS) -c $< -o $@
 $(TARGET)-objs += amd_isp_mimo_driver.o
 $(TARGET)-objs += amd_isp_mimo_driver_utils.o
+$(TARGET)-objs += vvcam_video_event.o
 
 EXTRA_CFLAGS += -I$(PWD)/common/
 EXTRA_CFLAGS := -I$(PWD)/visp_mimo_video

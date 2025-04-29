@@ -691,7 +691,7 @@ static int reserved_memory_init(const char *node_name)
 		return -ENOMEM;
 	}
 
-	pr_info(
+	pr_debug(
 		"reserved_memory_init: Successfully initialized reserved memory for "
 		"node '%s'.\n",
 		node_name);

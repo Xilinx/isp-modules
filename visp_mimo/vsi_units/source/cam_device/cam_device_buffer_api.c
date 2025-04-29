@@ -56,7 +56,6 @@
 #include "cam_device_buffer_api.h"
 #include "cam_device.h"
 #include "cam_device_api.h"
-//#include "mailbox.h"
 #include "sensor_cmd.h"
 #include "kmbox.h"
 #include "vvcam_isp_driver.h"
@@ -115,18 +114,6 @@ RESULT VsiCamDeviceInitBufChain
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-
-#if 0
-p_data = packet->payload;
-memset(p_data,0,packet->payload_size + payload_extra_size);
-p_data[4]=2;
-p_data[8]=1;
-p_data[12]=10;
-p_data[16]=1;
-p_data[20]=244;
-p_data[21]=1;
-#endif
-
 
 #if 1
     mutex_lock(&isp_dev->mlock);
@@ -250,14 +237,6 @@ RESULT VsiCamDeviceCreateBufPool
     packet->payload_size += sizeof(CamDeviceBufChainId_t);
     p_data += sizeof(CamDeviceBufChainId_t);
 
-//    memcpy(p_data, &(hBufferPoolSetupCfg->bufIo), sizeof(CamDeviceBufChainId_t));
-//    packet.payload_size += sizeof(CamDeviceBufChainId_t);
-//    p_data += sizeof(CamDeviceBufChainId_t);
-//
-//    memcpy(p_data, &(hBufferPoolSetupCfg->bufferChain), sizeof(CamDeviceBufChainConfig_t));
-//	packet.payload_size += sizeof(CamDeviceBufChainConfig_t);
-//	p_data += sizeof(CamDeviceBufChainConfig_t);
-
     memcpy(p_data, &(hBufferPoolCfg->bufMode), sizeof(CamDeviceBufMode_t));
 	packet->payload_size += sizeof(CamDeviceBufMode_t);
 	p_data += sizeof(CamDeviceBufMode_t);
@@ -291,7 +270,6 @@ RESULT VsiCamDeviceCreateBufPool
     }
 #if 1
     mutex_lock(&isp_dev->mlock);
-    dev_info(isp_dev->dev ," [APU]-%sSEND COOKIE == %d\n",__func__,packet->cookie);
     result= Send_Command( APU_2_RPU_MB_CMD_CREATE_BUFFER_POOL , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
     if(0 != result) {
         kfree(packet);
@@ -400,12 +378,10 @@ RESULT VsiCamDeviceSetupBufMgmt
 
     p_data = packet->payload;
     memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
-    dev_info(isp_dev->dev ," [APU]-%sSEND p_data instanceID = %d\n",__func__,*p_data);
     packet->payload_size += sizeof(uint32_t);
     p_data += sizeof(uint32_t);
 
     memcpy(p_data, &bufId, sizeof(CamDeviceBufChainId_t));
-    printk(KERN_INFO" [APU]-%sSEND p_data bufId = %d==%d\n",__func__,*p_data,bufId);
     packet->payload_size += sizeof(CamDeviceBufChainId_t);
     p_data += sizeof(CamDeviceBufChainId_t);
 
@@ -586,7 +562,6 @@ RESULT VsiCamDeviceDeQueBuffer
     	return RET_OUTOFRANGE;
 
 #if 1
-//    mutex_lock(&isp_dev->mlock);
     result = Send_Command(APU_2_RPU_MB_CMD_DEQUE_BUFFER , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
     if(0 != result) {
         kfree(packet);
@@ -635,21 +610,8 @@ RESULT VsiCamDeviceDeQueBuffer
     memcpy(&((*pMediaBuf)->pOwner), p_data, sizeof(uint32_t));
 
 
-#if 0
-    result = Send_Command(APU_2_RPU_MB_CMD_ENQUE_BUFFER , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
-
-#endif
-
-
-  //  mutex_unlock(&isp_dev->mlock);
 	kfree(packet);
 
-//	dev_err(isp_dev->dev ,"RKC-DRV-DQ_GOT_DQ_ACK_CNT=%d \n",DRV_DQ_CNT);
     return result;
 }
 
@@ -701,12 +663,8 @@ RESULT VsiCamDeviceEnQueBuffer
     packet->payload_size += sizeof(CamDeviceBufChainId_t);
     p_data += sizeof(CamDeviceBufChainId_t);
 
-    if(pMediaBuf->pMetaData) {
-//    	kfree(pMediaBuf->pMetaData); //TODO
-    }
 #if 1
     memcpy(p_data, &(pMediaBuf->baseAddress), sizeof(uint32_t));
-//	dev_err(isp_dev->dev ,"[RKC-ISP-DRV] %x\n",(uint32_t *)p_data);
     packet->payload_size += sizeof(uint32_t);
     p_data += sizeof(uint32_t);
 
@@ -739,20 +697,12 @@ RESULT VsiCamDeviceEnQueBuffer
     memcpy(p_data, &((pMediaBuf)->pOwner), sizeof(uint32_t));
     packet->payload_size += sizeof(uint32_t);
     p_data += sizeof(uint32_t);
-// RANJITH THE BELOW CODE is ADDED due to some memcpy issue
-#if 0
-    memcpy(p_data, &((pMediaBuf)->pIplAddress), sizeof(uint32_t));
-    packet->payload_size += sizeof(uint32_t);
-    p_data += sizeof(uint32_t);
-#endif
 
-//    kfree(pMediaBuf);
 
     if(packet->payload_size > MAX_ITEM)
     	return RET_OUTOFRANGE;
 #if 1
 
-    //mutex_lock(&isp_dev->mlock); 	//--TODO
     result = Send_Command(APU_2_RPU_MB_CMD_ENQUE_BUFFER , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
     if(0 != result) {
     kfree(packet);
@@ -763,8 +713,6 @@ RESULT VsiCamDeviceEnQueBuffer
     kfree(pMediaBuf);  
 #endif
 
-//    xlnx_mbox_apu_wait_for_ack(isp_dev);
-  //mutex_unlock(&isp_dev->mlock);
 
     kfree(packet);
 
@@ -809,7 +757,6 @@ RESULT VsiCamDeviceGetBufferSize
     p_data += sizeof(uint32_t);
 
     memcpy(p_data, &bufId, sizeof(CamDeviceBufChainId_t));
-    dev_info(isp_dev->dev , "RDMA p_data=%d==%d\n",*p_data,bufId);
     packet->payload_size += sizeof(CamDeviceBufChainId_t);
     p_data += sizeof(CamDeviceBufChainId_t);
 
@@ -835,16 +782,14 @@ RESULT VsiCamDeviceGetBufferSize
         return -1;
     }
     memcpy(pBufSize, p_data, sizeof(uint32_t));
-	//dev_info(isp_dev->dev , "[RKC-ISP] %s %d byte_zise=%x==%x==%x \n",__func__,__LINE__,*(uint32_t *)p_data,(uint32_t *)p_data,*pBufSize);
 	if((*pBufSize)==0)
 	{
-	    dev_err(isp_dev->dev , "RKC-INVALID BUF SIZE = 0 %d \n",-EINVAL);
+	    dev_err(isp_dev->dev , "INVALID BUF SIZE = 0 %d \n",-EINVAL);
         return -EINVAL;
 	}
     mutex_unlock(&isp_dev->mlock);
 
     kfree(packet);
-	loge("[RKC-ISP] %s %d\n",__func__,__LINE__);
     return result;
 }
 

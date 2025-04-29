@@ -50,6 +50,7 @@
  * version of this file.
  *
  *****************************************************************************/
+
 #ifndef __VVCAM_ISP_EE_H__
 #define __VVCAM_ISP_EE_H__
 

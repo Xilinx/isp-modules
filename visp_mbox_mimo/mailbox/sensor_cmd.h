@@ -600,28 +600,10 @@ typedef enum payload_type {
 } Payload_type;
 #endif
 
-//
 typedef struct response_field{
    uint32_t processed_cmdid;
    uint32_t error_subcode_t;
 }response_field_t;
-
-/*typedef struct response_template {
-	Payload_type payload_type;
-	uint8_t return_res;
-	uint32_t cookie;
-	MBCmdId_E cmdid;
-	uint32_t error_subcode;
-	//uint32_t resp_payload[64];
-} Response_packet;
-*/
-/*typedef struct payload_template {
-	Payload_type type;
-	uint8_t return_res;
-	uint32_t cookie;
-    	uint32_t payload_size;
-    	uint8_t payload[MAX_ITEM];
-}payload_packet;*/
 
 typedef struct payload_template {
    Payload_type type;
@@ -630,13 +612,6 @@ typedef struct payload_template {
     response_field_t resp_field;
     uint8_t payload[MAX_ITEM];
 }payload_packet;
-/*
-struct resource_table  {
-	uint8_t rpu0_ready;
-	uint8_t rpu1_ready;
-	uint8_t apu_ready;
-};
-*/
 
 int Send_Command(MBCmdId_E cmd, void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu );
 

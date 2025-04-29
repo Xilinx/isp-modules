@@ -65,7 +65,6 @@ typedef struct {
 int MediaIspHalCreate(MediaEntityAttr *MediaEntity);
 int MediaIspHalDestroy(MediaEntityAttr *MediaEntity);
 void* MediaIspHalEventListenThread(void *Param);
-//int MediaIspHalBufDone(MediaEntityAttr *MediaEntity, int pad, MediaBuf *Buf);
 
 #ifdef __cplusplus
 }

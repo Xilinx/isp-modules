@@ -63,7 +63,6 @@
 #include <media/v4l2-ctrls.h>
 #include <media/videobuf2-dma-contig.h>
 #include "vvcam_v4l2_common.h"
-//RKC-TODO Check if below headers were required in M13
 #include "media_isp.h"
 #include <linux/of.h>
 #include <linux/of_device.h>
@@ -142,16 +141,7 @@ struct vvcam_isp_event_shm {
 
 #define MAX_IBA_PER_ISP 5
 
-#if 0
-struct iba_info {
-   u32 ppc;
-   u32 vcid;
-   u32 frame_rate;
-   u32 data_format;
-   u32 max_width;
-   u32 max_height;
-};
-#endif
+
 typedef struct iba_info {
    u32 baseaddress;
    u32 iba_id;   
@@ -178,8 +168,6 @@ struct vvcam_isp_sensor_info {
     uint32_t sensor_id;
 };
 
-
-
 struct vvcam_isp_port_info {
     uint32_t vcid;
     uint32_t data_format;
@@ -188,6 +176,7 @@ struct vvcam_isp_port_info {
     uint32_t fps;
     uint32_t mode;
 };
+
 struct vvcam_isp_ext_dma_buf {
     uint64_t addr;
 	void *vaddr;
@@ -203,6 +192,11 @@ struct rpu_dev {
     struct cdev cdev;
     struct mutex lock;
     struct mutex ack_lock;
+    struct mutex read_lock;
+    struct mutex rpu_lock;
+    struct mutex write_lock;
+	struct mutex userapp_lock;
+    int app_wait_flag;
     struct list_head node;
     struct kref refcount;
     struct tasklet_struct tasklet;	
