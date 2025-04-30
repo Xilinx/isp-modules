@@ -149,6 +149,7 @@
 #define V4L2_PIX_FMT_I40DWA v4l2_fourcc('I', '4', '0', 'D')
 #endif
 
+
 /////////////////////////////////////////////////////////
 // RGB
 // RGB888
@@ -321,57 +322,58 @@
 #define V4L2_PIX_FMT_SRGGB24 v4l2_fourcc('R', 'G', '2', '4')
 #endif
 
+
 /* media bus format */
 #ifndef MEDIA_BUS_FMT_RGB888_3X8
-#define MEDIA_BUS_FMT_RGB888_3X8 0x101c
+#define MEDIA_BUS_FMT_RGB888_3X8        0x101c
 #endif
 
 #ifndef MEDIA_BUS_FMT_SBGGR14_1X14
-#define MEDIA_BUS_FMT_SBGGR14_1X14 0x3019
+#define MEDIA_BUS_FMT_SBGGR14_1X14      0x3019
 #endif
 
 #ifndef MEDIA_BUS_FMT_SGBRG14_1X14
-#define MEDIA_BUS_FMT_SGBRG14_1X14 0x301a
+#define MEDIA_BUS_FMT_SGBRG14_1X14      0x301a
 #endif
 
 #ifndef MEDIA_BUS_FMT_SGRBG14_1X14
-#define MEDIA_BUS_FMT_SGRBG14_1X14 0x301b
+#define MEDIA_BUS_FMT_SGRBG14_1X14      0x301b
 #endif
 
 #ifndef MEDIA_BUS_FMT_SRGGB14_1X14
-#define MEDIA_BUS_FMT_SRGGB14_1X14 0x301c
+#define MEDIA_BUS_FMT_SRGGB14_1X14      0x301c
 #endif
 
 #ifndef MEDIA_BUS_FMT_SBGGR16_1X16
-#define MEDIA_BUS_FMT_SBGGR16_1X16 0x301d
+#define MEDIA_BUS_FMT_SBGGR16_1X16       0x301d
 #endif
 
 #ifndef MEDIA_BUS_FMT_SGBRG16_1X16
-#define MEDIA_BUS_FMT_SGBRG16_1X16 0x301e
+#define MEDIA_BUS_FMT_SGBRG16_1X16       0x301e
 #endif
 
 #ifndef MEDIA_BUS_FMT_SGRBG16_1X16
-#define MEDIA_BUS_FMT_SGRBG16_1X16 0x301f
+#define MEDIA_BUS_FMT_SGRBG16_1X16       0x301f
 #endif
 
 #ifndef MEDIA_BUS_FMT_SRGGB16_1X16
-#define MEDIA_BUS_FMT_SRGGB16_1X16 0x3020
+#define MEDIA_BUS_FMT_SRGGB16_1X16       0x3020
 #endif
 
 #ifndef MEDIA_BUS_FMT_SBGGR24_1X24
-#define MEDIA_BUS_FMT_SBGGR24_1X24 0x3021
+#define MEDIA_BUS_FMT_SBGGR24_1X24       0x3021
 #endif
 
 #ifndef MEDIA_BUS_FMT_SGBRG24_1X24
-#define MEDIA_BUS_FMT_SGBRG24_1X24 0x3022
+#define MEDIA_BUS_FMT_SGBRG24_1X24       0x3022
 #endif
 
 #ifndef MEDIA_BUS_FMT_SGRBG24_1X24
-#define MEDIA_BUS_FMT_SGRBG24_1X24 0x3023
+#define MEDIA_BUS_FMT_SGRBG24_1X24       0x3023
 #endif
 
 #ifndef MEDIA_BUS_FMT_SRGGB24_1X24
-#define MEDIA_BUS_FMT_SRGGB24_1X24 0x3024
+#define MEDIA_BUS_FMT_SRGGB24_1X24       0x3024
 #endif
 
 #endif

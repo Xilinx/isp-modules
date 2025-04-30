@@ -501,7 +501,7 @@ RESULT VsiCamDeviceSensorGetInfo
  *****************************************************************************/
 RESULT VsiCamDeviceSensorOpen
 (
-    struct vvcam_isp_dev *isp_dev,
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     uint32_t          modeIndex
 );
@@ -522,7 +522,7 @@ RESULT VsiCamDeviceSensorOpen
  *****************************************************************************/
 RESULT VsiCamDeviceSensorClose
 (
-    struct vvcam_isp_dev *isp_dev,
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice
 );
 
@@ -539,7 +539,7 @@ RESULT VsiCamDeviceSensorClose
  *****************************************************************************/
 RESULT VsiCamDeviceSensorDrvHandleRegister
 (
-    struct vvcam_isp_dev *isp_dev,
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
 	const CamDeviceSensorDrvCfg_t *pSensorDrv
 );
@@ -556,7 +556,7 @@ RESULT VsiCamDeviceSensorDrvHandleRegister
  *****************************************************************************/
 RESULT VsiCamDeviceSensorDrvHandleUnRegister
 (
-    struct vvcam_isp_dev *isp_dev,
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice
 );
 
@@ -574,7 +574,7 @@ RESULT VsiCamDeviceSensorDrvHandleUnRegister
  *****************************************************************************/
 RESULT VsiCamDeviceSensorSetTestPattern
 (
-    struct vvcam_isp_dev *isp_dev,
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     const CamDeviceSensorTestPattern_t *pTestPattern
 );
@@ -598,7 +598,7 @@ RESULT VsiCamDeviceSensorSetTestPattern
  *****************************************************************************/
 RESULT VsiCamDeviceSensorMapping
 (
-    struct vvcam_isp_dev *isp_dev,
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     const char *pSensorName,
     CamDeviceSensorDrvHandle_t *pSensorDrvhandle
@@ -660,7 +660,7 @@ RESULT VsiCamDeviceSensorGetRegister
  *****************************************************************************/
 RESULT VsiCamDeviceSensorSetFrameRate
 (
-    struct vvcam_isp_dev *isp_dev,
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     /*float32_t **/uint32_t *pFps
 );
@@ -724,7 +724,7 @@ RESULT VsiCamDeviceSensorGetModeInfo
  *****************************************************************************/
 RESULT VsiCamDeviceSensorQuery
 (
-    struct vvcam_isp_dev *isp_dev,
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     CamDeviceSensorQuery_t *pQuery
 );
@@ -1020,7 +1020,7 @@ RESULT VsiCamDeviceSensorGetListInfo
  *****************************************************************************/
 RESULT VsiCamDeviceSensorGetConnectPortInfo
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t   hCamDevice,
     CamDeviceMcmPortId_t  portId,
     CamDeviceSensorConnectPortInfo_t *pPortInfo

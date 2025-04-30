@@ -31,10 +31,10 @@
 #include "cam_device_common.h"
 #include "cam_device_calibration.h"
 #include "iba.h"
-#include "vvcam_isp_driver.h"
+#include "visp_driver.h"
 #define MAX_IBA_PER_TILE     5UL
 
-#define AMD_PLATFORM
+#define VISP_PLATFORM
 typedef enum iba_id{
 	IBA_0,
 	IBA_1,
@@ -147,8 +147,8 @@ typedef struct iba_map {
 	int IsReady;  //TODO : Need to remove this
 }  __attribute((__packed__)) __attribute((aligned(8))) iba_map_t ;
 
-//int IBA_init_send_command(struct vvcam_isp_dev *isp_dev,);
-int IBA_init_send_command(struct vvcam_isp_dev *isp_dev,CamDeviceHandle_t hCamDevice);
+//int IBA_init_send_command(struct visp_dev *isp_dev,);
+int IBA_init_send_command(struct visp_dev *isp_dev,CamDeviceHandle_t hCamDevice);
 
 #define IBA_WriteReg(BaseAddress, RegOffset, Data) \
     Xil_Out32( (UINTPTR)(((u8 *)BaseAddress) + (RegOffset)), (u32)(Data)) ; xil_printf("RPU:IBA reg add 0x%x ,val 0x%x \n",(UINTPTR)(((u8 *)BaseAddress) + (RegOffset)),Data);

@@ -53,42 +53,42 @@
 
 
 
-#ifndef __vvcam_isp_COMMON_H__
-#define __vvcam_isp_COMMON_H__
+#ifndef __visp_COMMON_H__
+#define __visp_COMMON_H__
 
-int vvcam_isp_buf_done(struct v4l2_subdev *sd, void *arg);
-int vvcam_isp_set_frame_interval_public(struct vvcam_isp_dev *isp_dev, struct v4l2_subdev_frame_interval *fi);
-int vvcam_isp_set_fmt_public(struct vvcam_isp_dev *isp_dev, struct v4l2_subdev_format *format);
-int MediaIspDeviceSetFrameRate(struct vvcam_isp_dev *isp_dev, uint8_t Port,  uint32_t *FrameRate);
-int MediaIspDeviceStreamOn(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
-int MediaIspDeviceStreamOnOut(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
-int IspDeviceDestroy(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
-int IspDestroyCamDevice(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
-int IspDestroyPipeline(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
-int MediaIspStreamOff(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
-int MediaIspDeviceQbuf(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn, MediaBuf *Buf);
-int MediaIspQBuf(struct vvcam_isp_dev *isp_dev, int Pad_index, MediaBuf *Buf);
+int visp_buf_done(struct v4l2_subdev *sd, void *arg);
+int visp_set_frame_interval_public(struct visp_dev *isp_dev, struct v4l2_subdev_frame_interval *fi);
+int visp_set_fmt_public(struct visp_dev *isp_dev, struct v4l2_subdev_format *format);
+int MediaIspDeviceSetFrameRate(struct visp_dev *isp_dev, uint8_t Port,  uint32_t *FrameRate);
+int MediaIspDeviceStreamOn(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
+int MediaIspDeviceStreamOnOut(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
+int IspDeviceDestroy(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
+int IspDestroyCamDevice(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
+int IspDestroyPipeline(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
+int MediaIspStreamOff(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
+int MediaIspDeviceQbuf(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn, MediaBuf *Buf);
+int MediaIspQBuf(struct visp_dev *isp_dev, int Pad_index, MediaBuf *Buf);
 int MediaIspHalMbusFmtToMediaFmt(uint32_t *Code, uint32_t *PixelFormat, uint32_t Fourcc);
-int MediaIspDeviceSetFormat(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t Chn);
-int MediaIspCalibGetModeInfo(struct vvcam_isp_dev *isp_dev, uint8_t Port, CamDeviceSensorModeInfo_t *ModeInfo);
-int MediaIspCalibGetSensorName(struct vvcam_isp_dev *isp_dev, uint8_t Port, char *SensorName);
-int MediaIspCalibGetSensorMode(struct vvcam_isp_dev *isp_dev, uint8_t Port, uint8_t *SensorMode);
-int MediaIspDeviceSensorOpen(struct vvcam_isp_dev *isp_dev, uint8_t Port);
-int MediaIspDeviceCameraConnect(struct vvcam_isp_dev *isp_dev, uint8_t Index);
-int MediaIspCalibQuerySensor(struct vvcam_isp_dev *isp_dev, uint8_t Port);
-int MediaIspCalibLoadIspConfig(struct vvcam_isp_dev *isp_dev, uint8_t Port);
-int MediaIspHalSetFmt(struct vvcam_isp_dev *isp_dev, int Pad, MediaFmt *Format);
-int MediaIspSetFormat(struct vvcam_isp_dev *isp_dev, uint32_t pad_index, MediaFmt Format_t);
-int MediaIspSetFrameRate(struct vvcam_isp_dev *isp_dev, int Pad, uint32_t *FrameRate);
+int MediaIspDeviceSetFormat(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
+int MediaIspCalibGetModeInfo(struct visp_dev *isp_dev, uint8_t Port, CamDeviceSensorModeInfo_t *ModeInfo);
+int MediaIspCalibGetSensorName(struct visp_dev *isp_dev, uint8_t Port, char *SensorName);
+int MediaIspCalibGetSensorMode(struct visp_dev *isp_dev, uint8_t Port, uint8_t *SensorMode);
+int MediaIspDeviceSensorOpen(struct visp_dev *isp_dev, uint8_t Port);
+int MediaIspDeviceCameraConnect(struct visp_dev *isp_dev, uint8_t Index);
+int MediaIspCalibQuerySensor(struct visp_dev *isp_dev, uint8_t Port);
+int MediaIspCalibLoadIspConfig(struct visp_dev *isp_dev, uint8_t Port);
+int MediaIspHalSetFmt(struct visp_dev *isp_dev, int Pad, MediaFmt *Format);
+int MediaIspSetFormat(struct visp_dev *isp_dev, uint32_t pad_index, MediaFmt Format_t);
+int MediaIspSetFrameRate(struct visp_dev *isp_dev, int Pad, uint32_t *FrameRate);
 int MediaIspHalBufDone(struct v4l2_subdev *sd, int pad, const MediaBuf *Buf);
-int IspDeviceCreate(struct vvcam_isp_dev *isp_dev, uint8_t Port);
+int IspDeviceCreate(struct visp_dev *isp_dev, uint8_t Port);
 
-RESULT VsiCamDeviceAwbDisable(struct vvcam_isp_dev *isp_dev, CamDeviceHandle_t hCamDevice);
-RESULT VsiCamDeviceUnRegisterAwbLib(struct vvcam_isp_dev *isp_dev,
+RESULT VsiCamDeviceAwbDisable(struct visp_dev *isp_dev, CamDeviceHandle_t hCamDevice);
+RESULT VsiCamDeviceUnRegisterAwbLib(struct visp_dev *isp_dev,
                                     CamDeviceHandle_t hCamDevice);
-RESULT VsiCamDeviceAeDisable(struct vvcam_isp_dev *isp_dev,
+RESULT VsiCamDeviceAeDisable(struct visp_dev *isp_dev,
                              CamDeviceHandle_t hCamDevice);
-RESULT VsiCamDeviceUnRegisterAeLib(struct vvcam_isp_dev *isp_dev,
+RESULT VsiCamDeviceUnRegisterAeLib(struct visp_dev *isp_dev,
                                    CamDeviceHandle_t hCamDevice);
 
 #endif

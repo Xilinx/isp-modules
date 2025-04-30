@@ -30,7 +30,7 @@
 #include "visp_driver.h"
 #define MAX_IBA_PER_TILE 5UL
 
-#define AMD_PLATFORM
+#define VISP_PLATFORM
 typedef enum iba_id
 {
 	IBA_0,

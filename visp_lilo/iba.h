@@ -33,7 +33,7 @@
 #define MAX_IBA_PER_TILE 5UL
 
 #define MAX_IBA_PER_ISP  5
-#define AMD_PLATFORM
+#define VISP_PLATFORM
 typedef enum iba_id
 {
 	IBA_0,

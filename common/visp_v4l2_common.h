@@ -54,93 +54,71 @@
 #define __VISP_V4L2_COMMON_H__
 #include <linux/videodev2.h>
 
-struct visp_video_plane
-{
+struct visp_video_plane {
 	uint32_t dma_addr;
 	uint32_t size;
 };
 
-struct visp_vb2_buffer
-{
-	struct vb2_v4l2_buffer vb;
+struct visp_vb2_buffer {
+    struct vb2_v4l2_buffer vb;
 	unsigned int num_planes;
 	struct visp_video_plane planes[VIDEO_MAX_PLANES];
-	struct list_head list;
-	uint32_t sequence;
+    struct list_head list;
+    uint32_t sequence;
 };
 
-struct visp_pad_reqbufs
-{
-	int pad;
-	uint32_t num_buffers;
+struct visp_pad_reqbufs {
+    int pad;
+    uint32_t num_buffers;
 };
 
-struct visp_pad_buf
-{
-	uint32_t pad;
-	struct visp_vb2_buffer *buf;
+struct visp_pad_buf {
+    uint32_t pad;
+    struct visp_vb2_buffer *buf;
 };
 
-struct visp_pad_stream_status
-{
-	uint32_t pad;
-	uint32_t status;
+struct visp_pad_stream_status {
+    uint32_t pad;
+    uint32_t status;
 };
 
-struct visp_pad_queryctrl
-{
-	uint32_t pad;
-	struct v4l2_queryctrl *query_ctrl;
+struct visp_pad_queryctrl {
+    uint32_t pad;
+    struct v4l2_queryctrl *query_ctrl;
 };
 
-struct visp_pad_query_ext_ctrl
-{
-	uint32_t pad;
-	struct v4l2_query_ext_ctrl *query_ext_ctrl;
+struct visp_pad_query_ext_ctrl {
+    uint32_t pad;
+    struct v4l2_query_ext_ctrl *query_ext_ctrl;
 };
 
-struct visp_pad_control
-{
-	uint32_t pad;
-	struct v4l2_control *control;
+struct visp_pad_control {
+    uint32_t pad;
+    struct v4l2_control *control;
 };
 
-struct visp_pad_ext_controls
-{
-	uint32_t pad;
-	struct v4l2_ext_controls *ext_controls;
+struct visp_pad_ext_controls {
+    uint32_t pad;
+    struct v4l2_ext_controls *ext_controls;
 };
 
-struct visp_pad_querymenu
-{
-	uint32_t pad;
-	struct v4l2_querymenu *querymenu;
+struct visp_pad_querymenu {
+    uint32_t pad;
+    struct v4l2_querymenu *querymenu;
 };
 
-#define VISP_PAD_REQUBUFS \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 0, struct visp_pad_reqbufs)
-#define VISP_PAD_BUF_DONE \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 1, struct visp_pad_buf)
-#define VISP_PAD_BUF_QUEUE \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 2, struct visp_pad_buf)
-#define VISP_PAD_S_STREAM \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 3, struct visp_pad_stream_status)
+#define VISP_PAD_REQUBUFS       _IOWR('V',  BASE_VIDIOC_PRIVATE + 0, struct visp_pad_reqbufs)
+#define VISP_PAD_BUF_DONE       _IOWR('V',  BASE_VIDIOC_PRIVATE + 1, struct visp_pad_buf)
+#define VISP_PAD_BUF_QUEUE      _IOWR('V',  BASE_VIDIOC_PRIVATE + 2, struct visp_pad_buf)
+#define VISP_PAD_S_STREAM       _IOWR('V',  BASE_VIDIOC_PRIVATE + 3, struct visp_pad_stream_status)
 
-#define VISP_PAD_QUERYCTRL \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 4, struct visp_pad_queryctrl)
-#define VISP_PAD_QUERY_EXT_CTRL \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 5, struct visp_pad_query_ext_ctrl)
-#define VISP_PAD_G_CTRL \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 6, struct visp_pad_control)
-#define VISP_PAD_S_CTRL \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 7, struct visp_pad_control)
-#define VISP_PAD_G_EXT_CTRLS \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 8, struct visp_pad_ext_controls)
-#define VISP_PAD_S_EXT_CTRLS \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 9, struct visp_pad_ext_controls)
-#define VISP_PAD_TRY_EXT_CTRLS \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 10, struct visp_pad_ext_controls)
-#define VISP_PAD_QUERYMENU \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 11, struct visp_pad_querymenu)
+#define VISP_PAD_QUERYCTRL      _IOWR('V',  BASE_VIDIOC_PRIVATE + 4, struct visp_pad_queryctrl)
+#define VISP_PAD_QUERY_EXT_CTRL _IOWR('V',  BASE_VIDIOC_PRIVATE + 5, struct visp_pad_query_ext_ctrl)
+#define VISP_PAD_G_CTRL         _IOWR('V',  BASE_VIDIOC_PRIVATE + 6, struct visp_pad_control)
+#define VISP_PAD_S_CTRL         _IOWR('V',  BASE_VIDIOC_PRIVATE + 7, struct visp_pad_control)
+#define VISP_PAD_G_EXT_CTRLS    _IOWR('V',  BASE_VIDIOC_PRIVATE + 8, struct visp_pad_ext_controls)
+#define VISP_PAD_S_EXT_CTRLS    _IOWR('V',  BASE_VIDIOC_PRIVATE + 9, struct visp_pad_ext_controls)
+#define VISP_PAD_TRY_EXT_CTRLS  _IOWR('V',  BASE_VIDIOC_PRIVATE + 10, struct visp_pad_ext_controls)
+#define VISP_PAD_QUERYMENU      _IOWR('V',  BASE_VIDIOC_PRIVATE + 11, struct visp_pad_querymenu)
 
 #endif

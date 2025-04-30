@@ -60,7 +60,7 @@
 #include <linux/kernel.h>
 #include<linux/module.h>
 #include <linux/arm-smccc.h>
-#include "vvcam_isp_driver.h"
+#include "visp_driver.h"
 
 #include <linux/kernel.h>
 #include <linux/ktime.h>

@@ -54,7 +54,7 @@
 #include "cam_device.h"
 #include "sensor_cmd.h"
 #include <linux/delay.h>
-#include "vvcam_isp_driver.h"
+#include "visp_driver.h"
 #include <linux/string.h>
 #include "kmbox.h"
 #include "visp_common.h"
@@ -62,7 +62,7 @@
 
 RESULT VsiCamDeviceUnRegisterAwbLib
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice
 )
 {
@@ -115,7 +115,7 @@ RESULT VsiCamDeviceUnRegisterAwbLib
 
 RESULT VsiCamDeviceAwbDisable
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t  hCamDevice
 )
 {

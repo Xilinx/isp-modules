@@ -234,7 +234,7 @@ struct visp_subdev_dma_buf
 	int size;
 };
 
-struct visp_isp_reserve_mem
+struct visp_reserve_mem
 {
 	dma_addr_t pa;
 	uint32_t size;
@@ -291,7 +291,7 @@ struct visp_dev
 #endif
 	struct visp_pad_data pad_data[VISP_PAD_NR];
 
-	struct visp_isp_reserve_mem reserve_mem;
+	struct visp_reserve_mem reserve_mem;
 	struct visp_event_shm event_shm;
 	struct v4l2_ctrl_handler ctrl_handler;
 	struct mutex ctrl_lock;

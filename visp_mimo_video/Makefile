@@ -1,15 +1,15 @@
-ifeq ($(VVCAM_PATH),)
-	VVCAM_PATH:=$(shell cd $(shell pwd)/../; pwd)
-	export VVCAM_PATH
+ifeq ($(VISP_PATH),)
+	VISP_PATH:=$(shell cd $(shell pwd)/../; pwd)
+	export VISP_PATH
 endif
 
 TARGET := visp_video_mimo
 obj-m := $(TARGET).o
 
 #  $(CC) $(CFLAGS) -c $< -o $@
-$(TARGET)-objs += amd_isp_mimo_driver.o
-$(TARGET)-objs += amd_isp_mimo_driver_utils.o
-$(TARGET)-objs += vvcam_video_event.o
+$(TARGET)-objs += visp_mimo_driver.o
+$(TARGET)-objs += visp_mimo_driver_utils.o
+$(TARGET)-objs += visp_video_event.o
 
 EXTRA_CFLAGS += -I$(PWD)/common/
 EXTRA_CFLAGS := -I$(PWD)/visp_mimo_video

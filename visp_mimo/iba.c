@@ -23,7 +23,7 @@
 
 #include "sensor_cmd.h"
 
-#include "amd_mbox_driver.h"
+#include "visp_mbox_driver.h"
 //#include "kmbox.h"
 #include "cam_device.h"
 #include "cam_device_api.h"
@@ -51,7 +51,7 @@ void print_iba_info(const iba_info_t *iba_info) {
 }
 
 
-int IBA_init_send_command(struct vvcam_isp_dev *isp_dev, CamDeviceHandle_t hCamDevice)
+int IBA_init_send_command(struct visp_dev *isp_dev, CamDeviceHandle_t hCamDevice)
 {
     int result = 0;
     payload_packet *packet;

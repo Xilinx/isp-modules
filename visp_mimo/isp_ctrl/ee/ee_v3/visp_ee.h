@@ -1,0 +1,360 @@
+/****************************************************************************
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ *
+ *****************************************************************************
+ *
+ * The GPL License (GPL)
+ *
+ * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program;
+ *
+ *****************************************************************************
+ *
+ * Note: This software is released under dual MIT and GPL licenses. A
+ * recipient may use this file under the terms of either the MIT license or
+ * GPL License. If you wish to use only one license not the other, you can
+ * indicate your decision by deleting one of the above license notices in your
+ * version of this file.
+ *
+ *****************************************************************************/
+
+#ifndef __VISP_EE_H__
+#define __VISP_EE_H__
+
+#include "visp_ctrl.h"
+
+#define VISP_CID_EE_ENABLE             (VISP_CID_EE_BASE + 0x0000)
+#define VISP_CID_EE_RESET              (VISP_CID_EE_BASE + 0x0001)
+#define VISP_CID_EE_CURVE_ENABLE       (VISP_CID_EE_BASE + 0x0002)
+#define VISP_CID_EE_CA_ENABLE          (VISP_CID_EE_BASE + 0x0003)
+#define VISP_CID_EE_DEPURPLE_ENABLE    (VISP_CID_EE_BASE + 0x0004)
+#define VISP_CID_EE_DCI_ENABLE         (VISP_CID_EE_BASE + 0x0005)
+#define VISP_CID_EE_YUV_DOMAIN_ENABLE  (VISP_CID_EE_BASE + 0x0006)
+#define VISP_CID_EE_SHARPEN_LIMIT_ENABLE \
+                                            (VISP_CID_EE_BASE + 0x0007)
+#define VISP_CID_EE_SKIN_PROC_ENABLE   (VISP_CID_EE_BASE + 0x0008)
+#define VISP_CID_EE_MODE               (VISP_CID_EE_BASE + 0x0009)
+#define VISP_CID_EE_AUTO_LEVEL         (VISP_CID_EE_BASE + 0x000A)
+#define VISP_CID_EE_AUTO_GAIN          (VISP_CID_EE_BASE + 0x000B)
+#define VISP_CID_EE_AUTO_EE_EN         (VISP_CID_EE_BASE + 0x000C)
+#define VISP_CID_EE_AUTO_STRENGTH      (VISP_CID_EE_BASE + 0x000D)
+#define VISP_CID_EE_AUTO_SRC_STRENGTH  (VISP_CID_EE_BASE + 0x000E)
+#define VISP_CID_EE_AUTO_SRC_STRENGTH_SKIN \
+                                            (VISP_CID_EE_BASE + 0x000F)
+#define VISP_CID_EE_AUTO_EDGE_NR_LEVEL (VISP_CID_EE_BASE + 0x0010)
+#define VISP_CID_EE_AUTO_DETAIL_LEVEL  (VISP_CID_EE_BASE + 0x0011)
+#define VISP_CID_EE_AUTO_DETAIL_PRE_ENHANCE_STR \
+                                            (VISP_CID_EE_BASE + 0x0012)
+#define VISP_CID_EE_AUTO_SKIN_PROC_EN  (VISP_CID_EE_BASE + 0x0013)
+#define VISP_CID_EE_AUTO_SKIN_DETECT_STR \
+                                            (VISP_CID_EE_BASE + 0x0014)
+#define VISP_CID_EE_AUTO_SKIN_THRESHOLD \
+                                            (VISP_CID_EE_BASE + 0x0015)
+#define VISP_CID_EE_AUTO_HF_MERGE_CURVE \
+                                            (VISP_CID_EE_BASE + 0x0016)
+#define VISP_CID_EE_AUTO_HF_MERGE_CURVE_SKIN \
+                                            (VISP_CID_EE_BASE + 0x0017)
+#define VISP_CID_EE_AUTO_GRAD_THRESHOLD \
+                                            (VISP_CID_EE_BASE + 0x0018)
+#define VISP_CID_EE_AUTO_GRAD_THRESHOLD_SKIN \
+                                            (VISP_CID_EE_BASE + 0x0019)
+#define VISP_CID_EE_AUTO_SHARP_CURVE_LEVEL \
+                                            (VISP_CID_EE_BASE + 0x001A)
+#define VISP_CID_EE_AUTO_SHARP_SKIN_CURVE_LEVEL \
+                                            (VISP_CID_EE_BASE + 0x001B)
+#define VISP_CID_EE_AUTO_SHARP_GAIN    (VISP_CID_EE_BASE + 0x001C)
+#define VISP_CID_EE_AUTO_SHARP_SKIN_GAIN \
+                                            (VISP_CID_EE_BASE + 0x001D)
+#define VISP_CID_EE_AUTO_SHARP_UV_GAIN (VISP_CID_EE_BASE + 0x001E)
+#define VISP_CID_EE_AUTO_SHARP_LIMIT   (VISP_CID_EE_BASE + 0x001F)
+#define VISP_CID_EE_AUTO_SHARP_SKIN_LIMIT \
+                                            (VISP_CID_EE_BASE + 0x0020)
+#define VISP_CID_EE_AUTO_DEPURPLE_EN   (VISP_CID_EE_BASE + 0x0021)
+#define VISP_CID_EE_AUTO_DPL_LIMIT     (VISP_CID_EE_BASE + 0x0022)
+#define VISP_CID_EE_AUTO_DPL_DETECT_LUMA_THR \
+                                            (VISP_CID_EE_BASE + 0x0023)
+#define VISP_CID_EE_AUTO_DPL_DETECT_LUMA_DIFF \
+                                            (VISP_CID_EE_BASE + 0x0024)
+#define VISP_CID_EE_AUTO_DPL_COMP_LUMA_DIFF \
+                                            (VISP_CID_EE_BASE + 0x0025)
+#define VISP_CID_EE_AUTO_DPL_SAT_STR   (VISP_CID_EE_BASE + 0x0026)
+#define VISP_CID_EE_AUTO_DPL_FIX_STR   (VISP_CID_EE_BASE + 0x0027)
+#define VISP_CID_EE_AUTO_CA_ENABLE     (VISP_CID_EE_BASE + 0x0028)
+#define VISP_CID_EE_AUTO_CA_LUT_CHROMA_TBL \
+                                            (VISP_CID_EE_BASE + 0x0029)
+#define VISP_CID_EE_AUTO_DCI_EN        (VISP_CID_EE_BASE + 0x002A)
+#define VISP_CID_EE_AUTO_DCI_CURVE     (VISP_CID_EE_BASE + 0x002B)
+#define VISP_CID_EE_MANU_SRC_STRENGTH  (VISP_CID_EE_BASE + 0x0040)
+#define VISP_CID_EE_MANU_SRC_STRENGTH_SKIN \
+                                            (VISP_CID_EE_BASE + 0x0041)
+#define VISP_CID_EE_MANU_EDGE_NR_LEVEL (VISP_CID_EE_BASE + 0x0042)
+#define VISP_CID_EE_MANU_EDGE_SCALER   (VISP_CID_EE_BASE + 0x0043)
+#define VISP_CID_EE_MANU_EDGE_USE_AUXI_DIR \
+                                            (VISP_CID_EE_BASE + 0x0044)
+#define VISP_CID_EE_MANU_DETAIL_LEVEL  (VISP_CID_EE_BASE + 0x0045)
+#define VISP_CID_EE_MANU_DETAIL_SCALER (VISP_CID_EE_BASE + 0x0046)
+#define VISP_CID_EE_MANU_DETAIL_PRE_ENHANCE_STR \
+                                            (VISP_CID_EE_BASE + 0x0047)
+#define VISP_CID_EE_MANU_SKIN_DETECT_STR \
+                                            (VISP_CID_EE_BASE + 0x0048)
+#define VISP_CID_EE_MANU_SKIN_H_THR_Y_MIN \
+                                            (VISP_CID_EE_BASE + 0x0049)
+#define VISP_CID_EE_MANU_SKIN_H_THR_Y_MAX \
+                                            (VISP_CID_EE_BASE + 0x004A)
+#define VISP_CID_EE_MANU_SKIN_H_THR_CR_MIN \
+                                            (VISP_CID_EE_BASE + 0x004B)
+#define VISP_CID_EE_MANU_SKIN_H_THR_CR_MAX \
+                                            (VISP_CID_EE_BASE + 0x004C)
+#define VISP_CID_EE_MANU_SKIN_H_THR_CB_MIN \
+                                            (VISP_CID_EE_BASE + 0x004D)
+#define VISP_CID_EE_MANU_SKIN_H_THR_CB_MAX \
+                                            (VISP_CID_EE_BASE + 0x004E)
+#define VISP_CID_EE_MANU_HF_MERGE_CURVE_T0 \
+                                            (VISP_CID_EE_BASE + 0x004F)
+#define VISP_CID_EE_MANU_HF_MERGE_CURVE_T1_SHIFT \
+                                            (VISP_CID_EE_BASE + 0x0050)
+#define VISP_CID_EE_MANU_HF_MERGE_CURVE_T2 \
+                                            (VISP_CID_EE_BASE + 0x0051)
+#define VISP_CID_EE_MANU_HF_MERGE_CURVE_T3_SHIFT \
+                                            (VISP_CID_EE_BASE + 0x0052)
+#define VISP_CID_EE_MANU_HF_MERGE_CURVE_SKIN_T0 \
+                                            (VISP_CID_EE_BASE + 0x0053)
+#define VISP_CID_EE_MANU_HF_MERGE_CURVE_SKIN_T1_SHIFT \
+                                            (VISP_CID_EE_BASE + 0x0054)
+#define VISP_CID_EE_MANU_HF_MERGE_CURVE_SKIN_T2 \
+                                            (VISP_CID_EE_BASE + 0x0055)
+#define VISP_CID_EE_MANU_HF_MERGE_CURVE_SKIN_T3_SHIFT \
+                                            (VISP_CID_EE_BASE + 0x0056)
+#define VISP_CID_EE_MANU_CUTOFF_GRAD_THR_EDGE \
+                                            (VISP_CID_EE_BASE + 0x0057)
+#define VISP_CID_EE_MANU_CUTOFF_GRAD_THR_DETAIL \
+                                            (VISP_CID_EE_BASE + 0x0058)
+#define VISP_CID_EE_MANU_CUTOFF_GRAD_THR_EDGE_SKIN \
+                                            (VISP_CID_EE_BASE + 0x0059)
+#define VISP_CID_EE_MANU_CUTOFF_GRAD_THR_DETAIL_SKIN \
+                                            (VISP_CID_EE_BASE + 0x005A)
+#define VISP_CID_EE_MANU_ENHANCE_STRENGTH \
+                                            (VISP_CID_EE_BASE + 0x005B)
+#define VISP_CID_EE_MANU_SHARP_CURVE_LEVEL \
+                                            (VISP_CID_EE_BASE + 0x005C)
+#define VISP_CID_EE_MANU_SHARP_SKIN_CURVE_LEVEL \
+                                            (VISP_CID_EE_BASE + 0x005D)
+#define VISP_CID_EE_MANU_SHARP_GAIN_UP (VISP_CID_EE_BASE + 0x005E)
+#define VISP_CID_EE_MANU_SHARP_GAIN_DOWN \
+                                            (VISP_CID_EE_BASE + 0x005F)
+#define VISP_CID_EE_MANU_SHARP_GAIN_SKIN_UP \
+                                            (VISP_CID_EE_BASE + 0x0060)
+#define VISP_CID_EE_MANU_SHARP_GAIN_SKIN_DOWN \
+                                            (VISP_CID_EE_BASE + 0x0061)
+#define VISP_CID_EE_MANU_SHARP_GAIN_UV (VISP_CID_EE_BASE + 0x0062)
+#define VISP_CID_EE_MANU_SHARP_LIMIT_TYPE \
+                                            (VISP_CID_EE_BASE + 0x0063)
+#define VISP_CID_EE_MANU_SHARP_LIMIT_UP \
+                                            (VISP_CID_EE_BASE + 0x0064)
+#define VISP_CID_EE_MANU_SHARP_LIMIT_DOWN \
+                                            (VISP_CID_EE_BASE + 0x0065)
+#define VISP_CID_EE_MANU_SHARP_LIMIT_SKIN_UP \
+                                            (VISP_CID_EE_BASE + 0x0066)
+#define VISP_CID_EE_MANU_SHARP_LIMIT_SKIN_DOWN \
+                                            (VISP_CID_EE_BASE + 0x0067)
+#define VISP_CID_EE_MANU_DPL_DETECT_RANGE \
+                                            (VISP_CID_EE_BASE + 0x0068)
+#define VISP_CID_EE_MANU_DPL_U_LIMIT_UP \
+                                            (VISP_CID_EE_BASE + 0x0069)
+#define VISP_CID_EE_MANU_DPL_U_LIMIT_DOWN \
+                                            (VISP_CID_EE_BASE + 0x006A)
+#define VISP_CID_EE_MANU_DPL_V_LIMIT_UP \
+                                            (VISP_CID_EE_BASE + 0x006B)
+#define VISP_CID_EE_MANU_DPL_V_LIMIT_DOWN \
+                                            (VISP_CID_EE_BASE + 0x006C)
+#define VISP_CID_EE_MANU_DPL_DETECT_LUMA_THR \
+                                            (VISP_CID_EE_BASE + 0x006D)
+#define VISP_CID_EE_MANU_DPL_DETECT_LUMA_DIFF \
+                                            (VISP_CID_EE_BASE + 0x006E)
+#define VISP_CID_EE_MANU_DPL_COMP_LUMA_DIFF \
+                                            (VISP_CID_EE_BASE + 0x006F)
+#define VISP_CID_EE_MANU_DPL_SAT_STR   (VISP_CID_EE_BASE + 0x0070)
+#define VISP_CID_EE_MANU_DPL_FIX_STR   (VISP_CID_EE_BASE + 0x0071)
+#define VISP_CID_EE_MANU_CA_LUT_CHROMA_TBL \
+                                            (VISP_CID_EE_BASE + 0x0072)
+#define VISP_CID_EE_MANU_CA_MODE       (VISP_CID_EE_BASE + 0x0073)
+#define VISP_CID_EE_MANU_DCI_DEGAMMA   (VISP_CID_EE_BASE + 0x0074)
+#define VISP_CID_EE_MANU_DCI_LUT_LUMA_TBL \
+                                            (VISP_CID_EE_BASE + 0x0075)
+#define VISP_CID_EE_MANU_DCI_MODE      (VISP_CID_EE_BASE + 0x0076)
+#define VISP_CID_EE_MANU_DCI_LOW_LUMA_INDEX \
+                                            (VISP_CID_EE_BASE + 0x0077)
+#define VISP_CID_EE_MANU_DCI_MIDDLE_LUMA_INDEX \
+                                            (VISP_CID_EE_BASE + 0x0078)
+#define VISP_CID_EE_MANU_DCI_HIGH_LUMA_INDEX \
+                                            (VISP_CID_EE_BASE + 0x0079)
+#define VISP_CID_EE_MANU_DCI_INFLCT_START_Y \
+                                            (VISP_CID_EE_BASE + 0x007A)
+#define VISP_CID_EE_MANU_DCI_INFLCT_1_X \
+                                            (VISP_CID_EE_BASE + 0x007B)
+#define VISP_CID_EE_MANU_DCI_INFLCT_1_Y \
+                                            (VISP_CID_EE_BASE + 0x007C)
+#define VISP_CID_EE_MANU_DCI_INFLCT_2_X \
+                                            (VISP_CID_EE_BASE + 0x007D)
+#define VISP_CID_EE_MANU_DCI_INFLCT_2_Y \
+                                            (VISP_CID_EE_BASE + 0x007E)
+#define VISP_CID_EE_MANU_DCI_INFLCT_STOP_Y \
+                                            (VISP_CID_EE_BASE + 0x007F)
+#define VISP_CID_EE_STAT_SKIN_PROC_ENABLE \
+                                            (VISP_CID_EE_BASE + 0x0080)
+#define VISP_CID_EE_STAT_SRC_STRENGTH  (VISP_CID_EE_BASE + 0x0081)
+#define VISP_CID_EE_STAT_SRC_STRENGTH_SKIN \
+                                            (VISP_CID_EE_BASE + 0x0082)
+#define VISP_CID_EE_STAT_EDGE_NR_LEVEL (VISP_CID_EE_BASE + 0x0083)
+#define VISP_CID_EE_STAT_EDGE_SCALER   (VISP_CID_EE_BASE + 0x0084)
+#define VISP_CID_EE_STAT_EDGE_USE_AUXI_DIR \
+                                            (VISP_CID_EE_BASE + 0x0085)
+#define VISP_CID_EE_STAT_DETAIL_LEVEL  (VISP_CID_EE_BASE + 0x0086)
+#define VISP_CID_EE_STAT_DETAIL_SCALER (VISP_CID_EE_BASE + 0x0087)
+#define VISP_CID_EE_STAT_DETAIL_PRE_ENHANCE_STR \
+                                            (VISP_CID_EE_BASE + 0x0088)
+#define VISP_CID_EE_STAT_SKIN_DETECT_STR \
+                                            (VISP_CID_EE_BASE + 0x0089)
+#define VISP_CID_EE_STAT_SKIN_H_THR_Y_MIN \
+                                            (VISP_CID_EE_BASE + 0x008A)
+#define VISP_CID_EE_STAT_SKIN_H_THR_Y_MAX \
+                                            (VISP_CID_EE_BASE + 0x008B)
+#define VISP_CID_EE_STAT_SKIN_H_THR_CR_MIN \
+                                            (VISP_CID_EE_BASE + 0x008C)
+#define VISP_CID_EE_STAT_SKIN_H_THR_CR_MAX \
+                                            (VISP_CID_EE_BASE + 0x008D)
+#define VISP_CID_EE_STAT_SKIN_H_THR_CB_MIN \
+                                            (VISP_CID_EE_BASE + 0x008E)
+#define VISP_CID_EE_STAT_SKIN_H_THR_CB_MAX \
+                                            (VISP_CID_EE_BASE + 0x008F)
+#define VISP_CID_EE_STAT_HF_MERGE_CURVE_T0 \
+                                            (VISP_CID_EE_BASE + 0x0090)
+#define VISP_CID_EE_STAT_HF_MERGE_CURVE_T1_SHIFT \
+                                            (VISP_CID_EE_BASE + 0x0091)
+#define VISP_CID_EE_STAT_HF_MERGE_CURVE_T2 \
+                                            (VISP_CID_EE_BASE + 0x0092)
+#define VISP_CID_EE_STAT_HF_MERGE_CURVE_T3_SHIFT \
+                                            (VISP_CID_EE_BASE + 0x0093)
+#define VISP_CID_EE_STAT_HF_MERGE_CURVE_SKIN_T0 \
+                                            (VISP_CID_EE_BASE + 0x0094)
+#define VISP_CID_EE_STAT_HF_MERGE_CURVE_SKIN_T1_SHIFT \
+                                            (VISP_CID_EE_BASE + 0x0095)
+#define VISP_CID_EE_STAT_HF_MERGE_CURVE_SKIN_T2 \
+                                            (VISP_CID_EE_BASE + 0x0096)
+#define VISP_CID_EE_STAT_HF_MERGE_CURVE_SKIN_T3_SHIFT \
+                                            (VISP_CID_EE_BASE + 0x0097)
+#define VISP_CID_EE_STAT_CUTOFF_GRAD_THR_EDGE \
+                                            (VISP_CID_EE_BASE + 0x0098)
+#define VISP_CID_EE_STAT_CUTOFF_GRAD_THR_DETAIL \
+                                            (VISP_CID_EE_BASE + 0x0099)
+#define VISP_CID_EE_STAT_CUTOFF_GRAD_THR_EDGE_SKIN \
+                                            (VISP_CID_EE_BASE + 0x009A)
+#define VISP_CID_EE_STAT_CUTOFF_GRAD_THR_DETAIL_SKIN \
+                                            (VISP_CID_EE_BASE + 0x009B)
+#define VISP_CID_EE_STAT_ENHANCE_STRENGTH \
+                                            (VISP_CID_EE_BASE + 0x009C)
+#define VISP_CID_EE_STAT_SHARP_CURVE_LEVEL \
+                                            (VISP_CID_EE_BASE + 0x009D)
+#define VISP_CID_EE_STAT_SHARP_SKIN_CURVE_LEVEL \
+                                            (VISP_CID_EE_BASE + 0x009E)
+#define VISP_CID_EE_STAT_SHARP_GAIN_UP (VISP_CID_EE_BASE + 0x009F)
+#define VISP_CID_EE_STAT_SHARP_GAIN_DOWN \
+                                            (VISP_CID_EE_BASE + 0x00A0)
+#define VISP_CID_EE_STAT_SHARP_GAIN_SKIN_UP \
+                                            (VISP_CID_EE_BASE + 0x00A1)
+#define VISP_CID_EE_STAT_SHARP_GAIN_SKIN_DOWN \
+                                            (VISP_CID_EE_BASE + 0x00A2)
+#define VISP_CID_EE_STAT_SHARP_GAIN_UV (VISP_CID_EE_BASE + 0x00A3)
+#define VISP_CID_EE_STAT_SHARP_LIMIT_TYPE \
+                                            (VISP_CID_EE_BASE + 0x00A4)
+#define VISP_CID_EE_STAT_SHARP_LIMIT_UP \
+                                            (VISP_CID_EE_BASE + 0x00A5)
+#define VISP_CID_EE_STAT_SHARP_LIMIT_DOWN \
+                                            (VISP_CID_EE_BASE + 0x00A6)
+#define VISP_CID_EE_STAT_SHARP_LIMIT_SKIN_UP \
+                                            (VISP_CID_EE_BASE + 0x00A7)
+#define VISP_CID_EE_STAT_SHARP_LIMIT_SKIN_DOWN \
+                                            (VISP_CID_EE_BASE + 0x00A8)
+#define VISP_CID_EE_STAT_DPL_DETECT_RANGE \
+                                            (VISP_CID_EE_BASE + 0x00A9)
+#define VISP_CID_EE_STAT_DPL_U_LIMIT_UP \
+                                            (VISP_CID_EE_BASE + 0x00AA)
+#define VISP_CID_EE_STAT_DPL_U_LIMIT_DOWN \
+                                            (VISP_CID_EE_BASE + 0x00AB)
+#define VISP_CID_EE_STAT_DPL_V_LIMIT_UP \
+                                            (VISP_CID_EE_BASE + 0x00AC)
+#define VISP_CID_EE_STAT_DPL_V_LIMIT_DOWN \
+                                            (VISP_CID_EE_BASE + 0x00AD)
+#define VISP_CID_EE_STAT_DPL_DETECT_LUMA_THR \
+                                            (VISP_CID_EE_BASE + 0x00AE)
+#define VISP_CID_EE_STAT_DPL_DETECT_LUMA_DIFF \
+                                            (VISP_CID_EE_BASE + 0x00AF)
+#define VISP_CID_EE_STAT_DPL_COMP_LUMA_DIFF \
+                                            (VISP_CID_EE_BASE + 0x00B0)
+#define VISP_CID_EE_STAT_DPL_SAT_STR   (VISP_CID_EE_BASE + 0x00B1)
+#define VISP_CID_EE_STAT_DPL_FIX_STR   (VISP_CID_EE_BASE + 0x00B2)
+#define VISP_CID_EE_STAT_CA_LUT_CHROMA_TBL \
+                                            (VISP_CID_EE_BASE + 0x00B3)
+#define VISP_CID_EE_STAT_CA_MODE       (VISP_CID_EE_BASE + 0x00B4)
+#define VISP_CID_EE_STAT_DCI_DEGAMMA   (VISP_CID_EE_BASE + 0x00B5)
+#define VISP_CID_EE_STAT_DCI_LUT_LUMA_TBL \
+                                            (VISP_CID_EE_BASE + 0x00B6)
+#define VISP_CID_EE_STAT_DCI_MODE      (VISP_CID_EE_BASE + 0x00B7)
+#define VISP_CID_EE_STAT_DCI_LOW_LUMA_INDEX \
+                                            (VISP_CID_EE_BASE + 0x00B8)
+#define VISP_CID_EE_STAT_DCI_MIDDLE_LUMA_INDEX \
+                                            (VISP_CID_EE_BASE + 0x00B9)
+#define VISP_CID_EE_STAT_DCI_HIGH_LUMA_INDEX \
+                                            (VISP_CID_EE_BASE + 0x00BA)
+#define VISP_CID_EE_STAT_DCI_INFLCT_START_Y \
+                                            (VISP_CID_EE_BASE + 0x00BB)
+#define VISP_CID_EE_STAT_DCI_INFLCT_1_X \
+                                            (VISP_CID_EE_BASE + 0x00BC)
+#define VISP_CID_EE_STAT_DCI_INFLCT_1_Y \
+                                            (VISP_CID_EE_BASE + 0x00BD)
+#define VISP_CID_EE_STAT_DCI_INFLCT_2_X \
+                                            (VISP_CID_EE_BASE + 0x00BE)
+#define VISP_CID_EE_STAT_DCI_INFLCT_2_Y \
+                                            (VISP_CID_EE_BASE + 0x00BF)
+#define VISP_CID_EE_STAT_DCI_INFLCT_STOP_Y \
+                                            (VISP_CID_EE_BASE + 0x00C0)
+
+#ifdef __KERNEL__
+int visp_ee_ctrl_count(void);
+int visp_ee_ctrl_create(struct visp_dev *isp_dev);
+#endif
+
+#endif

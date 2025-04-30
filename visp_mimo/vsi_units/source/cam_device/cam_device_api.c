@@ -55,8 +55,8 @@
 #include "cam_device_api.h"
 #include "sensor_cmd.h"
 #include <linux/delay.h>
-#include "vvcam_isp_driver.h"
-#include "vvcam_isp_app.h"
+#include "visp_driver.h"
+#include "visp_app.h"
 #include "visp_common.h"
 #include <linux/string.h>
 #include "kmbox.h"
@@ -64,7 +64,7 @@ uint8_t  *cam_load_calib = NULL; //[160010] __attribute__((section(".cam_load_ca
 
 RESULT VsiCamDeviceCreate
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceConfig_t *pCamConfig,
     CamDeviceHandle_t *pHandleCamDevice
 )
@@ -159,7 +159,7 @@ EXPORT_SYMBOL(VsiCamDeviceCreate);
 
 RESULT VsiCamDeviceDestroy
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice
 )
 {
@@ -213,7 +213,7 @@ EXPORT_SYMBOL(VsiCamDeviceDestroy);
 
 RESULT VsiCamDeviceSetOutFormat
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     CamDevicePipeOutPathType_t path,
     CamDevicePipeOutFmt_t *pFmt
@@ -286,7 +286,7 @@ RESULT VsiCamDeviceSetOutFormat
 
 RESULT VsiCamDeviceSetInFormat
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     CamDevicePipeInPathType_t path,
     CamDevicePipeInFmt_t *pFmt
@@ -356,7 +356,7 @@ RESULT VsiCamDeviceSetInFormat
 
 RESULT VsiCamDeviceConnectCamera
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     const CamDevicePipeSubmoduleCtrl_u *pSubCtrl
 )
@@ -427,7 +427,7 @@ RESULT VsiCamDeviceConnectCamera
 
 RESULT VsiCamDeviceDisconnectCamera
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice
 )
 {
@@ -493,8 +493,8 @@ RESULT VsiCamDeviceStartStreaming
     RESULT result = RET_SUCCESS;
 
     payload_packet *packet=NULL;
-    uint8_t *p_data=NULL; 
-    struct vvcam_isp_dev *isp_dev = pCamConfig->isp_dev;    
+    uint8_t *p_data=NULL;
+    struct visp_dev *isp_dev = pCamConfig->isp_dev;
 
     CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
     if (NULL == pCamDevCtx) {
@@ -543,7 +543,7 @@ RESULT VsiCamDeviceStartStreaming
 
 RESULT VsiCamDeviceSetPathStreaming
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     CamDevicePathStreamingCfg_t *pConfig
 ){
@@ -606,7 +606,7 @@ RESULT VsiCamDeviceSetPathStreaming
 
 RESULT VsiCamDeviceGetPathStreaming
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     CamDevicePathStreamingCfg_t *pConfig
 ){
@@ -697,7 +697,7 @@ RESULT VsiCamDeviceGetHardwareId
 
 RESULT VsiCamDeviceAllocResMemory
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t   hCamDevice,
     uint32_t            byteSize,
     uint32_t           *pBaseAddress,
@@ -774,7 +774,7 @@ RESULT VsiCamDeviceAllocResMemory
 
 RESULT VsiCamDeviceFreeResMemory
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t   hCamDevice,
     uint32_t            baseAddress
 )

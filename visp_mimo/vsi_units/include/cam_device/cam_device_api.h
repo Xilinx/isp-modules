@@ -57,7 +57,7 @@
 
 #include "cam_device_common.h"
 #include "cam_device_calibration.h"
-//#include "vvcam_isp_driver.h"
+//#include "visp_driver.h"
 //#include <ebase/offline_trace.h>
 
 
@@ -183,7 +183,7 @@ typedef struct CamDeviceConfig_s {
     CamDeviceOutputConfig_t       outputCfg;       /**< ISP output configuration parameters */
     CamDeviceSwitchSeqPriority_t  priority;        /**< Input device priority in switch control */
     void *                        hCascade; /**< Cascade ctx handle */
-    struct vvcam_isp_dev *isp_dev;   
+    struct visp_dev *isp_dev;
 }CamDeviceConfig_t;
 #endif
 
@@ -388,7 +388,7 @@ typedef struct CamDeviceMetadataConfig_s {
  *****************************************************************************/
 RESULT VsiCamDeviceCreate
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceConfig_t *pCamConfig,
     CamDeviceHandle_t *hCamDevice
 );
@@ -406,7 +406,7 @@ RESULT VsiCamDeviceCreate
  *****************************************************************************/
 RESULT VsiCamDeviceDestroy
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice
 );
 
@@ -446,7 +446,7 @@ RESULT VsiCamDeviceLoadCalibration
  *****************************************************************************/
 RESULT VsiCamDeviceSetOutFormat
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     CamDevicePipeOutPathType_t path,
     CamDevicePipeOutFmt_t *pFmt
@@ -466,7 +466,7 @@ RESULT VsiCamDeviceSetOutFormat
  *****************************************************************************/
 RESULT VsiCamDeviceSetInFormat
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     CamDevicePipeInPathType_t path,
     CamDevicePipeInFmt_t *pFmt
@@ -569,7 +569,7 @@ RESULT VsiCamDeviceGetIspWindow
  *****************************************************************************/
 RESULT VsiCamDeviceConnectCamera
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     const CamDevicePipeSubmoduleCtrl_u *pSubCtrl
 );
@@ -586,7 +586,7 @@ RESULT VsiCamDeviceConnectCamera
  *****************************************************************************/
 RESULT VsiCamDeviceDisconnectCamera
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice
 );
 
@@ -622,7 +622,7 @@ RESULT VsiCamDeviceGetSoftwareVersion
  *****************************************************************************/
 RESULT VsiCamDeviceSetPathStreaming
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     CamDevicePathStreamingCfg_t *pConfig
 );
@@ -641,7 +641,7 @@ RESULT VsiCamDeviceSetPathStreaming
  *****************************************************************************/
 RESULT VsiCamDeviceGetPathStreaming
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t hCamDevice,
     CamDevicePathStreamingCfg_t *pConfig
 );
@@ -720,7 +720,7 @@ RESULT VsiCamDeviceGetHardwareId
  *****************************************************************************/
 RESULT VsiCamDeviceAllocResMemory
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t   hCamDevice,
     uint32_t            byteSize,
     uint32_t           *pBaseAddress,
@@ -740,7 +740,7 @@ RESULT VsiCamDeviceAllocResMemory
  *****************************************************************************/
 RESULT VsiCamDeviceFreeResMemory
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t   hCamDevice,
     uint32_t            baseAddress
 );

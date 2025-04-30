@@ -175,7 +175,7 @@ typedef struct CamDeviceBufChainConfig_s {
  *****************************************************************************/
 RESULT VsiCamDeviceInitBufChain
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t            hCamDevice,
     CamDeviceBufChainId_t        bufId,
     CamDeviceBufChainConfig_t   *pConfig
@@ -193,7 +193,7 @@ RESULT VsiCamDeviceInitBufChain
  *****************************************************************************/
 RESULT VsiCamDeviceDeInitBufChain
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t       hCamDevice,
     CamDeviceBufChainId_t   bufId
 );
@@ -212,7 +212,7 @@ RESULT VsiCamDeviceDeInitBufChain
  *****************************************************************************/
 RESULT VsiCamDeviceCreateBufPool
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t           hCamDevice,
     CamDeviceBufChainId_t       bufId,
     CamDeviceBufPoolConfig_t   *pConfig
@@ -230,7 +230,7 @@ RESULT VsiCamDeviceCreateBufPool
  *****************************************************************************/
 RESULT VsiCamDeviceDestroyBufPool
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t       hCamDevice,
     CamDeviceBufChainId_t   bufId
 );
@@ -248,7 +248,7 @@ RESULT VsiCamDeviceDestroyBufPool
  *****************************************************************************/
 RESULT VsiCamDeviceSetupBufMgmt
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t       hCamDevice,
     CamDeviceBufChainId_t   bufId
 );
@@ -266,7 +266,7 @@ RESULT VsiCamDeviceSetupBufMgmt
  *****************************************************************************/
 RESULT VsiCamDeviceReleaseBufMgmt
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t       hCamDevice,
     CamDeviceBufChainId_t   bufId
 );
@@ -285,7 +285,7 @@ RESULT VsiCamDeviceReleaseBufMgmt
  *****************************************************************************/
 RESULT VsiCamDeviceDeQueBuffer
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t         hCamDevice,
     CamDeviceBufChainId_t     bufId,
     MediaBuffer_t           **pMediaBuf
@@ -304,7 +304,7 @@ RESULT VsiCamDeviceDeQueBuffer
  *****************************************************************************/
 RESULT VsiCamDeviceEnQueBuffer
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t       hCamDevice,
     CamDeviceBufChainId_t   bufId,
     MediaBuffer_t          *pMediaBuf
@@ -324,7 +324,7 @@ RESULT VsiCamDeviceEnQueBuffer
  *****************************************************************************/
 RESULT VsiCamDeviceGetBufferSize
 (
-    struct vvcam_isp_dev *isp_dev,    
+    struct visp_dev *isp_dev,
     CamDeviceHandle_t        hCamDevice,
     CamDeviceBufChainId_t    bufId,
     uint32_t                *pBufSize
