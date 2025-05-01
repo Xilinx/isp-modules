@@ -31,8 +31,8 @@ $(TARGET)-objs += vsi_units/source/cam_device/cam_device_awb_api.o
 EXTRA_CFLAGS := -I$(PWD)/visp_lilo/
 EXTRA_CFLAGS += -I$(PWD)/common/
 #EXTRA_CFLAGS += -I$(PWD)/mbox/
-EXTRA_CFLAGS += -I$(PWD)/visp_lilo_mbox/mailbox/
-EXTRA_CFLAGS += -I$(PWD)/visp_lilo_mbox/
+EXTRA_CFLAGS += -I$(PWD)/visp_mbox/mailbox/
+EXTRA_CFLAGS += -I$(PWD)/visp_mbox/
 EXTRA_CFLAGS += -I$(PWD)/visp_lilo/isp_ctrl/
 EXTRA_CFLAGS += -I$(PWD)/visp_lilo/isp_ctrl/ae/aev2/
 EXTRA_CFLAGS += -I$(PWD)/visp_lilo/vsi_units/include/
@@ -48,7 +48,7 @@ EXTRA_CFLAGS += -I$(PWD)/visp_lilo/vsi_units/isi/
 USER_INC:=$(PWD)/visp_lilo/isp_ctrl/visp_ctrl.h
 #USER_INC+=$(PWD)/isp_ctrl/visp_app.h
 #USER_INC+=$(PWD)/user_lib/source/vsi_units/include/cam_device/*h
-USER_INC += $(PWD)/visp_lilo_mbox/mailbox/*.h
+USER_INC += $(PWD)/visp_mbox/mailbox/*.h
 
 
 

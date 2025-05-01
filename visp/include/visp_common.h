@@ -53,7 +53,6 @@
  
 #ifndef __VISP_COMMON_H__
 #define __VISP_COMMON_H__
-#include "visp_common.h"
 
 int visp_buf_done(struct v4l2_subdev *sd, void *arg);
 int visp_set_frame_interval_public(struct visp_dev *isp_dev, struct v4l2_subdev_frame_interval *fi);

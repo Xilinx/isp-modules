@@ -76,8 +76,6 @@
 #include "visp_procfs.h"
 #include "visp_v4l2_common.h"
 #include "visp_v4l2_std_exts.h"
-#include <linux/delay.h>
-#include <linux/interrupt.h>
 
 #include "sensor_cmd.h"
 #include "mbox_api.h"
@@ -768,7 +766,8 @@ int MediaIspDeviceDqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 						MediaBuf *Buf, void *Enque_Buff_G,
 						OutputBuffer_t *OutputBuffer);
 
-int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev)
+
+static int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev)
 {
 	int RetVal = 0;
 	OutputBuffer_t *OutputBuffer = NULL;
@@ -816,11 +815,11 @@ int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev)
 									  .Bufs[OutputBuffer->index]));
 	if (RetVal != 0)
 	{
-		dev_err(
+		dev_dbg(
 			isp_dev->dev,
 			"Handle_Frameout_Buffer: MediaIspHalBufDone failed with error %d\n",
 			RetVal);
-		dev_err(isp_dev->dev,
+		dev_dbg(isp_dev->dev,
 				"Skip Buf: RetVal=%d, ISP=%d, Port=%d, Chn=%d, BUF=0x%x\n",
 				RetVal, isp_dev->id, info.VtId, info.path,
 				OutputBuffer ? OutputBuffer->baseAddress : 0);
@@ -835,7 +834,7 @@ error_free_buf:
 	/* Free buffer in case of any error*/
 	return RetVal;
 }
-EXPORT_SYMBOL_GPL(Handle_Frameout_Buffer);
+//EXPORT_SYMBOL_GPL(Handle_Frameout_Buffer);
 
 //
 
@@ -968,12 +967,12 @@ int visp_buf_done(struct v4l2_subdev *sd, void *arg)
 
 	if (list_empty(&cur_pad->queue))
 	{
-		dev_err(isp_dev->dev, "EMPTY LISt\n");
+		dev_dbg(isp_dev->dev, "Empty list\n");
 		return -EINVAL;
 	}
 	if ((cur_pad->stream == 0))
 	{
-		dev_err(isp_dev->dev, "Stream===0\n");
+		dev_dbg(isp_dev->dev, "Streamoff\n");
 		return -EINVAL;
 	}
 
@@ -1390,8 +1389,7 @@ static int visp_set_frame_interval(
 	int ret = 0;
 	int i = 0;
 	struct v4l2_fract *timeperframe;
-	uint32_t FrameRate =
-		0;
+	uint32_t FrameRate = 0;
 
 	sink_pad_index = fi->pad - (fi->pad % VISP_PORT_PAD_NR);
 	sink_pad = &isp_dev->pad_data[sink_pad_index];
@@ -1769,6 +1767,7 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 	/*Exit Port Level Critical Section */
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
 #endif
+    set_default_pad_config(isp_dev);
 	format->format = pad_data->format;
 
 	return 0;
@@ -1783,7 +1782,7 @@ static int visp_enum_mbus_code(struct v4l2_subdev *sd,
 
 	if (code->index >= pad_data->num_formats)
 	{
-		dev_err(isp_dev->dev ,"%s %d pad name %s index %d\n",
+		dev_dbg(isp_dev->dev ,"%s %d pad name %s index %d\n",
 			__func__,__LINE__,isp_dev->pads[code->pad].entity->name,
 			isp_dev->pads[code->pad].index);
 		return -EINVAL;
@@ -2406,8 +2405,8 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 
 	isp_dev->tx_chan = isp_dev->rpu->tx_chan;
 	isp_dev->rx_chan = isp_dev->rpu->rx_chan;
-	isp_dev->rpu->isp_dev[isp_dev->id] =
-		isp_dev; //Assigning isp_dev structure value to isp_dev present in rpu_dev struct
+	//isp_dev->rpu->isp_dev[isp_dev->id] =
+	//	isp_dev; //Assigning isp_dev structure value to isp_dev present in rpu_dev struct
 
 	return 0;
 }
@@ -2415,11 +2414,15 @@ static int visp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct visp_dev *isp_dev;
+	struct visp_common *visp_common_dev;
 	int ret;
 	int port = 0;
 
 	isp_dev = devm_kzalloc(&pdev->dev, sizeof(struct visp_dev), GFP_KERNEL);
 	if (!isp_dev) return -ENOMEM;
+
+	visp_common_dev = devm_kzalloc(&pdev->dev, sizeof(struct visp_dev), GFP_KERNEL);
+	if(!visp_common_dev) return -ENOMEM;
 
 	mutex_init(&isp_dev->mlock);
 	mutex_init(&isp_dev->ctrl_lock);
@@ -2438,6 +2441,10 @@ static int visp_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to init mbox\n");
 		return -EINVAL;
 	}
+	visp_common_dev->mode = get_isp_mode_from_str(isp_dev->ss_mode_i0);
+    visp_common_dev->isp_dev = (void *)isp_dev;
+
+	isp_dev->rpu->isp_dev[isp_dev->id] = visp_common_dev;
 	// store the instance pointer in the array
 
 	v4l2_subdev_init(&isp_dev->sd, &visp_subdev_ops);
@@ -2500,7 +2507,9 @@ static int visp_probe(struct platform_device *pdev)
 	}
 
 	isp_dev->PortsMask = isp_dev->num_streams;
-	sensor_pipeline_init(isp_dev);
+	/* Register Callback function*/
+	isp_dev->frameout_cb = Handle_Frameout_Buffer;
+	//sensor_pipeline_init(isp_dev);
 	set_default_pad_config(isp_dev);
 
 	dev_info(&pdev->dev, "visp isp driver probe success\n");

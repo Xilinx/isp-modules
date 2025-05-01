@@ -2362,7 +2362,7 @@ static void visp_video_vb2_stop_streaming(struct vb2_queue *queue)
 	{
         if(queue->bufs[i]==NULL)
         {
-            return;//RKC-RET if max_numbuffers > allocated buffers.
+            return;//RET if max_numbuffers > allocated buffers.
         }
 		if (queue->bufs[i]->state == VB2_BUF_STATE_ACTIVE)
 			vb2_buffer_done(queue->bufs[i], VB2_BUF_STATE_ERROR);

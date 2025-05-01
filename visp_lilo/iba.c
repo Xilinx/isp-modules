@@ -34,7 +34,7 @@ static void print_iba_info(const iba_info_t *iba_info)
 		pr_err("IBA info is NULL\n");
 		return;
 	}
-
+#ifdef ENABLE_IBA_LOG
 	pr_err("IBA Info:\n");
 	pr_err("  Base Address: 0x%x\n", iba_info->baseaddress);
 	pr_err("  IBA ID: %u\n", iba_info->iba_id);
@@ -49,6 +49,7 @@ static void print_iba_info(const iba_info_t *iba_info)
 	pr_err("  PPC: %u\n", iba_info->ppc);
 	pr_err("  ISP ID: %u\n", iba_info->isp_id);
 	pr_err("  Frame Rate: %u\n", iba_info->frame_rate);
+#endif
 }
 
 int IBA_init_send_command(struct visp_dev *isp_dev,
@@ -80,7 +81,6 @@ int IBA_init_send_command(struct visp_dev *isp_dev,
 			iba_id = (num_streams == 1) ? IBA_4 : IBA_3 + i;
 		}
 
-		pr_err("IBA %s %d iba_id/Vtid =%d\n", __func__, __LINE__, iba_id);
 		iba_info = &isp_dev->iba[iba_id];
 		iba_info->baseaddress = 0xE8520000 + (0x1000 * iba_id);
 		iba_info->iba_id = iba_id;

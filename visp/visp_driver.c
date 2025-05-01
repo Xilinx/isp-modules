@@ -2275,7 +2275,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	}
 	else
 	{
-		dev_dbg(&pdev->dev, "xlnx,num_streams: %u--DELELELELELELELELEL\n", isp_dev->num_streams);
+		dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
 	}
 
 	ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);

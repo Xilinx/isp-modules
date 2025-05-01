@@ -51,7 +51,7 @@
  *
  *****************************************************************************/
  
- #include "cam_device_api.h"
+#include "cam_device_api.h"
 #include "cam_device_buffer_api.h"
 #include "cam_device_sensor_api.h"
 #include "iba.h"
@@ -366,8 +366,12 @@ static int isp_send_atm_prop_to_rpu(struct visp_dev *isp, CamDeviceHandle_t hCam
     p_data += sizeof(int);
     packet->payload_size += sizeof(int);
 
-	xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_CMD_SET_ATM, packet,
+	result = xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_CMD_SET_ATM, packet,
             packet->payload_size + payload_extra_size, isp->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 	kfree(packet);
 
     return result;
@@ -460,7 +464,6 @@ static int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port,
 		// create mcm buf pool by camdevice reserved memory
 		uint32_t PhyAddr = 0;
 		uint32_t *pIplAddr = VSI_NULL;
-		dev_err(isp_dev->dev, "RDMA CHN=%d\n", Chn);
 		RetVal = VsiCamDeviceGetBufferSize(isp_dev, IspPort->CamDeviceHandle,
 										   Chn, &BufSize);
 		if (RetVal != VSI_SUCCESS)
@@ -1957,7 +1960,6 @@ int MediaIspCalibQuerySensor(struct visp_dev *isp_dev, uint8_t Port)
 	RetVal = MediaIspCalibGetSensorMode(isp_dev, Port, &SensorMode);
 	if (RetVal != VSI_SUCCESS)
 	{
-		kfree(QueryInfo);
 		dev_err(isp_dev->dev, "%s: port %d get sensor mode failed", __func__,
 				Port);
 		return RetVal;
@@ -1967,7 +1969,6 @@ int MediaIspCalibQuerySensor(struct visp_dev *isp_dev, uint8_t Port)
 		VsiCamDeviceSensorQuery(isp_dev, IspPort->CamDeviceHandle, QueryInfo);
 	if (RetVal != VSI_SUCCESS)
 	{
-		kfree(QueryInfo);
 		dev_err(isp_dev->dev,
 				"%s: port %d CamDevice query sensor info failed %d", __func__,
 				Port, RetVal);
@@ -1977,7 +1978,6 @@ int MediaIspCalibQuerySensor(struct visp_dev *isp_dev, uint8_t Port)
 
 	if (SensorMode >= QueryInfo->number)
 	{
-		kfree(QueryInfo);
 		RetVal = VSI_ERR_ILLEGAL_PARAM;
 		dev_err(isp_dev->dev, "%s: port %d sensor mode %d out of range [0, %d]",
 				__func__, Port, SensorMode, QueryInfo->number - 1);
@@ -2084,7 +2084,6 @@ int IspDeviceCreate(struct visp_dev *isp_dev, uint8_t Port)
 
 	/*Enter Port Level Critical Section */
 
-
 	memset(&CamConfig, 0, sizeof(CamConfig));
 
 	CamConfig.ispHwId = isp_dev->id;
@@ -2157,7 +2156,6 @@ int IspDeviceCreate(struct visp_dev *isp_dev, uint8_t Port)
 	}
 
 	/*****Map the sensor*****/
-	dev_info(isp_dev->dev, "Registering the SensorDrvHandle, this will take some time...\n");
 	RetVal = VsiCamDeviceSensorMapping(isp_dev, IspPort->CamDeviceHandle,
 									   SensorName, &SensorDrvHandle);
 	if (RetVal != VSI_SUCCESS || SensorDrvHandle == VSI_NULL)
@@ -2173,6 +2171,7 @@ int IspDeviceCreate(struct visp_dev *isp_dev, uint8_t Port)
 	devSensorDrv.sensorDevId = IspPort->SensorInfo.sensor_id;
 
 	/***** FMC Config *****/
+	dev_info(isp_dev->dev, "Registering the SensorDrvHandle, this will take some time...\n");
 	RetVal = VsiCamDeviceSensorDrvHandleRegister(
 		isp_dev, IspPort->CamDeviceHandle,  &devSensorDrv);
 	if (RetVal != VSI_SUCCESS)

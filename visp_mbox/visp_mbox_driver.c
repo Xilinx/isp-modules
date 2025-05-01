@@ -185,7 +185,7 @@ static inline struct visp_dev *get_limo_dev(struct rpu_dev *rpu, int isp_id)
         return NULL;
 
     vc = rpu->isp_dev[isp_id];
-    if (!vc || vc->mode != ISP_MODE_LIMO)
+    if (!vc || ( (vc->mode != ISP_MODE_LIMO) && (vc->mode != ISP_MODE_LILO) ) )
         return NULL;
 
     return (struct visp_dev *)vc->isp_dev;

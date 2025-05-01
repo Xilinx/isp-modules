@@ -1588,7 +1588,7 @@ static int MediaIspDeviceMcmCreateBufPool(struct visp_dev *isp_dev,
 		}
 	}
 
-	IspPort->McmAttr.NumBufs = (uint8_t)NumBufs; //RKCMATCH
+	IspPort->McmAttr.NumBufs = (uint8_t)NumBufs;
 
 	RetVal = MediaIspDeviceCreateBufPool(isp_dev, Port, Chn);
 	if (RetVal != VSI_SUCCESS)
@@ -1736,7 +1736,6 @@ int Read_DQ_Bufinfo(void *data, struct visp_dev *isp_dev,
 {
 	uint8_t *p_data = NULL;
 	uint32_t hw_id_t = 100;
-	//uint32_t addr;
 	uint8_t idx;
 
 	payload_packet *packet = data;

@@ -268,6 +268,15 @@ static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
     return ISP_MODE_UNKNOWN;
 }
 
+#define MAX_OBA_PER_ISP     2UL
+
+struct oba_info {
+   uint32_t ppc;
+   uint32_t bpp;
+   const char * data_format;
+};
+
+
 struct visp_dev
 {
 	phys_addr_t paddr;
@@ -298,7 +307,6 @@ struct visp_dev
 	uint32_t ctrl_pad;
 
 	unsigned long pde;
-	//struct visp_sensor_info sensor_info[VISP_PORT_NR];
 	struct iba_info iba[MAX_IBA_PER_ISP];
 	enum visp_path_out_type_e output_type[VISP_PORT_NR][VISP_PORT_PAD_NR - 1];
 	enum visp_mcm_input_select_e mcm_input_select[VISP_PORT_NR];
@@ -328,6 +336,7 @@ struct visp_dev
 	bool tile0_enable_sp0;
 	uint32_t PortsMask;
 	struct visp_port_info port_info[MAX_PORTS]; // Ports info (up to 4)
+	struct oba_info oba[MAX_OBA_PER_ISP];
 	MediaIspPortAttr IspPorts[MEDIA_ISP_PORT_MAX];
 	struct mutex port_lock[MEDIA_ISP_PORT_MAX];
 	int streamon[VISP_PORT_PAD_NR * MAX_PORTS];
