@@ -218,10 +218,6 @@ enum isp_mode {
     ISP_MODE_UNKNOWN,
 };
 
-struct visp_common {
-    enum isp_mode mode;
-    void *isp_dev;  // pointer to specific driver struct
-};
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
 {

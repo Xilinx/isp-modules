@@ -13,23 +13,17 @@ $(TARGET)-objs += visp_procfs.o
 $(TARGET)-objs += isp_ctrl/visp_ctrl.o
 $(TARGET)-objs += visp_app.o
 $(TARGET)-objs += iba.o
-#$(TARGET)-objs += mailbox/mbox_cmd.o
-#$(TARGET)-objs += mailbox/mbox_api.o
-#$(TARGET)-objs += mailbox/mbox_fifo.o
 
 
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device_api.o
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device.o
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device_sensor_api.o
-#$(TARGET)-objs += user_lib/source/media_isp_device.o 
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device_buffer_api.o
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device_ae_api.o
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device_awb_api.o
-#$(TARGET)-objs += mailbox/mbox_cmd.o
 
 EXTRA_CFLAGS := -I$(PWD)/visp/
 EXTRA_CFLAGS += -I$(PWD)/common/
-#EXTRA_CFLAGS += -I$(PWD)/mbox/
 EXTRA_CFLAGS += -I$(PWD)/visp_mbox/mailbox/
 EXTRA_CFLAGS += -I$(PWD)/visp_mbox/
 EXTRA_CFLAGS += -I$(PWD)/visp/isp_ctrl/
@@ -45,8 +39,6 @@ EXTRA_CFLAGS += -I$(PWD)/visp/vsi_units/isi/
 
 
 USER_INC:=$(PWD)/visp/isp_ctrl/visp_ctrl.h
-#USER_INC+=$(PWD)/isp_ctrl/visp_app.h
-#USER_INC+=$(PWD)/user_lib/source/vsi_units/include/cam_device/*h
 USER_INC += $(PWD)/visp_mbox/mailbox/*.h
 
 

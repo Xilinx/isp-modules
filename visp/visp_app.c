@@ -2134,7 +2134,7 @@ int IspDeviceCreate(struct visp_dev *isp_dev, uint8_t Port)
 	devSensorDrv.sensorDevId = IspPort->SensorInfo.sensor_id;
 
 	/***** FMC Config *****/
-	dev_info(isp_dev->dev, "Registering the SensorDrvHandle, this will take some time...\n");
+	dev_info(isp_dev->dev, "Registering the SensorDrvHandle, this can take some time...\n");
 	RetVal = VsiCamDeviceSensorDrvHandleRegister(
 		isp_dev, IspPort->CamDeviceHandle,  &devSensorDrv);
 	if (RetVal != VSI_SUCCESS)
