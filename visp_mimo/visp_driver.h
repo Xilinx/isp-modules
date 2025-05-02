@@ -183,7 +183,7 @@ struct visp_ext_dma_buf {
 	uint32_t size;
 	struct list_head entry;
 };
-
+#if 0
 /* Structures to hold the rpu_device specific information */
 struct rpu_dev {
     struct device *dev;
@@ -211,7 +211,127 @@ struct rpu_dev {
     struct completion mailbox_completion;
 
 };
+//
+#endif
 
+struct atm_prop {
+    u32 high_mem_addr;      // Higher 32-bit of memory address
+    u32 is_64bit;     // True if 64-bit, False if 32-bit
+    char node_name[50]; // Node name dynamically generated
+};
+
+
+typedef int (*frameout_cb_t)(void *data, struct visp_dev *dev);
+
+struct visp_reserve_mem
+{
+	dma_addr_t pa;
+	uint32_t size;
+	void *va;
+};
+
+
+#define MAX_OBA_PER_ISP     2UL
+
+struct oba_info {
+   uint32_t ppc;
+   uint32_t bpp;
+   const char * data_format;
+};
+
+
+
+
+struct visp_dev {
+    phys_addr_t paddr;
+    struct rpu_dev *rpu;
+    uint32_t regs_size;
+    void __iomem *base;
+    void __iomem *reset;
+    struct cdev cdev;
+    int  id;
+    int fe_irq;
+    int isp_irq;
+    int mi_irq;
+    struct device *dev;
+    struct mutex mlock;
+    uint32_t refcnt;
+    struct v4l2_subdev sd;
+	struct media_pad pads[VISP_PAD_NR];
+	struct v4l2_async_notifier notifier;
+#ifdef VISP_PLATFORM_REGISTER
+	struct fwnode_handle fwnode;
+#endif
+	struct visp_pad_data pad_data[VISP_PAD_NR];
+
+	struct visp_reserve_mem reserve_mem;
+	struct visp_event_shm event_shm;
+	struct v4l2_ctrl_handler ctrl_handler;
+	struct mutex ctrl_lock;
+	uint32_t ctrl_pad;
+
+	unsigned long pde;
+	//struct visp_sensor_info sensor_info[VISP_PORT_NR];
+    struct iba_info iba[MAX_IBA_PER_ISP];
+	enum visp_path_out_type_e output_type[VISP_PORT_NR][VISP_PORT_PAD_NR - 1];
+	enum visp_mcm_input_select_e mcm_input_select[VISP_PORT_NR];
+
+	struct list_head mcm_input[VISP_PORT_NR];
+
+
+  struct tasklet_struct tasklet;
+	// Structure added for mailbox
+   unsigned char rx_mc_buf[RX_MBOX_CLIENT_BUF_MAX];
+    struct mbox_client tx_mc;
+    struct mbox_client rx_mc;
+    struct mbox_chan *tx_chan;
+    struct mbox_chan *rx_chan;
+    struct work_struct mbox_work;
+    struct sk_buff_head tx_mc_skbs;
+    struct idr notifyids;
+	const char *ss_mode_i0;    // Example member to store device tree property
+    u32 num_streams;           // Example member to store device tree property
+	 u32 isp_mem;
+	 u32 isp_mode;
+    u32 isp_rpu;
+    u32 dma_align;
+    const char *vid_formats;
+    const char *sensor_name;
+	 bool tile0_enable_mp0;
+    bool tile0_enable_sp0;
+    uint32_t PortsMask;
+    struct visp_port_info port_info[MAX_PORTS]; // Ports info (up to 4)
+	struct oba_info oba[MAX_OBA_PER_ISP];
+    MediaIspPortAttr IspPorts[MEDIA_ISP_PORT_MAX];
+    struct mutex port_lock[MEDIA_ISP_PORT_MAX];
+    int streamon[VISP_PORT_PAD_NR*MAX_PORTS];
+//Flags
+    struct completion apu_wait_for_ack;
+    struct completion apu_wait_for_data;
+    struct completion mailbox_completion;
+	struct atm_prop atm;
+    wait_queue_head_t wq_frame_done_finished;
+    bool apu_wait_for_isp_frame_done;
+    int k_apu_ack_flag;
+    int k_apu_data_flag;
+    int app_wait_flag;
+	frameout_cb_t frameout_cb;
+     dma_addr_t ip_a[2];
+     dma_addr_t op_a[4];
+     unsigned int out_w;
+     unsigned int out_h;
+     unsigned int cap_w;
+     unsigned int cap_h;
+     unsigned long int out_sizeimage;
+     unsigned long int cap_sizeimage;
+     unsigned int out_fmt;
+     unsigned int cap_fmt;
+     unsigned int isp_dq_out_index;
+};
+
+
+//
+#if 0
 struct visp_dev {
     phys_addr_t paddr;
     struct rpu_dev *rpu;
@@ -298,6 +418,6 @@ struct visp_dev {
      unsigned int cap_fmt;
      unsigned int isp_dq_out_index;
 };
-
+#endif
 int Handle_Frameout_Buffer(void * Enque_Buff_L,struct visp_dev *isp_dev);
 #endif

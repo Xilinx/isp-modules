@@ -91,4 +91,5 @@ RESULT VsiCamDeviceAeDisable(struct visp_dev *isp_dev,
 RESULT VsiCamDeviceUnRegisterAeLib(struct visp_dev *isp_dev,
                                    CamDeviceHandle_t hCamDevice);
 
+int MediaIspDeviceDqbuf_out(struct visp_dev *isp_dev, struct Chn_info *info, MediaBuf *Buf, void * Packet_from_RPU, MediaBuffer_t *pMediaBuffer);
 #endif

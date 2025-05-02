@@ -763,7 +763,7 @@ int MediaIspHalBufDone(struct v4l2_subdev *sd, int pad, MediaBuf *Buf);
 
 int MediaIspDeviceDqbuf(struct visp_dev *isp_dev, struct Chn_info *info, MediaBuf *Buf,void *Enque_Buff_G , MediaBuffer_t *pMediaBuffer);
 
-int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev) {
+int Handle_Frameout_Buffer_mimo(void *Packet_from_RPU, struct visp_dev *isp_dev) {
     int RetVal = 0;
     MediaBuf *Buf = NULL;
     MediaBuffer_t *pMediaBuffer = NULL;
@@ -801,6 +801,7 @@ int Handle_Frameout_Buffer(void *Packet_from_RPU, struct visp_dev *isp_dev) {
         goto error_free_buf;
     }
 
+    wake_up(&isp_dev->wq_frame_done_finished);
     /* Free allocated buffer after successful processing*/
     kfree(Buf);
     return 0;
@@ -810,8 +811,7 @@ error_free_buf:
     kfree(Buf);
     return RetVal;
 }
-EXPORT_SYMBOL_GPL(Handle_Frameout_Buffer);
-
+EXPORT_SYMBOL(Handle_Frameout_Buffer_mimo);
 
 //
 int MediaIspDeviceCameraConnect(struct visp_dev *isp_dev , uint8_t Index);
@@ -2157,13 +2157,11 @@ int xlnx_link_mbox(struct visp_dev *isp_dev)
         dev_err(isp_dev->dev, "No TX or RX Channel found on RPU: %d\n", isp_dev->isp_rpu);
         return -ENOMEM;
     }
-			
-  	isp_dev->tx_chan = isp_dev->rpu->tx_chan; 
+
+    isp_dev->tx_chan = isp_dev->rpu->tx_chan;
   	isp_dev->rx_chan = isp_dev->rpu->rx_chan;
-	isp_dev->rpu->isp_dev[isp_dev->id] = isp_dev; //Assigning isp_dev structure value to isp_dev present in rpu_dev struct 
-    
+    isp_dev->rpu->isp_dev[isp_dev->id] = isp_dev; //Assigning isp_dev structure value to isp_dev present in rpu_dev struct
     return 0;
-	
 }
 
 

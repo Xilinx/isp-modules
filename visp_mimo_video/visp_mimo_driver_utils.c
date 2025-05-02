@@ -24,7 +24,6 @@
 
 #include <visp_mimo_driver.h>
 #include "visp_common.h"
-
 int xlnx_link_mbox(struct visp_dev *isp_dev)
 {
     /* Find or create a new RPU with the given rpu_id */
@@ -49,6 +48,7 @@ int xlnx_link_mbox(struct visp_dev *isp_dev)
 	isp_dev->rx_chan = isp_dev->rpu->rx_chan;
 	//Assigning isp_dev structure value to isp_dev present in rpu_dev struct
 	isp_dev->rpu->isp_dev[isp_dev->id] = isp_dev;
+    pr_err("RKC-PRINT %s %d id:%d isp_dev->rpu->isp_dev[isp_dev->id] 0x%x isp_dev->rpu 0x%x\n",__func__, __LINE__,isp_dev->id,isp_dev->rpu->isp_dev[isp_dev->id],isp_dev->rpu);
 	return 0;
 }
 
@@ -57,6 +57,10 @@ int IspDeviceCreateMIMO(struct visp_dev *isp_dev , uint8_t Port)
 	int RetVal = VSI_SUCCESS;
     MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
     CamDeviceConfig_t CamConfig;
+    if(!isp_dev)
+    {
+    pr_err("RKC-PRINT %s %d NULL_ISP_DEV\n",__func__, __LINE__);
+    }
 
     //mutex_lock(&isp_dev->port_lock[Port]);
 

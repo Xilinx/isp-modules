@@ -49,6 +49,8 @@
 #include <visp_video_event.h>
 #include <visp_v4l2_std_exts.h>
 #include <linux/miscdevice.h>
+#include "visp_mbox_driver.h"
+#include "visp_common.h"
 
 #define DEBUG_ENABLE
 /* version 1.0 */
@@ -70,6 +72,7 @@ MODULE_PARM_DESC(debug, "debug level (0-3)");
 
 struct isp_mimo_ctx;
 
+int xlnx_link_mbox(struct visp_dev *isp_dev);
 
 struct visp_format visp_mp_fmts[] = {
 	{
@@ -403,6 +406,7 @@ static int on;
 	MediaIspDeviceDeque(device->isp_dev, 0);
 
 	device->isp_dev->apu_wait_for_isp_frame_done = 1;
+
 	wait_event_interruptible(device->isp_dev->wq_frame_done_finished, !device->isp_dev->apu_wait_for_isp_frame_done);
 
 	/* return the src and dst buffers back to V4L2 M2M layer to return to application */
@@ -2156,7 +2160,56 @@ static int visp_parse_params(struct visp_dev *isp_dev, struct platform_device *p
 	return 0;
 }
 
+//
 
+int Handle_Frameout_Buffer_mimo(void *Packet_from_RPU, struct visp_dev *isp_dev) {
+    int RetVal = 0;
+    MediaBuf *Buf = NULL;
+    MediaBuffer_t *pMediaBuffer = NULL;
+
+    struct Chn_info info;
+    /* Validate inputs */
+    if (!isp_dev) {
+        dev_err(isp_dev->dev ,"Handle_Frameout_Buffer: isp_dev is NULL\n");
+        return -EINVAL;
+    }
+    if (!Packet_from_RPU) {
+        dev_err(isp_dev->dev ,"Handle_Frameout_Buffer: Packet_from_RPU is NULL\n");
+        return -EINVAL;
+    }
+
+    /* Allocate memory for the buffer */
+    pMediaBuffer = kzalloc(sizeof(MediaBuffer_t), GFP_KERNEL);
+    if(!pMediaBuffer)
+	{
+        dev_err(isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__, __LINE__);
+        return -ENOMEM;
+    }
+    Buf = kzalloc(sizeof(MediaBuf), GFP_KERNEL);
+    if (!Buf) {
+        dev_err(isp_dev->dev ,"Handle_Frameout_Buffer: Failed to allocate memory for MediaBuf\n");
+        return -ENOMEM;
+    }
+    /* Dequeue buffer from the ISP device*/
+    RetVal = MediaIspDeviceDqbuf_out(isp_dev, &info, Buf, Packet_from_RPU, pMediaBuffer);
+    if (RetVal != VSI_SUCCESS) {
+        dev_err(isp_dev->dev ,"Handle_Frameout_Buffer: MediaIspDeviceDqbuf failed with error %d\n", RetVal);
+        goto error_free_buf;
+    }
+    isp_dev->apu_wait_for_isp_frame_done = 0;
+    wake_up(&isp_dev->wq_frame_done_finished);
+    /* Free allocated buffer after successful processing*/
+    kfree(Buf);
+    return 0;
+
+error_free_buf:
+    /* Free buffer in case of any error*/
+    kfree(Buf);
+    return RetVal;
+}
+
+
+//
 int isp_mimo_probe(struct platform_device *pdev)
 {
 	static int probe_cnt = 0;
@@ -2173,8 +2226,6 @@ int isp_mimo_probe(struct platform_device *pdev)
 		return 0;
 	}
 	pdev->id = probe_cnt;
-
-
 	device = devm_kzalloc(dev, sizeof(*device), GFP_KERNEL);
 	if(!device)
 		return -ENOMEM;
@@ -2248,6 +2299,8 @@ int isp_mimo_probe(struct platform_device *pdev)
         pr_err("%s no memory for calibration\n", __func__);
         return -ENOMEM;
     }
+
+	device->isp_dev->frameout_cb = Handle_Frameout_Buffer_mimo;
 
     for (i = 0; i < num_mems; i++) {
         struct device_node *node;

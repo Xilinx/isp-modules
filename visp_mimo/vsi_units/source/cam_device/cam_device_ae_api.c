@@ -59,6 +59,7 @@
 #include <linux/string.h>
 #include "kmbox.h"
 #include "visp_common.h"
+#include "visp_mbox_driver.h"
 
 RESULT VsiCamDeviceUnRegisterAeLib
 (
@@ -92,17 +93,12 @@ RESULT VsiCamDeviceUnRegisterAeLib
     memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
     packet->payload_size += sizeof(uint32_t);
 
-     mutex_lock(&isp_dev->mlock);
-    result = Send_Command( RPU_2_APU_MB_CMD_UNREGISTER_AELIB, packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        mutex_unlock(&isp_dev->mlock);
-        kfree(packet);
-        return result;
-    }
-    ret = mbox_send_message(isp_dev->tx_chan,NULL);
-
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+result = xlnx_send_mbox_acked_cmd(isp_dev, RPU_2_APU_MB_CMD_UNREGISTER_AELIB, packet,
+		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
     kfree(packet);
 
@@ -148,16 +144,14 @@ RESULT VsiCamDeviceAeDisable
     	return RET_OUTOFRANGE;
     }
 
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command( APU_2_RPU_MB_CMD_AE_DISABLE , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_AE_DISABLE , packet,
+		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+
     kfree(packet);
 
 	return result;

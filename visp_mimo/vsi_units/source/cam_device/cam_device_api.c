@@ -57,6 +57,7 @@
 #include <linux/delay.h>
 #include "visp_driver.h"
 #include "visp_app.h"
+#include "visp_mbox_driver.h"
 #include "visp_common.h"
 #include <linux/string.h>
 #include "kmbox.h"
@@ -137,19 +138,14 @@ RESULT VsiCamDeviceCreate
     	return RET_OUTOFRANGE;
     }
 
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command (APU_2_RPU_MB_CMD_CREATE_INSTANCE,packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        loge("Mailbox Send message failed %s %d\n",__func__,__LINE__);
-        kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_CREATE_INSTANCE, packet,
+		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-    *pHandleCamDevice = hCamDevice;
-
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+	*pHandleCamDevice = hCamDevice;
 
     kfree(packet);
     return result;
@@ -194,17 +190,13 @@ RESULT VsiCamDeviceDestroy
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-    mutex_lock(&isp_dev->mlock);
-    ret = Send_Command (APU_2_RPU_MB_CMD_DESTORY , packet, packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
-    if(0 != ret) {
-        mutex_unlock(&isp_dev->mlock);
-    	kfree(packet);
-        return ret;
-    }
-	mbox_send_message(isp_dev->tx_chan,NULL);
 
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DESTORY, packet,
+		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
     kfree(packet);
 	return result;
@@ -267,18 +259,14 @@ RESULT VsiCamDeviceSetOutFormat
         kfree(packet);
         return RET_OUTOFRANGE;
     }
-    mutex_lock(&isp_dev->mlock);
-    ret = Send_Command (APU_2_RPU_MB_CMD_SET_OUT_FORMAT, packet, packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
-    if(0 != ret) {
-        loge("Failed to send_command %s %d\n",__func__,__LINE__);
-        kfree(packet);
-        return ret;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SET_OUT_FORMAT, packet,
+		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
 
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
 
 	kfree(packet);
 	return result;
@@ -335,17 +323,12 @@ RESULT VsiCamDeviceSetInFormat
     	return RET_OUTOFRANGE;
     }
 
-     mutex_lock(&isp_dev->mlock);
-    ret = Send_Command( APU_2_RPU_MB_CMD_SET_IN_FORMAT, packet, packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
-    if(0 != result) {
-        mutex_unlock(&isp_dev->mlock);
-        kfree(packet);
-        return ret;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
-
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SET_IN_FORMAT, packet,
+		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
     kfree(packet);
 
@@ -406,20 +389,13 @@ RESULT VsiCamDeviceConnectCamera
         kfree(packet);
         return RET_OUTOFRANGE;
     }
-#if 1
-    mutex_lock(&isp_dev->mlock);
-    ret = Send_Command(APU_2_RPU_MB_CMD_CONNECT_CAMERA , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != ret) {
-        kfree(packet);
-        mutex_unlock(&isp_dev->mlock);
-        return ret;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_CONNECT_CAMERA, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-#endif
-
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
     kfree(packet);
 
 	return result;
@@ -462,16 +438,15 @@ RESULT VsiCamDeviceDisconnectCamera
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-    mutex_lock(&isp_dev->mlock);
-    ret = Send_Command(APU_2_RPU_MB_CMD_DISCONNECT_CAMERA , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != ret) {
-        kfree(packet);
-        mutex_unlock(&isp_dev->mlock);
-        return ret;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+
+result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DISCONNECT_CAMERA, packet,
+		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
+
+
     kfree(packet);
 	return result;
 
@@ -525,18 +500,14 @@ RESULT VsiCamDeviceStartStreaming
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command(APU_2_RPU_MB_CMD_START_STREAMING , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        loge("Mailbox FAILed to send messge %s %d\n",__func__,__LINE__);
-        kfree(packet);
-        mutex_unlock(&isp_dev->mlock);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_START_STREAMING, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+
     kfree(packet);
 	return result;
 }
@@ -589,17 +560,15 @@ RESULT VsiCamDeviceSetPathStreaming
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command (APU_2_RPU_MB_CMD_SET_PATH_STREAMING, packet, packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
-    if(0 != result) {
-        mutex_unlock(&isp_dev->mlock);
-        kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SET_PATH_STREAMING, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+
+
     kfree(packet);
 	return result;
 }
@@ -649,25 +618,9 @@ RESULT VsiCamDeviceGetPathStreaming
     	return RET_OUTOFRANGE;
     }
 
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command( APU_2_RPU_MB_CMD_GET_PATH_STREAMING , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(result != 0) {
-        mutex_unlock(&isp_dev->mlock);
-        kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_GET_PATH_STREAMING, packet,
+			packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 
-    __result = xlnx_mbox_apu_wait_for_data(isp_dev,packet->payload);
-	if(__result)
-    {
-        dev_err(isp_dev->dev , "FAILED TO SET PATH STREAMING\n");
-        mutex_unlock(&isp_dev->mlock);
-        kfree(packet);
-        return -1;
-    }
-	memcpy(pConfig, p_data, sizeof(CamDevicePathStreamingCfg_t));
-    mutex_unlock(&isp_dev->mlock);
     kfree(packet);
 	return result;
 }
@@ -743,30 +696,11 @@ RESULT VsiCamDeviceAllocResMemory
     	return RET_OUTOFRANGE;
     }
 
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command( APU_2_RPU_MB_CMD_ALLOC_RES_MEMORY , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        mutex_unlock(&isp_dev->mlock);
-        kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
- 
-    __result = xlnx_mbox_apu_wait_for_data(isp_dev,packet->payload);
-    if(__result)
-    {
-        mutex_unlock(&isp_dev->mlock);
-        kfree(packet);
-        dev_err(isp_dev->dev , "FAILED TO ALLOC RES MEMORY\n");
-        return -1;
-    }
+	xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_GET_PATH_STREAMING, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 
-    dev_info(isp_dev->dev , "[ISP] %s %d %x %x\n",__func__,__LINE__,*p_data,*(p_data+sizeof(uint32_t)));
-    memcpy(pBaseAddress, p_data, sizeof(uint32_t));
-	p_data += sizeof(uint32_t);
 	memcpy(pIplAddress, p_data, sizeof(uint32_t));
 
-    mutex_unlock(&isp_dev->mlock);
 
     kfree(packet);
     return result;
@@ -813,20 +747,15 @@ RESULT VsiCamDeviceFreeResMemory
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-#if 1
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command( APU_2_RPU_MB_CMD_FREE_RES_MEMORY , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        mutex_unlock(&isp_dev->mlock);
-        kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_FREE_RES_MEMORY, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-#endif
 
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+
     kfree(packet);
     return RET_SUCCESS;
 }

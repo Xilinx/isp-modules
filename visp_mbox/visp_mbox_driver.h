@@ -66,6 +66,8 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 			void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu);
 
+int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
+			void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu);
 
 void mailbox_init(uint32_t cpu, uint64_t MBOX_FIFO_START_ADDR,
 				  uint64_t MBOX_FIFO_START_ADDR_PHY);
@@ -89,5 +91,34 @@ struct reserved_memory
 	phys_addr_t phys_addr;
 	void __iomem *virt_addr;
 };
+/* Structures to hold the rpu_device specific information */
+struct rpu_dev {
+    struct device *dev;
+    int rpu_id;
+    dev_t devno;
+    struct cdev cdev;
+    struct mutex lock;
+    struct mutex ack_lock;
+    struct mutex read_lock;
+    struct mutex rpu_lock;
+    struct mutex write_lock;
+	struct mutex userapp_lock;
+    int app_wait_flag;
+    struct list_head node;
+    struct kref refcount;
+    struct tasklet_struct tasklet;
+    struct visp_dev *isp_dev[MAX_NO_ISP];
+    struct class *rpu_class[4];
+    struct mbox_client tx_mc;
+    struct mbox_client rx_mc;
+    struct mbox_chan *tx_chan;
+    struct mbox_chan *rx_chan;
+    struct work_struct mbox_work;
+    struct sk_buff_head tx_mc_skbs;
+    struct completion mailbox_completion;
+
+};
+//
+
 
 #endif

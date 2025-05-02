@@ -3,7 +3,7 @@ ifeq ($(VISP_PATH),)
 	export VISP_PATH
 endif
 
-TARGET := visp_video_mimo
+TARGET := visp_mimo_video
 obj-m := $(TARGET).o
 
 #  $(CC) $(CFLAGS) -c $< -o $@
@@ -16,16 +16,17 @@ EXTRA_CFLAGS := -I$(PWD)/visp_mimo_video
 EXTRA_CFLAGS += -I$(PWD)/visp_mimo/
 EXTRA_CFLAGS += -I$(PWD)/visp_mimo/include/
 EXTRA_CFLAGS += -I$(PWD)/common/
-EXTRA_CFLAGS += -I$(PWD)/visp_mbox_mimo/
-EXTRA_CFLAGS += -I$(PWD)/visp_mbox_mimo/mailbox/
+EXTRA_CFLAGS += -I$(PWD)/visp_mbox/
+EXTRA_CFLAGS += -I$(PWD)/visp_mbox/mailbox/
 EXTRA_CFLAGS += -I$(PWD)/visp_mimo/vsi_units/include/
 EXTRA_CFLAGS += -I$(PWD)/visp_mimo/vsi_units/include/cam_device/
 EXTRA_CFLAGS += -I$(PWD)/include/
 EXTRA_CFLAGS += -I$(PWD)/isp_ctrl/sensor
-EXTRA_CFLAGS += -I$(PWD)/visp_mbox_mimo/mailbox/
-EXTRA_CFLAGS += -I$(PWD)/visp_mbox_mimo/
+EXTRA_CFLAGS += -I$(PWD)/visp_mbox/mailbox/
+EXTRA_CFLAGS += -I$(PWD)/visp_mbox/
 USER_INC += $(PWD)/visp_mimo/isp_ctrl/sensor/*.h
-USER_INC += $(PWD)/visp_mbox_mimo/mailbox/*.h
+USER_INC += $(PWD)/visp_mbox/mailbox/*.h
+USER_INC += $(PWD)/visp_mimo/*.h
 EXTRA_CFLAGS += -g -DDEBUG
 
 PWD := $(shell pwd)

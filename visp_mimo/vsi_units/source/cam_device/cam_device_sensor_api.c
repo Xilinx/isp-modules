@@ -61,6 +61,7 @@
 #include <linux/string.h>
 #include "kmbox.h"
 #include "visp_driver.h"
+#include "visp_mbox_driver.h"
 
 #define SENSOR_NAME_LEN 20
 
@@ -107,19 +108,13 @@ RESULT VsiCamDeviceSensorOpen
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-#if 1
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command(APU_2_RPU_MB_CMD_SENSOR_OPEN , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_OPEN, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-#endif
-
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
 
     kfree(packet);
 
@@ -183,23 +178,12 @@ RESULT VsiCamDeviceSensorDrvHandleRegister
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-#if 1
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command (APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_REG,packet, packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        kfree(packet);
-        return result;
-    }
-    pr_err("%s %d\n",__func__,__LINE__);
-    mbox_send_message(isp_dev->tx_chan,NULL);
-    pr_err("%s %d\n",__func__,__LINE__);
-
-#endif
-
-    pr_err("%s %d\n",__func__,__LINE__);
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    pr_err("%s %d\n",__func__,__LINE__);
-    mutex_unlock(&isp_dev->mlock);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_REG, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
     kfree(packet);
     return result;
@@ -245,20 +229,13 @@ RESULT VsiCamDeviceSensorDrvHandleUnRegister
     	return RET_OUTOFRANGE;
     }
 
-#if 1
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command(APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_UNREG , packet,packet->payload_size + payload_extra_size ,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        kfree(packet);
-        mutex_unlock(&isp_dev->mlock);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_UNREG, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-#endif
-
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
 
     kfree(packet);
     return result;
@@ -303,19 +280,13 @@ RESULT VsiCamDeviceSensorClose
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-#if 1
-    mutex_lock(&isp_dev->mlock);
-    result= Send_Command(APU_2_RPU_MB_CMD_SENSOR_CLOSE , packet,packet->payload_size + payload_extra_size  ,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
 
-#endif
-
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_CLOSE, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
     kfree(packet);
 	return result;
@@ -331,7 +302,6 @@ RESULT VsiCamDeviceSensorMapping
     RESULT result = RET_SUCCESS;
     uint8_t *p_data=NULL; 
     payload_packet *packet=NULL;
-    uint8_t __result;
     IsiCamDrvConfigMbox_t camcfg ;//= NULL;
 
     CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
@@ -373,23 +343,9 @@ RESULT VsiCamDeviceSensorMapping
         return RET_OUTOFRANGE;
     }
 
-#if 1
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command(APU_2_RPU_MB_CMD_SENSOR_MAPPING, packet, packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
-    if(0 != result) {
-    kfree(packet);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan, NULL);
+xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_MAPPING, packet,
+		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 
-#endif
-	__result = xlnx_mbox_apu_wait_for_data(isp_dev, packet->payload);
-	if(__result)
-	{
-        kfree(packet);
-    	pr_err("FAiled in Sensor Mapping\n");
-	    return -1;
-	}
 	*pSensorDrvhandle = kzalloc(sizeof(IsiCamDrvConfigMbox_t), GFP_KERNEL);
 
     if(*pSensorDrvhandle == NULL) {

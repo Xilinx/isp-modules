@@ -1447,6 +1447,7 @@ int MediaIspDeviceMcmSetFormat(struct visp_dev *isp_dev , uint8_t Port)
             break;
 	}
 
+    pr_err("RKC-PRINT %s %d \n",__func__, __LINE__);
 	RetVal = VsiCamDeviceSetInFormat(isp_dev , IspPort->CamDeviceHandle , InPath, &InFormat);
     if (RetVal != VSI_SUCCESS) {
         dev_err(isp_dev->dev,"CamDevice set input path %d format failed, ret is %d", InPath, RetVal);
@@ -1572,6 +1573,7 @@ int  Read_DQ_Bufinfo(void *data ,MediaBuffer_t * pMediaBuffer, struct Chn_info *
 }
 #if 1
 int MediaIspDeviceDqbuf_out(struct visp_dev *isp_dev, struct Chn_info *info, MediaBuf *Buf, void * Packet_from_RPU, MediaBuffer_t *pMediaBuffer);
+
 int MediaIspDeviceDqbuf_out(struct visp_dev *isp_dev, struct Chn_info *info, MediaBuf *Buf, void * Packet_from_RPU, MediaBuffer_t *pMediaBuffer)
 {
     int RetVal = VSI_SUCCESS;
@@ -1599,6 +1601,7 @@ int MediaIspDeviceDqbuf_out(struct visp_dev *isp_dev, struct Chn_info *info, Med
 
 	return RetVal;
 }
+EXPORT_SYMBOL(MediaIspDeviceDqbuf_out);
 #endif
 
 

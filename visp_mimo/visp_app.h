@@ -69,7 +69,13 @@ struct Chn_info
 	uint32_t path;
 };
 
+
+int Handle_Frameout_Buffer_mimo(void *Packet_from_RPU, struct visp_dev *isp_dev);
 int MediaIspDeviceCameraDisConnect(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
+
+
+int MediaIspDeviceDqbuf_out(struct visp_dev *isp_dev, struct Chn_info *info, MediaBuf *Buf, void * Packet_from_RPU, MediaBuffer_t *pMediaBuffer);
+
 
 #define ENABLE_LOG 1
 

@@ -55,6 +55,7 @@
 #include "sensor_cmd.h"
 #include <linux/delay.h>
 #include "visp_driver.h"
+#include "visp_mbox_driver.h"
 #include <linux/string.h>
 #include "kmbox.h"
 #include "visp_common.h"
@@ -97,17 +98,14 @@ RESULT VsiCamDeviceUnRegisterAwbLib
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command( APU_2_RPU_MB_CMD_UNREGISTER_AWB_LIB , packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        kfree(packet);
-        mutex_unlock(&isp_dev->mlock);
-        return result;
-    }
-    mbox_send_message(isp_dev->tx_chan,NULL);
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_UNREGISTER_AWB_LIB, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
+
     kfree(packet);
 
 	return result;
@@ -150,18 +148,13 @@ RESULT VsiCamDeviceAwbDisable
     	return RET_OUTOFRANGE;
     }
 
-    mutex_lock(&isp_dev->mlock);
-    result = Send_Command( APU_2_RPU_MB_CMD_AWB_DISABLE, packet,packet->payload_size + payload_extra_size,isp_dev->isp_rpu,MBOX_CORE_APU);
-    if(0 != result) {
-        mutex_unlock(&isp_dev->mlock);
-        kfree(packet);
-        return result;
-    }
+	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_AWB_DISABLE, packet,
+            packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
 
-    mbox_send_message(isp_dev->tx_chan,NULL);
-
-    xlnx_mbox_apu_wait_for_ack(isp_dev);
-    mutex_unlock(&isp_dev->mlock);
 
     kfree(packet);
 

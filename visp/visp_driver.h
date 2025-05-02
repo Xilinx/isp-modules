@@ -72,7 +72,6 @@
 #include <linux/mailbox_client.h>
 #include <linux/mailbox_controller.h>
 #include <linux/skbuff.h>
-
 #define VISP_NAME "visp-isp-subdev"
 #define VISP_SUBDEV_NAME_SIZE 52
 
@@ -193,35 +192,6 @@ struct visp_ext_dma_buf
 	uint32_t size;
 	struct list_head entry;
 };
-
-/* Structures to hold the rpu_device specific information */
-struct rpu_dev
-{
-	struct device *dev;
-	int rpu_id;
-	dev_t devno;
-	struct cdev cdev;
-	struct mutex lock;
-	struct mutex ack_lock;
-	struct mutex read_lock;
-	struct mutex rpu_lock;
-	struct mutex write_lock;
-	struct list_head node;
-	struct kref refcount;
-	struct tasklet_struct tasklet;
-	struct visp_common *isp_dev[MAX_NO_ISP];
-	//struct visp_dev *isp_dev[MAX_NO_ISP];
-	struct class *rpu_class[4];
-	struct mbox_client tx_mc;
-	struct mbox_client rx_mc;
-	struct mbox_chan *tx_chan;
-	struct mbox_chan *rx_chan;
-	struct work_struct mbox_work;
-	struct sk_buff_head tx_mc_skbs;
-	struct completion mailbox_completion;
-	int app_wait_flag;
-};
-
 struct atm_prop {
     u32 high_mem_addr;      // Higher 32-bit of memory address
     u32 is_64bit;     // True if 64-bit, False if 32-bit
@@ -276,6 +246,8 @@ struct oba_info {
    const char * data_format;
 };
 
+
+//
 
 struct visp_dev
 {
@@ -345,11 +317,24 @@ struct visp_dev
 	struct completion apu_wait_for_data;
 	struct completion mailbox_completion;
 	struct atm_prop atm;
+    wait_queue_head_t wq_frame_done_finished;
+    bool apu_wait_for_isp_frame_done;
 	int k_apu_ack_flag;
 	int k_apu_data_flag;
 	int app_wait_flag;
 	frameout_cb_t frameout_cb;
+     dma_addr_t ip_a[2];
+     dma_addr_t op_a[4];
+     unsigned int out_w;
+     unsigned int out_h;
+     unsigned int cap_w;
+     unsigned int cap_h;
+     unsigned long int out_sizeimage;
+     unsigned long int cap_sizeimage;
+     unsigned int out_fmt;
+     unsigned int cap_fmt;
+     unsigned int isp_dq_out_index;
 };
 
-//int Handle_Frameout_Buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);
+//
 #endif

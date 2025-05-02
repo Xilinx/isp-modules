@@ -177,6 +177,7 @@ static void visp_mb_tx_done(struct mbox_client *cl, void *msg, int r)
 	return;
 }
 
+#if 0
 static inline struct visp_dev *get_limo_dev(struct rpu_dev *rpu, int isp_id)
 {
     struct visp_common *vc;
@@ -185,11 +186,12 @@ static inline struct visp_dev *get_limo_dev(struct rpu_dev *rpu, int isp_id)
         return NULL;
 
     vc = rpu->isp_dev[isp_id];
-    if (!vc || ( (vc->mode != ISP_MODE_LIMO) && (vc->mode != ISP_MODE_LILO) ) )
+    if (!vc )//|| ( (vc->mode != ISP_MODE_LIMO) && (vc->mode != ISP_MODE_LILO) ) )
         return NULL;
 
     return (struct visp_dev *)vc->isp_dev;
 }
+#endif
 
 static void my_tasklet_function(void *data)
 {
@@ -204,23 +206,17 @@ static void my_tasklet_function(void *data)
 		pr_err("my_tasklet_function: rpu_dev is NULL\n");
 		return;
 	}
-
 	/* Read command ID and ISP ID from mailbox */
 	mutex_lock(&rpu->read_lock);
+	/* Read command ID and ISP ID from mailbox */
 	recv_cmd_id = apu_mailbox_read(get_dest_cpu(rpu->rpu_id), &isp_id);
 	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES)
 	{
 		dev_err(rpu->dev,"my_tasklet_function: Invalid isp_id %u\n", isp_id);
+	    mutex_unlock(&rpu->read_lock);
 		return;
 	}
-	/* Retrieve the corresponding ISP device */
-	isp_dev =  get_limo_dev(rpu, isp_id);//rpu->isp_dev[isp_id];
-	if (!isp_dev)
-	{
-		dev_err(rpu->dev,"my_tasklet_function: ISP device is NULL for isp_id %u\n",
-			   isp_id);
-		return;
-	}
+    isp_dev = rpu->isp_dev[isp_id];
 	/* Handle specific commands */
 	if (isp_dev->k_apu_ack_flag && (recv_cmd_id == MB_CMD_RES_SUCCESS))
 	{
@@ -238,11 +234,12 @@ static void my_tasklet_function(void *data)
 	else if (recv_cmd_id == RPU_2_APU_CMD_DISPLAY_BUFFER)
 	{
 		if (isp_dev->frameout_cb) {
+		    mutex_unlock(&rpu->read_lock);
 			isp_dev->frameout_cb(data_from_interrupt.data, isp_dev);
 		} else {
 			pr_err("%s %d CALLBACK IS NULL\n",__func__,__LINE__);
+		    mutex_unlock(&rpu->read_lock);
 		}
-		mutex_unlock(&rpu->read_lock);
 	}
 	else
 	{
@@ -251,7 +248,6 @@ static void my_tasklet_function(void *data)
 			   recv_cmd_id);
 	}
 	cnt++;
-	// mutex_unlock(&rpu->read_lock);
 }
 
 static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg) {
@@ -278,14 +274,12 @@ static void visp_mb_rx_cb(struct mbox_client *cl, void *msg,int rpu_id)
 	if (rpu != NULL)
 	{
 		/* Schedule work to handle the received event */
-		if ( queue_work_on(1, system_wq, &rpu->mbox_work) )
-		{
-		}
-		else
-		{
-			dev_err(rpu->dev,"visp_mb_rx_cb: Failed to schedule work for RPU ID %d\n",
-				   rpu_id);
-		}
+		//if ( queue_work_on(1, system_wq, &rpu->mbox_work) )
+        if (work_pending(&rpu->mbox_work)) {
+            pr_err("Work already pending for RPU ID %d\n", rpu_id);
+        } else {
+            queue_work(system_wq, &rpu->mbox_work);
+        }
 	}
 	else
 	{
@@ -556,6 +550,7 @@ EXPORT_SYMBOL(get_rpu_dev);
 static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev,
 										  int rpu_id)
 {
+
 	struct rpu_dev *rpu;
 	struct device_node *node;
 	char dev_name[20];
@@ -830,6 +825,33 @@ unlock_and_exit:
 }
 EXPORT_SYMBOL(xlnx_send_mbox_data_cmd);
 
+int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
+			void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu)
+{
+    int result;
+	struct rpu_dev *rpu;
+	if (!isp_dev || !isp_dev->rpu) {
+		pr_err("%s: Invalid ISP device\n", __func__);
+		return -EINVAL;
+	}
+	rpu = isp_dev->rpu;
+	result = Send_Command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
+	if (result != 0) {
+		dev_err(rpu->dev,"%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
+		mutex_unlock(&rpu->write_lock);
+		return result;
+	}
+
+	//result = mbox_send_message(isp_dev->tx_chan, NULL);
+	result = mbox_send_message(rpu->tx_chan, NULL);
+	if (result < 0) {
+		dev_err(rpu->dev,"%s: mbox_send_message failed at line %d\n", __func__, __LINE__);
+		return result;
+	}
+	return 0; // Success
+}
+EXPORT_SYMBOL(xlnx_send_mbox_without_ack_cmd);
+
 
 int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 			void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu)
@@ -852,11 +874,14 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
+    // Prepare for ACK
+    reinit_completion(&isp_dev->apu_wait_for_ack);
 
 	/* Set acknowledgment flag */
 	isp_dev->k_apu_ack_flag = 1;
 
-	result = mbox_send_message(isp_dev->tx_chan, NULL);
+	//result = mbox_send_message(isp_dev->tx_chan, NULL);
+	result = mbox_send_message(rpu->tx_chan, NULL);
 	if (result < 0) {
 		dev_err(rpu->dev,"%s: mbox_send_message failed at line %d\n", __func__, __LINE__);
 		mutex_unlock(&rpu->write_lock);
@@ -869,6 +894,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 		dev_err(rpu->dev,"%s: Failed to get ack\n", __func__);
 		goto unlock_and_exit;
 	}
+
 unlock_and_exit:
 	mutex_unlock(&rpu->write_lock);
 	return result; // Success
@@ -895,9 +921,8 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 	/* Lock the acknowledgment mutex */
 	//    mutex_lock(&rpu->ack_lock);
 
-
-	//dev_err(isp_dev->dev, "%s %d acquired lock and waiting for ack to receive from rpu\n",__func__,__LINE__);
 	/* Wait for acknowledgment completion */
+	/* Read command ID and ISP ID from mailbox */
 	long timeout_jiffies = msecs_to_jiffies(1000*60*5);  // Timeout of 5000ms (5 seconds)
 	result = wait_for_completion_interruptible_timeout(&isp_dev->apu_wait_for_ack, timeout_jiffies);
 	if (result == 0) {
@@ -980,7 +1005,7 @@ static int visp_mbox_probe(struct platform_device *pdev)
 	dev_dbg(dev, "rpu_id read from device tree: %u\n", rpu_id);
 
 	/* Validate rpu_id if there is a known range */
-	if (rpu_id < 0 || rpu_id >= MAX_RPU_ID)
+	if (rpu_id < 6 || rpu_id >= MAX_RPU_ID)
 	{ // Replace MAX_RPU_ID with your maximum allowed value
 		dev_err(dev, "Invalid rpu_id: %d\n", rpu_id);
 		return -EINVAL;
@@ -1106,9 +1131,12 @@ static void visp_mbox_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id visp_mbox_of_match[] = {
-	{
-		.compatible = "xlnx,mbox",
-	},
+    {
+        .compatible = "xlnx,mimo-mbox"
+    },
+    {
+        .compatible = "xlnx,mbox"
+    },
 	{/* sentinel */},
 };
 static struct platform_driver visp_mbox_driver = {
