@@ -300,8 +300,9 @@ RESULT VsiCamDeviceDestroyBufPool
     packet->payload_size += sizeof(CamDeviceBufChainId_t);
 
     if(packet->payload_size > MAX_ITEM)
+    {
     	return RET_OUTOFRANGE;
-
+    }
 
 	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DESTORY_BUFFER_POOL, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
@@ -355,8 +356,9 @@ RESULT VsiCamDeviceSetupBufMgmt
     p_data += sizeof(CamDeviceBufChainId_t);
 
     if(packet->payload_size > MAX_ITEM)
+    {
     	return RET_OUTOFRANGE;
-
+    }
 	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_SETUP_BUF_MGMT, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (RET_SUCCESS != result )
@@ -415,8 +417,9 @@ RESULT VsiCamDeviceReleaseBufMgmt
     packet->payload_size += sizeof(CamDeviceBufChainId_t);
 
     if(packet->payload_size > MAX_ITEM)
+    {
     	return RET_OUTOFRANGE;
-
+    }
 	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_RELEASE_BUF_MGMT, packet,
 		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (RET_SUCCESS != result )
@@ -441,7 +444,6 @@ RESULT VsiCamDeviceDeQueBuffer
     RESULT result = RET_SUCCESS;
     payload_packet *packet=NULL;
     uint8_t *p_data=NULL; 
-    uint8_t __result ;
     CamDeviceContext_t *pCamDevCtx = NULL;
 
      DRV_DQ_CNT++;
@@ -515,8 +517,9 @@ RESULT VsiCamDeviceDeQueBuffer
     packet->payload_size += sizeof(uint32_t);
 
     if(packet->payload_size > MAX_ITEM)
+    {
     	return RET_OUTOFRANGE;
-
+    }
 	xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_DEQUE_BUFFER, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 
@@ -641,8 +644,9 @@ RESULT VsiCamDeviceEnQueBuffer
 
 
     if(packet->payload_size > MAX_ITEM)
+    {
     	return RET_OUTOFRANGE;
-
+    }
 
 	result = xlnx_send_mbox_without_ack_cmd(isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, packet,
 		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
@@ -666,7 +670,6 @@ RESULT VsiCamDeviceGetBufferSize
     payload_packet *packet=NULL;
     CamDeviceContext_t *pCamDevCtx = NULL;
     uint8_t *p_data = NULL; 
-    uint8_t  __result ;
 
     if (NULL == hCamDevice || NULL == pBufSize) {
         return RET_NULL_POINTER;
@@ -699,7 +702,9 @@ RESULT VsiCamDeviceGetBufferSize
     packet->payload_size += sizeof(uint32_t);
 
     if(packet->payload_size > MAX_ITEM)
+    {
     	return RET_OUTOFRANGE;
+    }
 
 	xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_GET_BUFFER_SIZE, packet,
             packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);

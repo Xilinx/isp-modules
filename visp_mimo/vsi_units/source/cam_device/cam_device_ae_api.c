@@ -68,7 +68,6 @@ RESULT VsiCamDeviceUnRegisterAeLib
 )
 {
     RESULT result = RET_SUCCESS;
-    int ret = 0;
     payload_packet *packet=NULL;
     uint8_t *p_data=NULL;
 

@@ -160,7 +160,6 @@ RESULT VsiCamDeviceDestroy
 )
 {
     RESULT result = RET_SUCCESS;
-    int ret = 0;
     uint8_t *p_data=NULL;
     payload_packet *packet=NULL;
 
@@ -212,7 +211,6 @@ RESULT VsiCamDeviceSetOutFormat
 )
 {
     RESULT result = RET_SUCCESS;
-    int ret = 0;
     payload_packet *packet=NULL;
     uint8_t *p_data=NULL; 
 
@@ -280,7 +278,6 @@ RESULT VsiCamDeviceSetInFormat
     CamDevicePipeInFmt_t *pFmt
 )
 {
-    int ret = 0;
     RESULT result = RET_SUCCESS;
     uint8_t *p_data=NULL; 
     payload_packet *packet=NULL;
@@ -349,7 +346,6 @@ RESULT VsiCamDeviceConnectCamera
     CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
     payload_packet *packet=NULL;
     uint8_t *p_data=NULL; 
-    int ret=0;
 
 	if (pCamDevCtx==NULL || pSubCtrl==NULL)
 	{
@@ -408,7 +404,6 @@ RESULT VsiCamDeviceDisconnectCamera
 )
 {
     RESULT result = RET_SUCCESS;
-    int ret=0;
     uint8_t *p_data=NULL;
     payload_packet *packet=NULL;
 
@@ -582,7 +577,6 @@ RESULT VsiCamDeviceGetPathStreaming
     RESULT result = RET_SUCCESS;
     uint8_t *p_data=NULL;
     payload_packet *packet=NULL;
-    uint8_t __result;
     CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t*) hCamDevice;
     if (NULL == pCamDevCtx) {
         return (RET_WRONG_HANDLE);
@@ -661,7 +655,6 @@ RESULT VsiCamDeviceAllocResMemory
     RESULT result = RET_SUCCESS;
     payload_packet *packet=NULL;
     uint8_t *p_data = NULL;
-    uint8_t __result ;
     if (NULL == pCamDevCtx) {
 		return (RET_WRONG_HANDLE);
 	}
