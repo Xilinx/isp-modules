@@ -1586,7 +1586,7 @@ int MediaIspDeviceDqbuf_out(struct visp_dev *isp_dev, struct Chn_info *info, Med
 	isp_dev->isp_dq_out_index = pMediaBuffer->index;
 
 	CamDeviceContext_t pCamDevCtx;
-	pCamDevCtx.ispHwId = 0;
+	pCamDevCtx.ispHwId = isp_dev->id;
 	pCamDevCtx.ispVtId = 0;
 	pCamDevCtx.instanceId =0 ;
 	pCamDevCtx.cookie =99;

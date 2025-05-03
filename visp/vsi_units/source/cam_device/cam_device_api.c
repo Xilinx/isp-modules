@@ -200,6 +200,8 @@ RESULT VsiCamDeviceDestroy(struct visp_dev *isp_dev,
    }
 
 	kfree(packet);
+    CamDeviceFreeInstance(hCamDevice, pCamDevCtx->ispHwId);
+
 	return result;
 }
 
@@ -726,6 +728,7 @@ RESULT VsiCamDeviceFreeResMemory(struct visp_dev *isp_dev,
    }
 
 	kfree(packet);
+    CamDeviceFreeInstance(hCamDevice, pCamDevCtx->ispHwId);
 	return RET_SUCCESS;
 }
 

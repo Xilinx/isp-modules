@@ -198,6 +198,7 @@ RESULT VsiCamDeviceDestroy
    }
 
     kfree(packet);
+    CamDeviceFreeInstance(hCamDevice, pCamDevCtx->ispHwId);
 	return result;
 }
 EXPORT_SYMBOL(VsiCamDeviceDestroy);
