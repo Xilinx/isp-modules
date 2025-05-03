@@ -177,6 +177,8 @@ int MediaIspDeviceStreamOff(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn)
     CamDevicePathStreamingCfg_t PathStatus;
     VsiCamDeviceGetPathStreaming(isp_dev , IspPort->CamDeviceHandle, &PathStatus);
     PathStatus.outPathEnable &=  ~(1 << Chn);
+
+    PathStatus.outPathEnable = 0;
     RetVal = VsiCamDeviceSetPathStreaming(isp_dev, IspPort->CamDeviceHandle, &PathStatus);
     MediaIspDeviceDestroyBufPool(isp_dev, Port, Chn);
 

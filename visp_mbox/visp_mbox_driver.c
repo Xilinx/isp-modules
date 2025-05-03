@@ -955,7 +955,7 @@ static int Mailbox_Initialization(struct rpu_dev *rpu)
 	}
 
 	/* Initialize reserved memory */
-	ret = reserved_memory_init("rpu0mbox0buffer");
+	ret = reserved_memory_init("isp_mbox_buffer");
 	if (ret)
 	{
 		dev_err(rpu->dev, "Failed to initialize reserved memory. Error: %d\n",

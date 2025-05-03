@@ -137,7 +137,6 @@ RESULT VsiCamDeviceCreate
         kfree(packet);
     	return RET_OUTOFRANGE;
     }
-
 	result = xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_CREATE_INSTANCE, packet,
 		packet->payload_size + payload_extra_size, isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (RET_SUCCESS != result )

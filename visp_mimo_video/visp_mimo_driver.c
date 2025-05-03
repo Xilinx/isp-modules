@@ -390,10 +390,12 @@ static int on;
 	if (!on)
 	{
         int ret;
+
         ret = visp_l_calib_event(device, 0, VIDEO_EVENT_LOAD_CALIB);
         if (ret != 0) {
                 pr_err("[EVENT_FAIL] %s %d\n", __func__,__LINE__);
         }
+
 	    MediaIspDeviceStreamOn(device->isp_dev, 0, 0);
 
         ret = visp_l_calib_event(device, 0, VIDEO_EVENT_LOAD_JSON);
