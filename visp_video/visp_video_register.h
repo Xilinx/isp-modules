@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -57,5 +58,4 @@
 
 int visp_video_register(struct visp_media_dev *visp_mdev, int port);
 int visp_video_unregister(struct visp_media_dev *visp_mdev, int port);
-
 #endif

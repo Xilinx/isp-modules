@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -65,8 +66,7 @@
 #include <media/videobuf2-dma-contig.h>
 
 #ifdef VISP_PLATFORM_REGISTER
-struct visp_v4l2_link
-{
+struct visp_v4l2_link {
 	struct v4l2_subdev **local_subdev;
 	bool local_is_video;
 	uint32_t video_index;
@@ -85,28 +85,24 @@ struct visp_v4l2_link
 #define VISP_VIDEO_MIN_WIDTH 32
 #define VISP_VIDEO_MIN_HEIGHT 16
 
-struct visp_video_params
-{
+struct visp_video_params {
 	bool m2m;
 };
 
-struct visp_video_event_shm
-{
+struct visp_video_event_shm {
 	struct mutex event_lock;
 	uint64_t phy_addr;
 	void *virt_addr;
 	uint32_t size;
 };
 
-struct visp_video_reserve_mem
-{
+struct visp_video_reserve_mem {
 	dma_addr_t pa;
 	int size;
 	void *va;
 };
 
-struct visp_video_dev
-{
+struct visp_video_dev {
 	struct visp_video_params video_params;
 	struct visp_media_dev *visp_mdev;
 	struct video_device *video;
@@ -119,8 +115,7 @@ struct visp_video_dev
 	struct visp_video_event_shm event_shm;
 };
 
-struct visp_media_dev
-{
+struct visp_media_dev {
 	int id;
 	struct device *dev;
 	struct media_device mdev;
@@ -136,17 +131,14 @@ struct visp_media_dev
 #endif
 };
 
-struct visp_video_fmt_info
-{
+struct visp_video_fmt_info {
 	uint32_t fourcc;
 	uint32_t mbus;
 };
 
-struct visp_video_dma_buf
-{
+struct visp_video_dma_buf {
 	uint64_t pa;
 	int size;
 };
-
 
 #endif
