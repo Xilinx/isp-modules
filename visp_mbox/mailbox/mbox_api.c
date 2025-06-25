@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -51,8 +52,8 @@
  *
  *****************************************************************************/
 
-//#include <linux/mbox_api.h>
-//#include <linux/mbox_fifo.h>
+// #include <linux/mbox_api.h>
+// #include <linux/mbox_fifo.h>
 #include <linux/gfp.h>
 #include <linux/ioport.h>
 #include <linux/kernel.h>
@@ -69,92 +70,105 @@ static uint16_t g_mem_list[MBOX_CORE_MAX][MBOX_CORE_MAX] = {
 	{2, INVALID_PATH, INVALID_PATH},
 	{3, INVALID_PATH, INVALID_PATH}};
 
-int mbox_mem_map(MboxFifoCtrl *mbox_fifo, MboxCoreId core_id,
-				 uint64_t shm_start_addr, uint64_t shm_start_addr_phy,
-				 uint32_t shm_block_size)
+int mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
+		 uint64_t shm_start_addr, uint64_t shm_start_addr_phy,
+		 uint32_t shm_block_size)
 {
-	MboxCoreId sender_id;
-	MboxCoreId receiver_id;
+	mbox_core_id sender_id;
+	mbox_core_id receiver_id;
 	uint32_t mlist, ret;
-	uint64_t buffer_addr_virt = shm_start_addr; //Virtual Address
+	uint64_t buffer_addr_virt = shm_start_addr; // Virtual Address
 	uint64_t buffer_addr_phy = shm_start_addr_phy;
 
-	FifoInitData *init_fifo = NULL;
+	fifo_init_data *init_fifo = NULL;
 
-	init_fifo = (FifoInitData *)kmalloc(sizeof(FifoInitData), GFP_KERNEL);
+	init_fifo =
+	    (fifo_init_data *)kmalloc(sizeof(fifo_init_data), GFP_KERNEL);
 
-	if (NULL == init_fifo) return VPI_ERR_NOMEM;
+	if (init_fifo == NULL)
+		return VPI_ERR_NOMEM;
 
-	init_fifo->item_size = sizeof(MboxPostMsg);
+	init_fifo->item_size = sizeof(mbox_post_msg);
 	init_fifo->buffer_size =
-		shm_block_size - ((sizeof(FifoControl) + 7) / 8 * 8);
+	    shm_block_size - ((sizeof(fifo_control) + 7) / 8 * 8);
 	init_fifo->item_total = init_fifo->buffer_size / init_fifo->item_size;
 
 	mlist = 0;
 
 	for (sender_id = MBOX_CORE_RPU0; sender_id < MBOX_CORE_MAX; sender_id++)
 		for (receiver_id = MBOX_CORE_RPU0; receiver_id < MBOX_CORE_MAX;
-			 receiver_id++)
-		{
-			// Check for invalid communication paths and ignore such combinations
+		     receiver_id++) {
+			// Check for invalid communication paths and ignore such
+			// combinations
 			if (sender_id == receiver_id ||
-				(sender_id == MBOX_CORE_RPU0 &&
-				 receiver_id == MBOX_CORE_RPU1) ||
-				(sender_id == MBOX_CORE_RPU0 &&
-				 receiver_id == MBOX_CORE_RPU2) ||
-				(sender_id == MBOX_CORE_RPU0 &&
-				 receiver_id == MBOX_CORE_RPU3) ||
+			    (sender_id == MBOX_CORE_RPU0 &&
+			     receiver_id == MBOX_CORE_RPU1) ||
+			    (sender_id == MBOX_CORE_RPU0 &&
+			     receiver_id == MBOX_CORE_RPU2) ||
+			    (sender_id == MBOX_CORE_RPU0 &&
+			     receiver_id == MBOX_CORE_RPU3) ||
 
-				(sender_id == MBOX_CORE_RPU1 &&
-				 receiver_id == MBOX_CORE_RPU0) ||
-				(sender_id == MBOX_CORE_RPU1 &&
-				 receiver_id == MBOX_CORE_RPU2) ||
-				(sender_id == MBOX_CORE_RPU1 &&
-				 receiver_id == MBOX_CORE_RPU3) ||
+			    (sender_id == MBOX_CORE_RPU1 &&
+			     receiver_id == MBOX_CORE_RPU0) ||
+			    (sender_id == MBOX_CORE_RPU1 &&
+			     receiver_id == MBOX_CORE_RPU2) ||
+			    (sender_id == MBOX_CORE_RPU1 &&
+			     receiver_id == MBOX_CORE_RPU3) ||
 
-				(sender_id == MBOX_CORE_RPU2 &&
-				 receiver_id == MBOX_CORE_RPU0) ||
-				(sender_id == MBOX_CORE_RPU2 &&
-				 receiver_id == MBOX_CORE_RPU1) ||
-				(sender_id == MBOX_CORE_RPU2 &&
-				 receiver_id == MBOX_CORE_RPU3) ||
+			    (sender_id == MBOX_CORE_RPU2 &&
+			     receiver_id == MBOX_CORE_RPU0) ||
+			    (sender_id == MBOX_CORE_RPU2 &&
+			     receiver_id == MBOX_CORE_RPU1) ||
+			    (sender_id == MBOX_CORE_RPU2 &&
+			     receiver_id == MBOX_CORE_RPU3) ||
 
-				(sender_id == MBOX_CORE_RPU3 &&
-				 receiver_id == MBOX_CORE_RPU0) ||
-				(sender_id == MBOX_CORE_RPU3 &&
-				 receiver_id == MBOX_CORE_RPU1) ||
-				(sender_id == MBOX_CORE_RPU3 && receiver_id == MBOX_CORE_RPU2)
+			    (sender_id == MBOX_CORE_RPU3 &&
+			     receiver_id == MBOX_CORE_RPU0) ||
+			    (sender_id == MBOX_CORE_RPU3 &&
+			     receiver_id == MBOX_CORE_RPU1) ||
+			    (sender_id == MBOX_CORE_RPU3 &&
+			     receiver_id == MBOX_CORE_RPU2)
 
-			)
-			{
+			) {
 				continue;
 			}
 
-			if (sender_id == core_id || receiver_id == core_id)
-			{
+			if (sender_id == core_id || receiver_id == core_id) {
 				g_mem_list[sender_id][receiver_id] = mlist;
 				(mbox_fifo + mlist)->core_id = core_id;
 				(mbox_fifo + mlist)->buffer_address_phy =
-					buffer_addr_phy +
-					((sizeof(
-						FifoControl))); //Storing phy addr here as RPU will read this adrress from register
+				    buffer_addr_phy +
+				    ((sizeof(
+					fifo_control))); // Storing phy addr
+							 // here as RPU will
+							 // read this adrress
+							 // from register
 				(mbox_fifo + mlist)->buffer_address_virt =
-					buffer_addr_virt +
-					((sizeof(
-						FifoControl))); //Storing phy addr here as RPU will read this adrress from register
+				    buffer_addr_virt +
+				    ((sizeof(
+					fifo_control))); // Storing phy addr
+							 // here as RPU will
+							 // read this adrress
+							 // from register
 				(mbox_fifo + mlist)->sender_id = sender_id;
 				(mbox_fifo + mlist)->receiver_id = receiver_id;
 				(mbox_fifo + mlist)->fifo =
-					(FifoControl
-						 *)(uint64_t)(buffer_addr_virt); //buffer_addr == 0 for first time
+				    (fifo_control
+					 *)(uint64_t)(buffer_addr_virt); // buffer_addr
+									 // == 0
+									 // for
+									 // first
+									 // time
 
 				init_fifo->buffer_addr_virt =
-					(mbox_fifo + mlist)->buffer_address_virt;
+				    (mbox_fifo + mlist)->buffer_address_virt;
 				init_fifo->buffer_addr_phy =
-					(mbox_fifo + mlist)->buffer_address_phy;
-				ret = fifo_init((mbox_fifo + mlist)->fifo, init_fifo);
-				//fifo_info((mbox_fifo + mlist)->fifo);
-				if (ret != VPI_SUCCESS) return ret;
+				    (mbox_fifo + mlist)->buffer_address_phy;
+				ret = fifo_init((mbox_fifo + mlist)->fifo,
+						init_fifo);
+				// fifo_info((mbox_fifo + mlist)->fifo);
+				if (ret != VPI_SUCCESS)
+					return ret;
 				mlist++;
 			}
 			buffer_addr_virt += shm_block_size;
@@ -167,22 +181,22 @@ int mbox_mem_map(MboxFifoCtrl *mbox_fifo, MboxCoreId core_id,
 }
 EXPORT_SYMBOL_GPL(mbox_mem_map);
 
-MboxFifoCtrl *vpi_mbox_init(MboxCoreId core_id, uint64_t shm_addr,
-							uint64_t shm_addr_phy, uint64_t shm_block_size)
+mbox_fifo_ctrl *vpi_mbox_init(mbox_core_id core_id, uint64_t shm_addr,
+			      uint64_t shm_addr_phy, uint64_t shm_block_size)
 {
-	MboxFifoCtrl *mbox_fifo = NULL;
+	mbox_fifo_ctrl *mbox_fifo = NULL;
 
-	if (core_id < 0 || core_id >= MBOX_CORE_MAX) return NULL;
+	if (core_id < 0 || core_id >= MBOX_CORE_MAX)
+		return NULL;
 
-	mbox_fifo = (MboxFifoCtrl *)kmalloc(
-		sizeof(MboxFifoCtrl) * ((MBOX_CORE_MAX - 1) * 2), GFP_KERNEL);
+	mbox_fifo = (mbox_fifo_ctrl *)kmalloc(
+	    sizeof(mbox_fifo_ctrl) * ((MBOX_CORE_MAX - 1) * 2), GFP_KERNEL);
 
-	if (NULL == mbox_fifo) return NULL;
-	if (VPI_SUCCESS != mbox_mem_map(mbox_fifo, core_id, shm_addr, shm_addr_phy,
-									shm_block_size))
-	{
+	if (mbox_fifo == NULL)
+		return NULL;
+	if (mbox_mem_map(mbox_fifo, core_id, shm_addr, shm_addr_phy,
+						shm_block_size) != VPI_SUCCESS){
 		kfree(mbox_fifo);
-
 		return NULL;
 	}
 
@@ -190,130 +204,140 @@ MboxFifoCtrl *vpi_mbox_init(MboxCoreId core_id, uint64_t shm_addr,
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_init);
 
-static inline int mbox_fifoctrl_init_check(MboxFifoCtrl *mbox_fifo)
+static inline int mbox_fifoctrl_init_check(mbox_fifo_ctrl *mbox_fifo)
 {
 	return (mbox_fifo == NULL) ? VPI_ERR_UNINITED : VPI_SUCCESS;
 }
 
-int mbox_core_id_check(MboxFifoCtrl *mbox_fifo, MboxCoreId sender_id,
-					   MboxCoreId receiver_id)
+int mbox_core_id_check(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
+		       mbox_core_id receiver_id)
 {
-	if (sender_id == receiver_id) return VPI_ERR_INVALID;
-	if (sender_id < 0 || sender_id >= MBOX_CORE_MAX || receiver_id < 0 ||
-		receiver_id >= MBOX_CORE_MAX)
+	if (sender_id == receiver_id)
 		return VPI_ERR_INVALID;
-	if (sender_id != mbox_fifo->core_id && receiver_id != mbox_fifo->core_id)
+	if (sender_id < 0 || sender_id >= MBOX_CORE_MAX || receiver_id < 0 ||
+	    receiver_id >= MBOX_CORE_MAX)
+		return VPI_ERR_INVALID;
+	if (sender_id != mbox_fifo->core_id &&
+	    receiver_id != mbox_fifo->core_id)
 		return VPI_ERR_INVALID;
 	return VPI_SUCCESS;
 }
 EXPORT_SYMBOL_GPL(mbox_core_id_check);
 
-int vpi_mbox_post(MboxFifoCtrl *mbox_fifo, MboxPostMsg *msg,
-				  MboxCoreId receiver_id, MboxDriverCb mbox_driver_cb)
+int vpi_mbox_post(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
+		  mbox_core_id receiver_id, mbox_driver_cb mbox_driver_cb)
 {
 	uint16_t ret;
 
-	if (VPI_ERR_UNINITED == mbox_fifoctrl_init_check(mbox_fifo))
+	if (mbox_fifoctrl_init_check(mbox_fifo) == VPI_ERR_UNINITED)
 		return VPI_ERR_UNINITED;
-	if (NULL == msg) return VPI_ERR_INVALID;
+	if (msg == NULL)
+		return VPI_ERR_INVALID;
 	if (VPI_ERR_INVALID ==
-		mbox_core_id_check(mbox_fifo, mbox_fifo->core_id, receiver_id))
+	    mbox_core_id_check(mbox_fifo, mbox_fifo->core_id, receiver_id))
 		return VPI_ERR_INVALID;
 
 	ret = fifo_write(
-		msg, (mbox_fifo + g_mem_list[mbox_fifo->core_id][receiver_id])->fifo);
+	    msg,
+	    (mbox_fifo + g_mem_list[mbox_fifo->core_id][receiver_id])->fifo);
 
-	if (ret != VPI_SUCCESS) return ret;
-	if (!mbox_driver_cb) return VPI_ERR_INVALID;
+	if (ret != VPI_SUCCESS)
+		return ret;
+	if (!mbox_driver_cb)
+		return VPI_ERR_INVALID;
 	mbox_driver_cb(receiver_id);
 	return VPI_SUCCESS;
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_post);
 
-int vpi_mbox_broadcast(MboxFifoCtrl *mbox_fifo, MboxPostMsg *msg,
-					   MboxDriverCb mbox_driver_cb)
+int vpi_mbox_broadcast(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
+		       mbox_driver_cb mbox_driver_cb)
 {
-	MboxCoreId recv_core;
+	mbox_core_id recv_core;
 	uint16_t ret;
 
-	if (VPI_ERR_UNINITED == mbox_fifoctrl_init_check(mbox_fifo))
+	if (mbox_fifoctrl_init_check(mbox_fifo) == VPI_ERR_UNINITED)
 		return VPI_ERR_UNINITED;
-	if (msg == NULL) return VPI_ERR_INVALID;
+	if (msg == NULL)
+		return VPI_ERR_INVALID;
 
 	for (recv_core = 0; recv_core < MBOX_CORE_MAX; recv_core++)
-		if (mbox_fifo->core_id != recv_core)
-		{
-			ret = vpi_mbox_post(mbox_fifo, msg, recv_core, mbox_driver_cb);
-			if (ret != VPI_SUCCESS) return ret;
+		if (mbox_fifo->core_id != recv_core) {
+			ret = vpi_mbox_post(mbox_fifo, msg, recv_core,
+					    mbox_driver_cb);
+			if (ret != VPI_SUCCESS)
+				return ret;
 		}
 	return VPI_SUCCESS;
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_broadcast);
 
-int vpi_mbox_read(MboxFifoCtrl *mbox_fifo, MboxPostMsg *msg,
-				  MboxCoreId sender_id)
+int vpi_mbox_read(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
+		  mbox_core_id sender_id)
 {
-	if (VPI_ERR_UNINITED == mbox_fifoctrl_init_check(mbox_fifo))
+	if (mbox_fifoctrl_init_check(mbox_fifo) == VPI_ERR_UNINITED)
 		return VPI_ERR_UNINITED;
-	if (msg == NULL) return VPI_ERR_INVALID;
+	if (msg == NULL)
+		return VPI_ERR_INVALID;
 	if (VPI_ERR_INVALID ==
-		mbox_core_id_check(mbox_fifo, sender_id, mbox_fifo->core_id))
+	    mbox_core_id_check(mbox_fifo, sender_id, mbox_fifo->core_id))
 		return VPI_ERR_INVALID;
 
 	return fifo_read(
-		msg, (mbox_fifo + g_mem_list[sender_id][mbox_fifo->core_id])->fifo);
+	    msg, (mbox_fifo + g_mem_list[sender_id][mbox_fifo->core_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_read);
-int vpi_mbox_reset(MboxFifoCtrl *mbox_fifo, MboxCoreId sender_id,
-				   MboxCoreId receiver_id)
+int vpi_mbox_reset(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
+		   mbox_core_id receiver_id)
 {
-	if (VPI_ERR_UNINITED == mbox_fifoctrl_init_check(mbox_fifo))
+	if (mbox_fifoctrl_init_check(mbox_fifo) == VPI_ERR_UNINITED)
 		return VPI_ERR_UNINITED;
 	if (VPI_ERR_INVALID ==
-		mbox_core_id_check(mbox_fifo, sender_id, receiver_id))
+	    mbox_core_id_check(mbox_fifo, sender_id, receiver_id))
 		return VPI_ERR_INVALID;
 
-	return fifo_reset((mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
+	return fifo_reset(
+	    (mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_reset);
 
-uint32_t vpi_mbox_get_stored(MboxFifoCtrl *mbox_fifo, MboxCoreId sender_id,
-							 MboxCoreId receiver_id)
+uint32_t vpi_mbox_get_stored(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
+			     mbox_core_id receiver_id)
 {
-	if (VPI_ERR_UNINITED == mbox_fifoctrl_init_check(mbox_fifo))
+	if (mbox_fifoctrl_init_check(mbox_fifo) == VPI_ERR_UNINITED)
 		return VPI_ERR_UNINITED;
 	if (VPI_ERR_INVALID ==
-		mbox_core_id_check(mbox_fifo, sender_id, receiver_id))
+	    mbox_core_id_check(mbox_fifo, sender_id, receiver_id))
 		return VPI_ERR_INVALID;
 
 	return fifo_get_stored(
-		(mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
+	    (mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_get_stored);
 
-bool vpi_mbox_is_full(MboxFifoCtrl *mbox_fifo, MboxCoreId sender_id,
-					  MboxCoreId receiver_id)
+bool vpi_mbox_is_full(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
+		      mbox_core_id receiver_id)
 {
-	return fifo_is_full((mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
+	return fifo_is_full(
+	    (mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_is_full);
 
-bool vpi_mbox_is_empty(MboxFifoCtrl *mbox_fifo, MboxCoreId sender_id,
-					   MboxCoreId receiver_id)
+bool vpi_mbox_is_empty(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
+		       mbox_core_id receiver_id)
 {
 	return fifo_is_empty(
-		(mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
+	    (mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_is_empty);
 
-void vpi_mbox_destroy(MboxFifoCtrl *mbox_fifo);
-void vpi_mbox_destroy(MboxFifoCtrl *mbox_fifo)
+void vpi_mbox_destroy(mbox_fifo_ctrl *mbox_fifo);
+void vpi_mbox_destroy(mbox_fifo_ctrl *mbox_fifo)
 {
 	uint16_t i;
+
 	for (i = 0; i < (MBOX_CORE_MAX - 1) * 2; i++)
-	{
 		kfree((mbox_fifo + i)->fifo);
-	}
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_destroy);
 

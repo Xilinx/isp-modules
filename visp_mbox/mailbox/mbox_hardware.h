@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -54,20 +55,18 @@
 #ifndef _MBOX_HARDWARE_H_
 #define _MBOX_HARDWARE_H_
 
-//#include <linux/mbox_fifo.h>
+// #include <linux/mbox_fifo.h>
 #include <mbox_fifo.h>
 
-typedef enum MboxIOCFlag
-{
+typedef enum mbox_ioc_flag {
 	MAILBOXIOC_WRITE_REG = 0x100,
 	MAILBOXIOC_READ_REG,
 	MAILBOXIOC_TRI_INT,
 	MAILBOXIOC_WRITE_MSG_REG,
 	MAILBOXIOC_READ_MSG_REG
-} MboxIOCFlag;
+} mbox_ioc_flag;
 
-typedef enum MboxFifoFlag
-{
+typedef enum mbox_fifo_flag {
 	MAILBOXFIFO_BUFFER,
 	MAILBOXFIFO_ITEM_SIZE,
 	MAILBOXFIFO_ITEM_TOTAL,
@@ -75,33 +74,30 @@ typedef enum MboxFifoFlag
 	MAILBOXFIFO_ITEM_STORED,
 	MAILBOXFIFO_READ_OFFSET,
 	MAILBOXFIFO_WRITE_OFFSET
-} MboxFifoFlag;
+} mbox_fifo_flag;
 
-typedef enum MboxMsgFlag
-{
+typedef enum mbox_msg_flag {
 	MAILBOXMSG_GROUP_ID = 0x10,
 	MAILBOXMSG_MSG_ID,
 	MAILBOXMSG_ACK,
 	MAILBOXMSG_FLAGS,
 	MAILBOXMSG_SIZE,
-	MAILBOXMSG_PAYLOAD //MAILBOXMSG_PAYLOAD must be the last one
-} MboxMsgFlag;
+	MAILBOXMSG_PAYLOAD // MAILBOXMSG_PAYLOAD must be the last one
+} mbox_msg_flag;
 
-typedef struct mailbox_reg_s
-{
+typedef struct mailbox_reg_s {
 	unsigned long val;
-	FifoControl *fifo;
-	MboxFifoFlag fifoflag;
+	fifo_control *fifo;
+	mbox_fifo_flag fifoflag;
 } mailbox_reg_t;
 
-typedef struct mailbox_reg_msg
-{
+typedef struct mailbox_reg_msg {
 	unsigned long val;
-	FifoControl *fifo;
-	MboxMsgFlag msgflag;
+	fifo_control *fifo;
+	mbox_msg_flag msgflag;
 } mailbox_reg_msg_t;
 
-int mailbox_write_msg(MboxPostMsg *msg, FifoControl *fifo, int fd);
-int mailbox_resd_msg(MboxPostMsg *msg, FifoControl *fifo, int fd);
+int mailbox_write_msg(mbox_post_msg *msg, fifo_control *fifo, int fd);
+int mailbox_resd_msg(mbox_post_msg *msg, fifo_control *fifo, int fd);
 
 #endif

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -58,8 +59,7 @@
 #define VSI_FAILURE (-1)
 #define VSI_NULL ((void *)0)
 
-typedef enum ErrCode_E
-{
+typedef enum ErrCode_E {
 	VSI_ERR_INVALID_DEVID = 1,
 	VSI_ERR_INVALID_PORTID = 2,
 	VSI_ERR_INVALID_CHNID = 3,
@@ -79,6 +79,6 @@ typedef enum ErrCode_E
 	VSI_ERR_BUSY = 18,
 	VSI_ERR_TIMEOUT = 19,
 	VSI_ERR_BUTT = 256
-} VSIErrCode_E;
+} vsi_err_code_e;
 
 #endif

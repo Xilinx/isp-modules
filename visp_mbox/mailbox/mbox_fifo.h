@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -58,8 +59,7 @@
 /**
  * @brief Structure of fifo control
  */
-typedef struct Fifo_Control
-{
+typedef struct fifo_control {
 	uint64_t *buffer_phy;
 	uint64_t *buffer_virt;
 	uint32_t item_size;
@@ -68,109 +68,106 @@ typedef struct Fifo_Control
 	uint32_t item_stored;
 	uint32_t read_offset;
 	uint32_t write_offset;
-} FifoControl;
+} fifo_control;
 
-void fifo_info(FifoControl *);
+void fifo_info(fifo_control *);
 /**
  * @brief Structure of init fifo data
  */
-typedef struct FifoInitData
-{
+typedef struct fifo_init_data {
 	uint64_t buffer_addr_phy;
 	uint64_t buffer_addr_virt;
 	uint32_t item_size;
 	uint32_t item_total;
 	uint32_t buffer_size;
-} FifoInitData;
+} fifo_init_data;
 
 /**
  * @brief Structure of Mbox post message
  */
-typedef struct MboxPostMsg
-{
+typedef struct mbox_post_msg {
 	uint8_t group_id;
 	uint8_t ack : 1;
 	uint8_t flags : 7;
 	uint16_t msg_id;
 	uint32_t size;
 	uint8_t payload[16420];
-} __attribute((aligned(8))) MboxPostMsg;
+} __attribute((aligned(8))) mbox_post_msg;
 
 /**
  * @brief Enum structure of Mailbox Interrupt id
  */
-typedef enum MboxIntId
-{
+typedef enum mbox_int_id {
 	MAILBOX_INTERRUPT_0,
 	MAILBOX_INTERRUPT_1,
 	MAILBOX_INTERRUPT_2,
 	MAILBOX_INTERRUPT_3
-} MboxIntId;
+} mbox_int_id;
 
 /**
  * @brief Initialize a Fifo with given input
- * @param fifo FifoControl pointer
+ * @param fifo fifo_control pointer
  * @param fifodata Fifo init data for construct the fifo
  * @return Return result
  * @retval MBOX_SUCCESS for succeed, others for failure
  */
-int fifo_init(FifoControl *fifo, FifoInitData *fifodata /*,int fd*/);
+int fifo_init(fifo_control *fifo, fifo_init_data *fifodata);
 
 /**
  * @brief Write a given meg to the fifo
  * @param msg write message
- * @param fifo FifoControl info pointer
+ * @param fifo fifo_control info pointer
  * @return Return result
  * @retval MBOX_SUCCESS for succeed, others for failure
  */
-int fifo_write(MboxPostMsg *msg, FifoControl *fifo /*,int fd*/);
+int fifo_write(mbox_post_msg *msg, fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Read a given meg from the fifo
  * @param msg read message
- * @param fifo FifoControl info pointer
+ * @param fifo fifo_control info pointer
  * @return Return result
  * @retval MBOX_SUCCESS for succeed, others for failure
  */
-int fifo_read(MboxPostMsg *msg, FifoControl *fifo /*,int fd*/);
+int fifo_read(mbox_post_msg *msg, fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Reset the FIFO
- * @param fifo FifoControl info pointer
+ * @param fifo fifo_control info pointer
  * @return Return result
  * @retval MBOX_SUCCESS for succeed, others for failure
  */
-int fifo_reset(FifoControl *fifo /*,int fd*/);
+int fifo_reset(fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Check current FIFO stored number
- * @param fifo FifoControl info pointer
+ * @param fifo fifo_control info pointer
  * @return Return result
  * @retval stored numbers, others for failure
  */
-uint32_t fifo_get_stored(FifoControl *fifo /*,int fd*/);
+uint32_t fifo_get_stored(fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Check current FIFO is full or not
- * @param fifo FifoControl info pointer
+ * @param fifo fifo_control info pointer
  * @return Return result
  * @retval true for full, false for failure
  */
-bool fifo_is_full(FifoControl *fifo /*,int fd*/);
+bool fifo_is_full(fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Check current FIFO is empty or not
- * @param fifo FifoControl info pointer
+ * @param fifo fifo_control info pointer
  * @return Return result
  * @retval ture for empty, false for failure
  */
-bool fifo_is_empty(FifoControl *fifo /*,int fd*/);
+bool fifo_is_empty(fifo_control *fifo /*,int fd*/);
 
 /**
- * @brief Free FifoControl buffer data, only used if the buffer is assigned by
+ * @brief Free fifo_control buffer data, only used if the buffer is assigned by
  * @brief malloc() or similar function
- * @param fifo FifoControl info pointer
+ * @param fifo fifo_control info pointer
  */
-int fifo_buffer_free(FifoControl *fifo);
+int fifo_buffer_free(fifo_control *fifo);
 
 #endif //_MBOX_FIFO_H_

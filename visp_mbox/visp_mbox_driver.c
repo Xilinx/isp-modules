@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -50,7 +51,7 @@
  * version of this file.
  *
  *****************************************************************************/
- 
+
 #include <linux/arm-smccc.h>
 #include <linux/module.h>
 #include <linux/of_graph.h>
@@ -70,20 +71,20 @@
 #include <media/v4l2-mc.h>
 #include <media/v4l2-mediabus.h>
 #include <media/videobuf2-dma-contig.h>
-//#include <linux/sensor_cmd.h>
+// #include <linux/sensor_cmd.h>
 #include <linux/delay.h>
 #include <linux/of_address.h>
 
 #include "visp_driver.h"
 #include "visp_event.h"
 #include "visp_v4l2_common.h"
-//#include "visp_ctrl.h"
+// #include "visp_ctrl.h"
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 
 #include "sensor_cmd.h"
 #include "visp_procfs.h"
-//#include "mailbox.h"
+// #include "mailbox.h"
 #include <linux/kernel.h>
 #include <linux/ktime.h>
 #include "visp_mbox_driver.h"
@@ -111,54 +112,52 @@ struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
 static LIST_HEAD(rpu_devices);
 static DECLARE_COMPLETION(mailbox_completion);
-int (*exported_func1)(void *, struct visp_dev *isp_dev);
+int (*exported_func1)(void *test, struct visp_dev *isp_dev);
 static void my_tasklet_function(void *data);
 /* Callback declarations */
-static void visp_mb_rx_cb(struct mbox_client *cl, void *msg,int rpu_id);
+static void visp_mb_rx_cb(struct mbox_client *cl, void *msg, int rpu_id);
 static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg);
 static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg);
 static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg);
 static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg);
 typedef int (*frameout_cb_t)(void *data, struct visp_dev *dev);
 int get_dest_cpu(int rpu_id);
-int get_dest_cpu(int rpu_id) {
-    int dest_cpu;
-    switch (rpu_id) {
-        case 6:
-            dest_cpu = RPU6_0;
-            break;
-        case 7:
-            dest_cpu = RPU6_1;
-            break;
-        case 8:
-            dest_cpu = RPU6_2;
-            break;
-        case 9:
-            dest_cpu = RPU6_3;
-            break;
-        default:
-            // Handle invalid rpu_id (you might want to return an error code)
-            dest_cpu = -1; // Or another indicator of an invalid ID
-            break;
-    }
-    return dest_cpu;
+int get_dest_cpu(int rpu_id)
+{
+	int dest_cpu;
+
+	switch (rpu_id) {
+	case 6:
+		dest_cpu = RPU6_0;
+		break;
+	case 7:
+		dest_cpu = RPU6_1;
+		break;
+	case 8:
+		dest_cpu = RPU6_2;
+		break;
+	case 9:
+		dest_cpu = RPU6_3;
+		break;
+	default:
+		// Handle invalid rpu_id (you might want to return an error
+		// code)
+		dest_cpu = -1; // Or another indicator of an invalid id
+		break;
+	}
+	return dest_cpu;
 }
 static void (*visp_rx_callbacks[])(struct mbox_client *, void *) = {
-    visp_mb_rx_cb_0,
-    visp_mb_rx_cb_1,
-    visp_mb_rx_cb_2,
-    visp_mb_rx_cb_3
-};
+	visp_mb_rx_cb_0, visp_mb_rx_cb_1, visp_mb_rx_cb_2, visp_mb_rx_cb_3};
 
 static void handle_event_notified(struct work_struct *work)
 {
-	//struct visp_dev *isp_dev;
+	// struct visp_dev *isp_dev;
 	struct rpu_dev *rpu;
 
 	/* Get the visp_dev structure from the work struct */
 	rpu = container_of(work, struct rpu_dev, mbox_work);
-	if (!rpu)
-	{
+	if (!rpu) {
 		pr_err("my_tasklet_function: rpu_dev is NULL\n");
 		return;
 	}
@@ -174,24 +173,7 @@ static void handle_event_notified(struct work_struct *work)
 
 static void visp_mb_tx_done(struct mbox_client *cl, void *msg, int r)
 {
-	return;
 }
-
-#if 0
-static inline struct visp_dev *get_limo_dev(struct rpu_dev *rpu, int isp_id)
-{
-    struct visp_common *vc;
-
-    if (!rpu || isp_id >= MAX_NO_ISP)
-        return NULL;
-
-    vc = rpu->isp_dev[isp_id];
-    if (!vc )//|| ( (vc->mode != ISP_MODE_LIMO) && (vc->mode != ISP_MODE_LILO) ) )
-        return NULL;
-
-    return (struct visp_dev *)vc->isp_dev;
-}
-#endif
 
 static void my_tasklet_function(void *data)
 {
@@ -199,92 +181,89 @@ static void my_tasklet_function(void *data)
 	uint32_t recv_cmd_id;
 	uint32_t isp_id;
 	struct visp_dev *isp_dev;
-	static int cnt = 0;
+	static int cnt;
 	/* Check for a valid RPU device */
-	if (!rpu)
-	{
+	if (!rpu) {
 		pr_err("my_tasklet_function: rpu_dev is NULL\n");
 		return;
 	}
-	/* Read command ID and ISP ID from mailbox */
+	/* Read command id and ISP id from mailbox */
 	mutex_lock(&rpu->read_lock);
-	/* Read command ID and ISP ID from mailbox */
+	/* Read command id and ISP id from mailbox */
 	recv_cmd_id = apu_mailbox_read(get_dest_cpu(rpu->rpu_id), &isp_id);
-	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES)
-	{
-		dev_err(rpu->dev,"my_tasklet_function: Invalid isp_id %u\n", isp_id);
-	    mutex_unlock(&rpu->read_lock);
+	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES) {
+		dev_err(rpu->dev, "my_tasklet_function: Invalid isp_id %u\n",
+			isp_id);
+		mutex_unlock(&rpu->read_lock);
 		return;
 	}
-    isp_dev = rpu->isp_dev[isp_id];
+	isp_dev = rpu->isp_dev[isp_id];
 	/* Handle specific commands */
-	if (isp_dev->k_apu_ack_flag && (recv_cmd_id == MB_CMD_RES_SUCCESS))
-	{
+	if (isp_dev->k_apu_ack_flag && (recv_cmd_id == MB_CMD_RES_SUCCESS)) {
 		complete(&isp_dev->apu_wait_for_ack);
-	}
-	else if (isp_dev->k_apu_data_flag && (recv_cmd_id == MB_CMD_GET_SUCCESS))
-	{
+	} else if (isp_dev->k_apu_data_flag &&
+		   (recv_cmd_id == MB_CMD_GET_SUCCESS)) {
 		complete(&isp_dev->apu_wait_for_data);
-	}
-	else if ((rpu->app_wait_flag && (recv_cmd_id == MB_CMD_RES_SUCCESS)) ||
-			 (rpu->app_wait_flag && (recv_cmd_id == MB_CMD_GET_SUCCESS)))
-	{
+	} else if ((rpu->app_wait_flag &&
+		    (recv_cmd_id == MB_CMD_RES_SUCCESS)) ||
+		   (rpu->app_wait_flag &&
+		    (recv_cmd_id == MB_CMD_GET_SUCCESS))) {
 		complete(&mailbox_completion);
-	}
-	else if (recv_cmd_id == RPU_2_APU_CMD_DISPLAY_BUFFER)
-	{
+	} else if (recv_cmd_id == RPU_2_APU_CMD_DISPLAY_BUFFER) {
 		if (isp_dev->frameout_cb) {
-		    mutex_unlock(&rpu->read_lock);
+			mutex_unlock(&rpu->read_lock);
 			isp_dev->frameout_cb(data_from_interrupt.data, isp_dev);
 		} else {
-			pr_err("%s %d CALLBACK IS NULL\n",__func__,__LINE__);
-		    mutex_unlock(&rpu->read_lock);
+			pr_err("%s %d CALLBACK IS NULL\n", __func__, __LINE__);
+			mutex_unlock(&rpu->read_lock);
 		}
-	}
-	else
-	{
+	} else {
 		mutex_unlock(&rpu->read_lock);
-		dev_err(rpu->dev,"my_tasklet_function: Unexpected command ID %d received\n",
-			   recv_cmd_id);
+		dev_err(
+		    rpu->dev,
+		    "my_tasklet_function: Unexpected command id %d received\n",
+		    recv_cmd_id);
 	}
 	cnt++;
 }
 
-static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg) {
-    visp_mb_rx_cb(cl, msg,6);
+static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg)
+{
+	visp_mb_rx_cb(cl, msg, 6);
 }
 
-static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg) {
-    visp_mb_rx_cb(cl, msg,7);
+static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg)
+{
+	visp_mb_rx_cb(cl, msg, 7);
 }
 
-static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg) {
-    visp_mb_rx_cb(cl, msg,8);
+static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg)
+{
+	visp_mb_rx_cb(cl, msg, 8);
 }
 
-static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg) {
-    visp_mb_rx_cb(cl, msg,9);
+static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg)
+{
+	visp_mb_rx_cb(cl, msg, 9);
 }
 
-static void visp_mb_rx_cb(struct mbox_client *cl, void *msg,int rpu_id)
+static void visp_mb_rx_cb(struct mbox_client *cl, void *msg, int rpu_id)
 {
 	struct rpu_dev *rpu = NULL;
-	/* Get RPU ID from the received message */
+	/* Get RPU id from the received message */
 	rpu = get_rpu_dev(rpu_id);
-	if (rpu != NULL)
-	{
+	if (rpu != NULL) {
 		/* Schedule work to handle the received event */
-		//if ( queue_work_on(1, system_wq, &rpu->mbox_work) )
-        if (work_pending(&rpu->mbox_work)) {
-            pr_err("Work already pending for RPU ID %d\n", rpu_id);
-        } else {
-            queue_work(system_wq, &rpu->mbox_work);
-        }
-	}
-	else
-	{
-		dev_err(rpu->dev,"visp_mb_rx_cb: Failed to find RPU device for RPU ID %d\n",
-			   rpu_id);
+		// if ( queue_work_on(1, system_wq, &rpu->mbox_work) )
+		if (work_pending(&rpu->mbox_work))
+			pr_err("Work already pending for RPU id %d\n", rpu_id);
+		else
+			queue_work(system_wq, &rpu->mbox_work);
+	} else {
+		dev_err(
+		    rpu->dev,
+		    "visp_mb_rx_cb: Failed to find RPU device for RPU id %d\n",
+		    rpu_id);
 	}
 }
 
@@ -292,9 +271,9 @@ static int visp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
 {
 	struct mbox_client *mclient;
 
-	if (!rpu || !rpu->dev)
-	{
-		dev_err(NULL, "visp_setup_mbox: Invalid RPU device structure.\n");
+	if (!rpu || !rpu->dev) {
+		dev_err(NULL,
+			"visp_setup_mbox: Invalid RPU device structure.\n");
 		return -EINVAL;
 	}
 
@@ -309,8 +288,9 @@ static int visp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
 	/* Setup RX mailbox channel client */
 	mclient = &rpu->rx_mc;
 	mclient->dev = rpu->dev;
-	//mclient->rx_callback = visp_mb_rx_cb; // Set the RX callback
-	mclient->rx_callback =  visp_rx_callbacks[get_dest_cpu(rpu->rpu_id)];//visp_mb_rx_cb; // Set the RX callback
+	// mclient->rx_callback = visp_mb_rx_cb; // Set the RX callback
+	mclient->rx_callback = visp_rx_callbacks[get_dest_cpu(
+	    rpu->rpu_id)]; // visp_mb_rx_cb; // Set the RX callback
 	mclient->tx_block = false;
 	mclient->knows_txdone = false;
 
@@ -320,8 +300,7 @@ static int visp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
 
 	/* Request TX channel */
 	rpu->tx_chan = mbox_request_channel_byname(&rpu->tx_mc, "tx");
-	if (IS_ERR(rpu->tx_chan))
-	{
+	if (IS_ERR(rpu->tx_chan)) {
 		dev_err(rpu->dev, "Failed to request TX mailbox channel.\n");
 		rpu->tx_chan = NULL;
 		return PTR_ERR(rpu->tx_chan);
@@ -329,8 +308,7 @@ static int visp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
 
 	/* Request RX channel */
 	rpu->rx_chan = mbox_request_channel_byname(&rpu->rx_mc, "rx");
-	if (IS_ERR(rpu->rx_chan))
-	{
+	if (IS_ERR(rpu->rx_chan)) {
 		dev_err(rpu->dev, "Failed to request RX mailbox channel.\n");
 		rpu->rx_chan = NULL;
 		return PTR_ERR(rpu->rx_chan);
@@ -348,8 +326,7 @@ static int char_dev_open(struct inode *inode, struct file *file)
 
 	/* Retrieve the RPU device structure using container_of */
 	rpu = container_of(inode->i_cdev, struct rpu_dev, cdev);
-	if (!rpu)
-	{
+	if (!rpu) {
 		pr_err("%s: Failed to retrieve RPU device\n", __func__);
 		return -ENODEV; // Return error if RPU is not found
 	}
@@ -365,9 +342,9 @@ static int char_dev_release(struct inode *inode, struct file *file)
 	struct rpu_dev *rpu = file->private_data;
 
 	/* Perform any necessary cleanup or validation */
-	if (!rpu)
-	{
-		pr_err("%s: Release called with invalid RPU device\n", __func__);
+	if (!rpu) {
+		pr_err("%s: Release called with invalid RPU device\n",
+		       __func__);
 		return -ENODEV; // Return error if RPU is invalid
 	}
 
@@ -375,23 +352,21 @@ static int char_dev_release(struct inode *inode, struct file *file)
 }
 
 static ssize_t char_dev_write(struct file *file, const char __user *buf,
-							  size_t lbuf, loff_t *offset)
+			      size_t lbuf, loff_t *offset)
 {
 	struct rpu_dev *rpu = file->private_data;
 	payload_packet *packet = NULL;
 	payload_user_packet *user_packet = NULL;
-	uint32_t instanceId = 0x99;
+	uint32_t instance_id = 0x99;
 	uint8_t *p_data;
 	int ret = 0;
 	/* Validate input buffer size */
-	if (lbuf < sizeof(payload_user_packet))
-	{
+	if (lbuf < sizeof(payload_user_packet)) {
 		pr_err("%s: Insufficient input buffer size\n", __func__);
 		return -EINVAL;
 	}
 	/* Validate RPU instance */
-	if (!rpu)
-	{
+	if (!rpu) {
 		pr_err("%s: RPU instance is NULL\n", __func__);
 		kfree(packet);
 		kfree(user_packet);
@@ -400,15 +375,14 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf,
 
 	/* Allocate memory for user_packet */
 	user_packet = kmalloc(sizeof(payload_user_packet), GFP_KERNEL);
-	if (!user_packet)
-	{
-		pr_err("%s: Failed to allocate memory for user_packet\n", __func__);
+	if (!user_packet) {
+		pr_err("%s: Failed to allocate memory for user_packet\n",
+		       __func__);
 		return -ENOMEM;
 	}
 	/* Allocate memory for packet */
 	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
-	if (!packet)
-	{
+	if (!packet) {
 		pr_err("%s: Failed to allocate memory for packet\n", __func__);
 		kfree(packet);
 		kfree(user_packet);
@@ -416,8 +390,7 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf,
 	}
 
 	/* Copy data from user space to kernel space */
-	if (copy_from_user(user_packet, buf, sizeof(payload_user_packet)))
-	{
+	if (copy_from_user(user_packet, buf, sizeof(payload_user_packet))) {
 		pr_err("%s: copy_from_user failed\n", __func__);
 		kfree(packet);
 		kfree(user_packet);
@@ -428,28 +401,28 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf,
 	packet->type = user_packet->type;
 	packet->cookie = user_packet->cookie;
 	packet->payload_size = user_packet->payload_size;
-	memcpy(packet->payload, user_packet->payload, sizeof(user_packet->payload));
+	memcpy(packet->payload, user_packet->payload,
+	       sizeof(user_packet->payload));
 
-	/* Extract instanceId from payload */
+	/* Extract instance_id from payload */
 	p_data = packet->payload;
-	memcpy(&instanceId, p_data, sizeof(uint32_t));
+	memcpy(&instance_id, p_data, sizeof(uint32_t));
 
 	mutex_lock(&rpu->write_lock); // Replaced spinlock with mutex
 	/* Send command and message */
-	ret = Send_Command(user_packet->cmd_id, packet, sizeof(payload_packet),
-					  get_dest_cpu(rpu->rpu_id), MBOX_CORE_APU);
+	ret = send_command(user_packet->cmd_id, packet, sizeof(payload_packet),
+			   get_dest_cpu(rpu->rpu_id), MBOX_CORE_APU);
 
-	if (ret < 0)
-	{
-		pr_err("%s: Send_Command failed with error: %d\n", __func__, ret);
+	if (ret < 0) {
+		pr_err("%s: send_command failed with error: %d\n", __func__,
+		       ret);
 		kfree(packet);
 		kfree(user_packet);
 		return -EIO;
 	}
 
 	ret = mbox_send_message(rpu->tx_chan, NULL); // Trigger irq
-	if (ret < 0)
-	{
+	if (ret < 0) {
 		pr_err("%s: mbox_send_message() failed: %d\n", __func__, ret);
 		kfree(packet);
 		kfree(user_packet);
@@ -462,13 +435,13 @@ static ssize_t char_dev_write(struct file *file, const char __user *buf,
 }
 
 static ssize_t my_driver_read(struct file *file, char __user *buf, size_t count,
-							  loff_t *offset)
+			      loff_t *offset)
 {
 	struct rpu_dev *rpu = file->private_data;
 	int result;
 	ssize_t bytes_copied = sizeof(struct response_user_packet);
-	if (!rpu)
-	{
+
+	if (!rpu) {
 		pr_err("%s: Invalid RPU device pointer\n", __func__);
 		mutex_unlock(&rpu->read_lock);
 		return -EINVAL;
@@ -479,18 +452,17 @@ static ssize_t my_driver_read(struct file *file, char __user *buf, size_t count,
 	/* Acquire lock to protect RPU structure */
 	/* Wait for completion interruptibly */
 	result = wait_for_completion_interruptible(&mailbox_completion);
-	if (result != 0)
-	{
-		pr_err("%s: Completion wait interrupted, error code: %d\n", __func__,
-			   result);
+	if (result != 0) {
+		pr_err("%s: Completion wait interrupted, error code: %d\n",
+		       __func__, result);
 		mutex_unlock(&rpu->read_lock);
-		return -ERESTARTSYS; // Return appropriate error for interruption
+		return -ERESTARTSYS; // Return appropriate error for
+				     // interruption
 	}
 
 	//    mutex_lock(&rpu->read_lock);
 	/* Copy data to user space */
-	if (copy_to_user(buf, &data_from_interrupt, bytes_copied))
-	{
+	if (copy_to_user(buf, &data_from_interrupt, bytes_copied)) {
 		pr_err("%s: Failed to copy data to user space\n", __func__);
 		mutex_unlock(&rpu->read_lock);
 		return -EFAULT; // Handle the copy_to_user error
@@ -502,11 +474,12 @@ static ssize_t my_driver_read(struct file *file, char __user *buf, size_t count,
 	return bytes_copied; // Return the size of data copied on success
 }
 
-static struct file_operations char_dev_fops = {.owner = THIS_MODULE,
-											   .read = my_driver_read,
-											   .write = char_dev_write,
-											   .open = char_dev_open,
-											   .release = char_dev_release};
+static struct file_operations char_dev_fops = {
+	.owner = THIS_MODULE,
+	.read = my_driver_read,
+	.write = char_dev_write,
+	.open = char_dev_open,
+	.release = char_dev_release};
 struct reserved_memory reserved_memory;
 /* Function to find an existing rpu_dev by rpu_id */
 
@@ -518,26 +491,24 @@ struct rpu_dev *get_rpu_dev(int rpu_id)
 	mutex_lock(&rpu_list_lock);
 
 	/* Check if the RPU devices list is empty */
-	if (list_empty(&rpu_devices))
-	{
-		dev_warn(rpu->dev,"get_rpu_dev: RPU devices list is empty.\n");
+	if (list_empty(&rpu_devices)) {
+		dev_warn(rpu->dev, "get_rpu_dev: RPU devices list is empty.\n");
 		mutex_unlock(&rpu_list_lock);
 		return NULL;
 	}
 
-	/* Search for the RPU with the given ID */
-	list_for_each_entry(rpu, &rpu_devices, node)
-	{
-		if (rpu->rpu_id == rpu_id)
-		{
-			//        pr_debug("get_rpu_dev: Found RPU device with ID %d.\n", rpu_id);
+	/* Search for the RPU with the given id */
+	list_for_each_entry(rpu, &rpu_devices, node) {
+		if (rpu->rpu_id == rpu_id) {
+			//        pr_debug("get_rpu_dev: Found RPU device with
+			//        id %d.\n", rpu_id);
 			mutex_unlock(&rpu_list_lock);
 			return rpu;
 		}
 	}
 
 	/* RPU not found, log an informational message */
-	// pr_info("get_rpu_dev: RPU device with ID %d not found.\n", rpu_id);
+	// pr_info("get_rpu_dev: RPU device with id %d not found.\n", rpu_id);
 
 	/* Unlock the mutex before returning */
 	mutex_unlock(&rpu_list_lock);
@@ -548,7 +519,7 @@ struct rpu_dev *get_rpu_dev(int rpu_id)
 EXPORT_SYMBOL(get_rpu_dev);
 
 static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev,
-										  int rpu_id)
+					  int rpu_id)
 {
 
 	struct rpu_dev *rpu;
@@ -560,12 +531,11 @@ static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev,
 	mutex_lock(&rpu_list_lock);
 
 	/* Look for an existing RPU with the given rpu_id */
-	list_for_each_entry(rpu, &rpu_devices, node)
-	{
-		if (rpu->rpu_id == rpu_id)
-		{
+	list_for_each_entry(rpu, &rpu_devices, node) {
+		if (rpu->rpu_id == rpu_id) {
 			kref_get(&rpu->refcount);
-			//      dev_dbg(&pdev->dev, "Found existing RPU with ID %d\n", rpu_id);
+			//      dev_dbg(&pdev->dev, "Found existing RPU with id
+			//      %d\n", rpu_id);
 			mutex_unlock(&rpu_list_lock);
 			return rpu;
 		}
@@ -573,8 +543,7 @@ static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev,
 
 	/* Create a new RPU */
 	rpu = devm_kzalloc(&pdev->dev, sizeof(*rpu), GFP_KERNEL);
-	if (!rpu)
-	{
+	if (!rpu) {
 		dev_err(&pdev->dev, "Failed to allocate memory for RPU\n");
 		mutex_unlock(&rpu_list_lock);
 		return ERR_PTR(-ENOMEM);
@@ -596,10 +565,9 @@ static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev,
 
 	/* Allocate a device number */
 	ret = alloc_chrdev_region(&rpu->devno, rpu_id, 1, dev_name);
-	if (ret)
-	{
-		dev_err(&pdev->dev, "Failed to allocate device number (error %d)\n",
-				ret);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"Failed to allocate device number (error %d)\n", ret);
 		devm_kfree(&pdev->dev, rpu);
 		mutex_unlock(&rpu_list_lock);
 		return ERR_PTR(ret);
@@ -607,8 +575,7 @@ static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev,
 
 	/* Add the character device */
 	ret = cdev_add(&rpu->cdev, rpu->devno, 1);
-	if (ret)
-	{
+	if (ret) {
 		dev_err(&pdev->dev, "Failed to add cdev (error %d)\n", ret);
 		unregister_chrdev_region(rpu->devno, 1);
 		devm_kfree(&pdev->dev, rpu);
@@ -617,8 +584,7 @@ static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev,
 	}
 
 	/* Create a device node */
-	if (!device_create(mailbox_class, NULL, rpu->devno, NULL, dev_name))
-	{
+	if (!device_create(mailbox_class, NULL, rpu->devno, NULL, dev_name)) {
 		dev_err(&pdev->dev, "Failed to create device node\n");
 		cdev_del(&rpu->cdev);
 		unregister_chrdev_region(rpu->devno, 1);
@@ -633,14 +599,13 @@ static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev,
 	list_add_tail(&rpu->node, &rpu_devices);
 
 	/* Setup mailbox if required */
-	if (of_property_read_bool(node, "mboxes"))
-	{
-		dev_dbg(&pdev->dev, "Setting up mailboxes for RPU with ID %d\n",
-				rpu_id);
+	if (of_property_read_bool(node, "mboxes")) {
+		dev_dbg(&pdev->dev, "Setting up mailboxes for RPU with id %d\n",
+			rpu_id);
 		ret = visp_setup_mbox(rpu, node);
-		if (ret)
-		{
-			dev_err(&pdev->dev, "Failed to set up mailboxes (error %d)\n", ret);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Failed to set up mailboxes (error %d)\n", ret);
 			device_destroy(mailbox_class, rpu->devno);
 			cdev_del(&rpu->cdev);
 			unregister_chrdev_region(rpu->devno, 1);
@@ -654,68 +619,63 @@ static struct rpu_dev *find_or_create_rpu(struct platform_device *pdev,
 	return rpu;
 }
 
-//TODO make this as static and keep appropriate name
+// TODO make this as static and keep appropriate name
 static int reserved_memory_init(const char *node_name)
 {
 	struct device_node *node;
 	int ret;
 
-	if (!node_name)
-	{
-		pr_err("reserved_memory_init: Invalid node name (NULL pointer).\n");
+	if (!node_name) {
+		pr_err("reserved_memory_init: Invalid node name (NULL "
+		       "pointer).\n");
 		return -EINVAL;
 	}
 
 	/* Find the reserved memory node */
 	node = of_find_node_by_name(NULL, node_name);
-	if (!node)
-	{
-		pr_err("reserved_memory_init: Reserved memory node '%s' not found.\n",
-			   node_name);
+	if (!node) {
+		pr_err("reserved_memory_init: Reserved memory node '%s' not "
+		       "found.\n",
+		       node_name);
 		return -ENODEV;
 	}
 
 	/* Get the physical address */
 	ret = of_property_read_u64(node, "reg", &reserved_memory.phys_addr);
-	if (ret)
-	{
-		pr_err(
-			"reserved_memory_init: Failed to read 'reg' property for node "
-			"'%s'. Error: %d\n",
-			node_name, ret);
+	if (ret) {
+		pr_err("reserved_memory_init: Failed to read 'reg' property "
+		       "for node "
+		       "'%s'. Error: %d\n",
+		       node_name, ret);
 		return -EINVAL;
 	}
 
 	/* Map to virtual address */
 	reserved_memory.virt_addr = of_iomap(node, 0);
-	if (!reserved_memory.virt_addr)
-	{
-		pr_err(
-			"reserved_memory_init: Failed to map reserved memory to virtual "
-			"address for node '%s'.\n",
-			node_name);
+	if (!reserved_memory.virt_addr) {
+		pr_err("reserved_memory_init: Failed to map reserved memory to "
+		       "virtual "
+		       "address for node '%s'.\n",
+		       node_name);
 		return -ENOMEM;
 	}
 
-	pr_debug(
-		"reserved_memory_init: Successfully initialized reserved memory for "
-		"node '%s'.\n",
-		node_name);
+	pr_debug("reserved_memory_init: Successfully initialized reserved "
+		 "memory for "
+		 "node '%s'.\n",
+		 node_name);
 	return 0;
 }
 
 static void reserved_memory_exit(void)
 {
-	if (reserved_memory.virt_addr)
-	{
+	if (reserved_memory.virt_addr) {
 		iounmap(reserved_memory.virt_addr);
 		pr_info(
-			"reserved_memory_exit: Unmapped reserved memory virtual "
-			"address.\n");
+		    "reserved_memory_exit: Unmapped reserved memory virtual "
+		    "address.\n");
 		reserved_memory.virt_addr = NULL;
-	}
-	else
-	{
+	} else {
 		pr_warn("reserved_memory_exit: No reserved memory to unmap.\n");
 	}
 }
@@ -725,37 +685,37 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	long result = 0;
 	struct rpu_dev *rpu = NULL;
 
-	if (!isp_dev)
-	{
-		pr_err(
-			"xlnx_mbox_apu_wait_for_data: Invalid ISP device (NULL "
-			"pointer).\n");
+	if (!isp_dev) {
+		pr_err("xlnx_mbox_apu_wait_for_data: Invalid ISP device (NULL "
+		       "pointer).\n");
 		return -EINVAL;
 	}
 
 	rpu = isp_dev->rpu;
-	if (!rpu)
-	{
+	if (!rpu) {
 		dev_err(isp_dev->dev, "RPU device is NULL in %s.\n", __func__);
 		return -ENOMEM;
 	}
 
-	if (!data)
-	{
-		dev_err(isp_dev->dev, "Invalid data pointer in %s.\n", __func__);
+	if (!data) {
+		dev_err(isp_dev->dev, "Invalid data pointer in %s.\n",
+			__func__);
 		return -EINVAL;
 	}
 
-	long timeout_jiffies = msecs_to_jiffies(1000*60*5);  // Timeout of 5000ms (5 seconds)
-	result = wait_for_completion_interruptible_timeout(&isp_dev->apu_wait_for_data, timeout_jiffies);
+	long timeout_jiffies =
+	    msecs_to_jiffies(1000 * 60 * 5); // Timeout of 5000ms (5 seconds)
+	result = wait_for_completion_interruptible_timeout(
+	    &isp_dev->apu_wait_for_data, timeout_jiffies);
 	if (result == 0) {
-		dev_err(rpu->dev,"Timeout occurred while waiting for APU ACK\n");
+		dev_err(rpu->dev,
+			"Timeout occurred while waiting for APU ACK\n");
 		isp_dev->k_apu_data_flag = 0; // Clear the data flag
 		//    mutex_unlock(&rpu->lock);
 		mutex_unlock(&rpu->read_lock);
 		return -1;
 	} else if (result < 0) {
-		dev_err(rpu->dev,"Wait interrupted\n");
+		dev_err(rpu->dev, "Wait interrupted\n");
 		isp_dev->k_apu_data_flag = 0; // Clear the data flag
 		//    mutex_unlock(&rpu->lock);
 		mutex_unlock(&rpu->read_lock);
@@ -764,7 +724,7 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 
 	/* Copy the received data */
 	memcpy(data, data_from_interrupt.res_payload_pkt.payload,
-		   sizeof(data_from_interrupt.res_payload_pkt.payload));
+	       sizeof(data_from_interrupt.res_payload_pkt.payload));
 
 	/* Clear the data flag */
 	isp_dev->k_apu_data_flag = 0;
@@ -776,8 +736,9 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 }
 EXPORT_SYMBOL(xlnx_mbox_apu_wait_for_data);
 
-int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
-			void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu)
+int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
+			    void *data, uint32_t size, uint8_t dest_cpu,
+			    uint8_t src_cpu)
 {
 	int result;
 	struct rpu_dev *rpu;
@@ -791,9 +752,11 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = Send_Command(cmd, data, size,get_dest_cpu(dest_cpu), src_cpu);
+	result = send_command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
 	if (result != 0) {
-		dev_err(rpu->dev,"%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev,
+			"%s: Mailbox Send message failed at line %d\n",
+			__func__, __LINE__);
 		goto unlock_and_exit;
 	}
 
@@ -802,20 +765,22 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	result = mbox_send_message(isp_dev->tx_chan, NULL);
 	if (result < 0) {
-		dev_err(rpu->dev,"%s: mbox_send_message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
+			__func__, __LINE__);
 		goto unlock_and_exit;
 	}
 
 	payload_packet *pkt = (payload_packet *)data;
+
 	if (!pkt) {
-		dev_err(rpu->dev,"%s: Payload data is NULL\n", __func__);
+		dev_err(rpu->dev, "%s: Payload data is NULL\n", __func__);
 		result = -EINVAL;
 		goto unlock_and_exit;
 	}
 
 	result = xlnx_mbox_apu_wait_for_data(isp_dev, pkt->payload);
 	if (result) {
-		dev_err(rpu->dev,"%s: Failed to get buffer data\n", __func__);
+		dev_err(rpu->dev, "%s: Failed to get buffer data\n", __func__);
 		goto unlock_and_exit;
 	}
 
@@ -825,38 +790,43 @@ unlock_and_exit:
 }
 EXPORT_SYMBOL(xlnx_send_mbox_data_cmd);
 
-int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
-			void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu)
+int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
+				   void *data, uint32_t size, uint8_t dest_cpu,
+				   uint8_t src_cpu)
 {
-    int result;
+	int result;
 	struct rpu_dev *rpu;
+
 	if (!isp_dev || !isp_dev->rpu) {
 		pr_err("%s: Invalid ISP device\n", __func__);
 		return -EINVAL;
 	}
 	rpu = isp_dev->rpu;
-	result = Send_Command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
+	result = send_command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
 	if (result != 0) {
-		dev_err(rpu->dev,"%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev,
+			"%s: Mailbox Send message failed at line %d\n",
+			__func__, __LINE__);
 		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
 
-	//result = mbox_send_message(isp_dev->tx_chan, NULL);
+	// result = mbox_send_message(isp_dev->tx_chan, NULL);
 	result = mbox_send_message(rpu->tx_chan, NULL);
 	if (result < 0) {
-		dev_err(rpu->dev,"%s: mbox_send_message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
+			__func__, __LINE__);
 		return result;
 	}
 	return 0; // Success
 }
 EXPORT_SYMBOL(xlnx_send_mbox_without_ack_cmd);
 
-
-int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
-			void *data, uint32_t size, uint8_t dest_cpu, uint8_t src_cpu)
+int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
+			     void *data, uint32_t size, uint8_t dest_cpu,
+			     uint8_t src_cpu)
 {
-    int result;
+	int result;
 	struct rpu_dev *rpu;
 
 	if (!isp_dev || !isp_dev->rpu) {
@@ -868,30 +838,32 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, MBCmdId_E cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = Send_Command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
+	result = send_command(cmd, data, size, get_dest_cpu(dest_cpu), src_cpu);
 	if (result != 0) {
-		dev_err(rpu->dev,"%s: Mailbox Send message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev,
+			"%s: Mailbox Send message failed at line %d\n",
+			__func__, __LINE__);
 		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
-    // Prepare for ACK
-    reinit_completion(&isp_dev->apu_wait_for_ack);
+	// Prepare for ACK
+	reinit_completion(&isp_dev->apu_wait_for_ack);
 
 	/* Set acknowledgment flag */
 	isp_dev->k_apu_ack_flag = 1;
 
-	//result = mbox_send_message(isp_dev->tx_chan, NULL);
+	// result = mbox_send_message(isp_dev->tx_chan, NULL);
 	result = mbox_send_message(rpu->tx_chan, NULL);
 	if (result < 0) {
-		dev_err(rpu->dev,"%s: mbox_send_message failed at line %d\n", __func__, __LINE__);
+		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
+			__func__, __LINE__);
 		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
 
 	result = xlnx_mbox_apu_wait_for_ack(isp_dev);
-	if(result < 0)
-	{
-		dev_err(rpu->dev,"%s: Failed to get ack\n", __func__);
+	if (result < 0) {
+		dev_err(rpu->dev, "%s: Failed to get ack\n", __func__);
 		goto unlock_and_exit;
 	}
 
@@ -905,15 +877,14 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 {
 	struct rpu_dev *rpu = NULL;
 	long result;
-	if (!isp_dev)
-	{
-		pr_err(
-			"xlnx_mbox_apu_wait_for_ack: Invalid ISP device (NULL pointer).\n");
+
+	if (!isp_dev) {
+		pr_err("xlnx_mbox_apu_wait_for_ack: Invalid ISP device (NULL "
+		       "pointer).\n");
 		return -1;
 	}
 	rpu = isp_dev->rpu;
-	if (!rpu)
-	{
+	if (!rpu) {
 		dev_err(isp_dev->dev, "RPU device is NULL in %s.\n", __func__);
 		return -1;
 	}
@@ -922,20 +893,23 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 	//    mutex_lock(&rpu->ack_lock);
 
 	/* Wait for acknowledgment completion */
-	/* Read command ID and ISP ID from mailbox */
-	long timeout_jiffies = msecs_to_jiffies(1000*60*5);  // Timeout of 5000ms (5 seconds)
-	result = wait_for_completion_interruptible_timeout(&isp_dev->apu_wait_for_ack, timeout_jiffies);
+	/* Read command id and ISP id from mailbox */
+	long timeout_jiffies =
+	    msecs_to_jiffies(1000 * 60 * 5); // Timeout of 5000ms (5 seconds)
+	result = wait_for_completion_interruptible_timeout(
+	    &isp_dev->apu_wait_for_ack, timeout_jiffies);
 	if (result == 0) {
-		dev_err(rpu->dev,"Timeout occurred while waiting for APU ACK\n");
+		dev_err(rpu->dev,
+			"Timeout occurred while waiting for APU ACK\n");
 		return -1;
 	} else if (result < 0) {
-		dev_err(rpu->dev,"Wait interrupted\n");
+		dev_err(rpu->dev, "Wait interrupted\n");
 		return -1;
 	}
 
 	/* Clear acknowledgment flag */
 	isp_dev->k_apu_ack_flag = 0;
-	//mutex_unlock(&rpu->ack_lock);
+	// mutex_unlock(&rpu->ack_lock);
 
 	/* Unlock the acknowledgment mutex */
 	mutex_unlock(&rpu->read_lock);
@@ -944,33 +918,32 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 }
 EXPORT_SYMBOL(xlnx_mbox_apu_wait_for_ack);
 
-static int Mailbox_Initialization(struct rpu_dev *rpu)
+static int mailbox_initialization(struct rpu_dev *rpu)
 {
 	int ret;
 
-	if (!rpu)
-	{
-		pr_err("Mailbox_Initialization: Invalid RPU device (NULL pointer).\n");
+	if (!rpu) {
+		pr_err("mailbox_initialization: Invalid RPU device (NULL "
+		       "pointer).\n");
 		return -EINVAL;
 	}
 
 	/* Initialize reserved memory */
 	ret = reserved_memory_init("isp_mbox_buffer");
-	if (ret)
-	{
-		dev_err(rpu->dev, "Failed to initialize reserved memory. Error: %d\n",
-				ret);
+	if (ret) {
+		dev_err(rpu->dev,
+			"Failed to initialize reserved memory. Error: %d\n",
+			ret);
 		return ret;
 	}
 
 	/* Initialize mailbox with reserved memory */
 	mailbox_init(MBOX_CORE_APU, (uintptr_t)reserved_memory.virt_addr,
-				 (uintptr_t)reserved_memory.phys_addr);
+		     (uintptr_t)reserved_memory.phys_addr);
 
 	/* Trigger an inter-processor interrupt (IPI) */
 	ret = mbox_send_message(rpu->tx_chan, NULL);
-	if (ret < 0)
-	{
+	if (ret < 0) {
 		dev_err(rpu->dev, "Failed to trigger IPI. Error: %d\n", ret);
 		return ret;
 	}
@@ -980,8 +953,8 @@ static int Mailbox_Initialization(struct rpu_dev *rpu)
 
 static void rpu_cleanup(struct kref *ref)
 {
-	/*    struct rpu_dev *rpu = container_of(ref, struct rpu_dev, refcount);
-	 *        devm_kfree(&rpu->pdev->dev, rpu);*/
+	//   struct rpu_dev *rpu = container_of(ref, struct rpu_dev, refcount);
+	//        devm_kfree(&rpu->pdev->dev, rpu);
 }
 static int visp_mbox_probe(struct platform_device *pdev)
 {
@@ -995,8 +968,7 @@ static int visp_mbox_probe(struct platform_device *pdev)
 
 	/* Read the rpu_id property */
 	ret = of_property_read_u32(node, "rpu_id", &rpu_id);
-	if (ret)
-	{
+	if (ret) {
 		dev_err(dev, " Failed to read rpu_id from device tree\n");
 		return -EINVAL;
 	}
@@ -1005,17 +977,17 @@ static int visp_mbox_probe(struct platform_device *pdev)
 	dev_dbg(dev, "rpu_id read from device tree: %u\n", rpu_id);
 
 	/* Validate rpu_id if there is a known range */
-	if (rpu_id < 6 || rpu_id >= MAX_RPU_ID)
-	{ // Replace MAX_RPU_ID with your maximum allowed value
+	if (rpu_id < 6 || rpu_id >= MAX_RPU_ID) { // Replace MAX_RPU_ID with
+						  // your maximum allowed value
 		dev_err(dev, "Invalid rpu_id: %d\n", rpu_id);
 		return -EINVAL;
 	}
 
 	/* Find or create a new RPU with the given rpu_id */
 	rpu = find_or_create_rpu(pdev, rpu_id);
-	if (!rpu)
-	{
-		dev_err(dev, "Failed to find or create RPU with ID: %d\n", rpu_id);
+	if (!rpu) {
+		dev_err(dev, "Failed to find or create RPU with id: %d\n",
+			rpu_id);
 		return -ENOMEM;
 	}
 
@@ -1023,15 +995,17 @@ static int visp_mbox_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, rpu);
 
 	/* Initialize the mailbox */
-	ret = Mailbox_Initialization(rpu);
-	if (ret)
-	{
-		dev_err(dev, "Failed to initialize mailbox for RPU ID: %d\n", rpu_id);
-		platform_set_drvdata(pdev, NULL); // Clear driver data on failure
+	ret = mailbox_initialization(rpu);
+	if (ret) {
+		dev_err(dev, "Failed to initialize mailbox for RPU id: %d\n",
+			rpu_id);
+		platform_set_drvdata(pdev,
+				     NULL); // Clear driver data on failure
 		return ret;
 	}
 
-	dev_info(dev, "Mailbox successfully initialized for RPU ID: %d\n", rpu_id);
+	dev_info(dev, "Mailbox successfully initialized for RPU id: %d\n",
+		 rpu_id);
 	return 0;
 }
 
@@ -1043,22 +1017,20 @@ static void rpu_remove(void)
 	mutex_lock(&rpu_list_lock);
 
 	/* Iterate through the list of RPU devices */
-	list_for_each_entry_safe(rpu, tmp, &rpu_devices, node)
-	{
-		if (!rpu)
-		{
+	list_for_each_entry_safe(rpu, tmp, &rpu_devices, node) {
+		if (!rpu) {
 			/* Handle NULL RPU device (shouldn't normally happen) */
-			pr_err("Encountered a NULL RPU device in the list, skipping.\n");
+			pr_err("Encountered a NULL RPU device in the list, "
+			       "skipping.\n");
 			continue;
 		}
 
 		/* Debug log the current RPU's reference count */
-		dev_dbg(rpu->dev,"RPU ID %d - refcount = %d\n", rpu->rpu_id,
-				 atomic_read(&rpu->refcount.refcount.refs));
+		dev_dbg(rpu->dev, "RPU id %d - refcount = %d\n", rpu->rpu_id,
+			atomic_read(&rpu->refcount.refcount.refs));
 
 		/* Check if the device is safe to remove */
-		if (atomic_read(&rpu->refcount.refcount.refs) == 1)
-		{
+		if (atomic_read(&rpu->refcount.refcount.refs) == 1) {
 			/* Perform cleanup and removal */
 			device_destroy(mailbox_class, rpu->devno);
 			cdev_del(&rpu->cdev);
@@ -1071,16 +1043,18 @@ static void rpu_remove(void)
 			list_del(&rpu->node);
 
 			/* Log successful removal */
-			dev_info(rpu->dev,"RPU with ID %d removed successfully.\n", rpu->rpu_id);
-		}
-		else
-		{
+			dev_info(rpu->dev,
+				 "RPU with id %d removed successfully.\n",
+				 rpu->rpu_id);
+		} else {
 			/* If still in use, decrement reference and log */
 			kref_put(&rpu->refcount, rpu_cleanup);
-			dev_warn(
-				rpu->dev,"Cannot remove RPU with ID %d - still in use (refcount = "
-				"%d).\n",
-				rpu->rpu_id, atomic_read(&rpu->refcount.refcount.refs));
+			dev_warn(rpu->dev,
+				 "Cannot remove RPU with id %d - still in use "
+				 "(refcount = "
+				 "%d).\n",
+				 rpu->rpu_id,
+				 atomic_read(&rpu->refcount.refcount.refs));
 		}
 	}
 
@@ -1094,29 +1068,24 @@ static void visp_mbox_remove(struct platform_device *pdev)
 
 	/* Retrieve the RPU device associated with this platform device */
 	rpu = platform_get_drvdata(pdev);
-	if (!rpu)
-	{
-		dev_err(&pdev->dev, "Failed to retrieve RPU device during remove.\n");
+	if (!rpu) {
+		dev_err(&pdev->dev,
+			"Failed to retrieve RPU device during remove.\n");
 		return;
 	}
 
 	/* Check and free mailbox channels if defined in the device tree */
-	if (of_property_read_bool(rpu->dev->of_node, "mboxes"))
-	{
+	if (of_property_read_bool(rpu->dev->of_node, "mboxes")) {
 		dev_info(rpu->dev, "Freeing mailbox channels.\n");
-		if (rpu->tx_chan)
-		{
+		if (rpu->tx_chan) {
 			mbox_free_channel(rpu->tx_chan);
 			rpu->tx_chan = NULL; // Avoid dangling pointers
 		}
-		if (rpu->rx_chan)
-		{
+		if (rpu->rx_chan) {
 			mbox_free_channel(rpu->rx_chan);
 			rpu->rx_chan = NULL; // Avoid dangling pointers
 		}
-	}
-	else
-	{
+	} else {
 		dev_dbg(rpu->dev, "No mailbox channels to free.\n");
 	}
 
@@ -1127,16 +1096,12 @@ static void visp_mbox_remove(struct platform_device *pdev)
 	/* Call rpu_remove to handle RPU-specific cleanup */
 	rpu_remove();
 
-	return ;
+	return;
 }
 
 static const struct of_device_id visp_mbox_of_match[] = {
-    {
-        .compatible = "xlnx,mimo-mbox"
-    },
-    {
-        .compatible = "xlnx,mbox"
-    },
+	{.compatible = "xlnx,mimo-mbox"},
+	{.compatible = "xlnx,mbox"},
 	{/* sentinel */},
 };
 static struct platform_driver visp_mbox_driver = {
@@ -1146,7 +1111,7 @@ static struct platform_driver visp_mbox_driver = {
 		.name = "visp_mbox_driver",
 		.owner = THIS_MODULE,
 		.of_match_table = visp_mbox_of_match,
-	}};
+		}};
 
 static int __init visp_mbox_init_module(void)
 {
@@ -1157,16 +1122,14 @@ static int __init visp_mbox_init_module(void)
 	/* Create the mailbox class */
 	// mailbox_class = class_create(THIS_MODULE, "mailbox-class");
 	mailbox_class = class_create("mailbox-class");
-	if (IS_ERR(mailbox_class))
-	{
+	if (IS_ERR(mailbox_class)) {
 		pr_err("Failed to create mailbox class.\n");
 		return PTR_ERR(mailbox_class);
 	}
 
 	/* Register the platform driver */
 	ret = platform_driver_register(&visp_mbox_driver);
-	if (ret)
-	{
+	if (ret) {
 		pr_err("Failed to register AMD MBox driver. Error: %d\n", ret);
 		class_destroy(mailbox_class);
 		return ret;
@@ -1188,8 +1151,7 @@ static void __exit visp_mbox_exit_module(void)
 	pr_info("AMD MBox driver unregistered successfully.\n");
 
 	/* Destroy the mailbox class */
-	if (mailbox_class)
-	{
+	if (mailbox_class) {
 		class_destroy(mailbox_class);
 		pr_info("Mailbox class destroyed successfully.\n");
 	}

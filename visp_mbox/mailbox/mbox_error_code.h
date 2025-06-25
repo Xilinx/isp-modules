@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -54,9 +55,8 @@
 #ifndef _MBOX_ERROR_CODE_H_
 #define _MBOX_ERROR_CODE_H_
 
-/** Error codes for VeriSilicon Platform Interface(VPI) */
-typedef enum VpiError
-{
+/** Error codes for VeriSilicon Platform interface(VPI) */
+typedef enum vpi_error {
 	VPI_ERR_GENERIC = -1, /**< Generic Error */
 	VPI_SUCCESS = 0,	  /**< Success */
 	VPI_ERR_INVALID,	  /**< Invalid input parameter */
@@ -73,6 +73,6 @@ typedef enum VpiError
 	VPI_ERR_NOT_READY,	  /**< System or data is not ready */
 	VPI_ERR_LACK,		  /**< Not enough data */
 	VPI_ERR_IOCTL
-} VpiError;
+} vpi_error;
 
 #endif // _MBOX_ERROR_CODE_H_
