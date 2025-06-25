@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -54,46 +55,44 @@
 #ifndef __VISP_VIDEO_EVENT_H__
 #define __VISP_VIDEO_EVENT_H__
 
-#define	 VISP_VIDEO_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 1000)
+#define VISP_VIDEO_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 1000)
 
-#define VISP_GET_RPU_ID \
-    _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu  )
+#define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
 
 struct isp_rpu {
-    uint32_t rpu;
-    uint32_t isp;
+	uint32_t rpu;
+	uint32_t isp;
 };
 
-
-
 enum visp_video_event_id {
-    VISP_VEVENT_CREATE_PIPELINE = 0,
-    VISP_VEVENT_DESTROY_PIPELINE,
+	VISP_VEVENT_CREATE_PIPELINE = 0,
+	VISP_VEVENT_DESTROY_PIPELINE,
 	VIDEO_EVENT_LOAD_CALIB,
-    VIDEO_EVENT_LOAD_JSON,
-    VISP_VEVENT_MAX,
+	VIDEO_EVENT_LOAD_JSON,
+	VISP_VEVENT_MAX,
 };
 
 struct visp_video_event_pkg_head {
-    uint32_t eid;
-    uint64_t shm_addr;
-    uint32_t shm_size;
-    uint32_t data_size;
+	uint32_t eid;
+	uint64_t shm_addr;
+	uint32_t shm_size;
+	uint32_t data_size;
 };
 
 struct visp_video_event_pkg {
-    struct visp_video_event_pkg_head head;
-    uint8_t  ack;
-    int32_t  result;
-    uint8_t data[2048];
+	struct visp_video_event_pkg_head head;
+	uint8_t ack;
+	int32_t result;
+	uint8_t data[2048];
 };
 
 struct visp_video_dma_buf {
-    uint64_t pa;
+	uint64_t pa;
 	int size;
 };
 
-#define VISP_VIDEO_IOC_DMABUF    _IOWR('I',  BASE_VIDIOC_PRIVATE + 0, struct visp_video_dma_buf)
+#define VISP_VIDEO_IOC_DMABUF                                                  \
+	_IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_video_dma_buf)
 
 #include "visp_mimo_driver.h"
 int visp_video_create_pipeline_event(struct isp_mimo *visp_vdev);

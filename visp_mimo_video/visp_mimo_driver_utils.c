@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /*
  * Copyright 2025 Advanced Micro Devices, Inc.
  *
@@ -21,91 +22,93 @@
  *
  */
 
-
 #include <visp_mimo_driver.h>
 #include "visp_common.h"
 int xlnx_link_mbox(struct visp_dev *isp_dev)
 {
-    /* Find or create a new RPU with the given rpu_id */
-    isp_dev->rpu = get_rpu_dev(isp_dev->isp_rpu);
-    if (!isp_dev->rpu) {
-        dev_err(isp_dev->dev, "Failed to find or create RPU: %d\n", isp_dev->isp_rpu);
-        return -ENOMEM;
-    }
-	 /* initialise completion used in while waiting for ack & data*/
-    init_completion(&isp_dev->apu_wait_for_ack);
-    init_completion(&isp_dev->apu_wait_for_data);
+	/* Find or create a new RPU with the given rpu_id */
+	isp_dev->rpu = get_rpu_dev(isp_dev->isp_rpu);
+	if (!isp_dev->rpu) {
+		dev_err(isp_dev->dev, "Failed to find or create RPU: %d\n",
+			isp_dev->isp_rpu);
+		return -ENOMEM;
+	}
+	/* initialise completion used in while waiting for ack & data*/
+	init_completion(&isp_dev->apu_wait_for_ack);
+	init_completion(&isp_dev->apu_wait_for_data);
 
-    isp_dev->apu_wait_for_isp_frame_done = 0;
+	isp_dev->apu_wait_for_isp_frame_done = 0;
 	init_waitqueue_head(&isp_dev->wq_frame_done_finished);
 
-	if(!isp_dev->rpu->tx_chan || !isp_dev->rpu->rx_chan ){
-        dev_err(isp_dev->dev, "No TX or RX Channel found on RPU: %d\n", isp_dev->isp_rpu);
-        return -ENOMEM;
-    }
+	if (!isp_dev->rpu->tx_chan || !isp_dev->rpu->rx_chan) {
+		dev_err(isp_dev->dev, "No TX or RX Channel found on RPU: %d\n",
+			isp_dev->isp_rpu);
+		return -ENOMEM;
+	}
 
 	isp_dev->tx_chan = isp_dev->rpu->tx_chan;
 	isp_dev->rx_chan = isp_dev->rpu->rx_chan;
-	//Assigning isp_dev structure value to isp_dev present in rpu_dev struct
+	// Assigning isp_dev structure value to isp_dev present in rpu_dev
+	// struct
 	isp_dev->rpu->isp_dev[isp_dev->id] = isp_dev;
 	return 0;
 }
 
-int IspDeviceCreateMIMO(struct visp_dev *isp_dev , uint8_t Port)
+int isp_device_create_m_i_m_o(struct visp_dev *isp_dev, uint8_t port)
 {
-	int RetVal = VSI_SUCCESS;
-    MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
-    CamDeviceConfig_t CamConfig;
-    if(!isp_dev)
-    {
-    pr_err("%s %d NULL_ISP_DEV\n",__func__, __LINE__);
-    }
+	int ret_val = VSI_SUCCESS;
+	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
+	cam_device_config_t CamConfig;
 
-    //mutex_lock(&isp_dev->port_lock[Port]);
+	if (!isp_dev)
+		pr_err("%s %d NULL_ISP_DEV\n", __func__, __LINE__);
 
-    memset(&CamConfig, 0 ,sizeof(CamConfig));
+	// mutex_lock(&isp_dev->port_lock[port]);
 
-    CamConfig.ispHwId = isp_dev->id;
-    CamConfig.inputCfg.inputType = CAMDEV_INPUT_TYPE_IMAGE;
-	if (IspPort->CamDeviceHandle) {
-        return VSI_SUCCESS;
-    }
+	memset(&CamConfig, 0, sizeof(CamConfig));
 
-	CamConfig.workCfg.workMode = CAMDEV_WORK_MODE_RDMA;
-	CamConfig.workCfg.modeCfg.stream.portId =  0;
+	CamConfig.isp_hw_id = isp_dev->id;
+	CamConfig.input_cfg.input_type = CAMDEV_INPUT_TYPE_IMAGE;
+	if (isp_port->cam_device_handle)
+		return VSI_SUCCESS;
 
-	CamConfig.outputCfg.outputType = CAMDEV_OUTPUT_TYPE_MEMORY;
-    CamConfig.priority = CAMDEV_SEQ_PRI_0;
+	CamConfig.work_cfg.work_mode = CAMDEV_WORK_MODE_RDMA;
+	CamConfig.work_cfg.mode_cfg.stream.port_id = 0;
 
-    /****CamDeviceCreate*****/
-    RetVal = VsiCamDeviceCreate(isp_dev, &CamConfig, &IspPort->CamDeviceHandle);
-    if (RetVal != VSI_SUCCESS) {
-        dev_err(isp_dev->dev,"CamDevice Creat Isp Device Handle Failed, ret is %d\n", RetVal);
-        RetVal = VSI_ERR_TIMEOUT;
-        return RetVal;
-    }
+	CamConfig.output_cfg.output_type = CAMDEV_OUTPUT_TYPE_MEMORY;
+	CamConfig.priority = CAMDEV_SEQ_PRI_0;
 
-    return RetVal;
-
-}
-
-
-int IspDeviceDistroyMIMO(struct visp_dev *isp_dev , uint8_t Port)
-{
-	int RetVal = VSI_SUCCESS;
-    MediaIspPortAttr *IspPort = &isp_dev->IspPorts[Port];
-
-    /*Enter Port Level Critical Section */
-
-	RetVal= VsiCamDeviceDestroy(isp_dev, &IspPort->CamDeviceHandle);
-	if (RetVal != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,"CamDevice Distroy Isp Device Handle Failed, ret is %d\n", RetVal);
-		RetVal = VSI_ERR_TIMEOUT;
-		return RetVal;
+	/****CamDeviceCreate*****/
+	ret_val = vsi_cam_device_create(isp_dev, &CamConfig,
+				       &isp_port->cam_device_handle);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(isp_dev->dev,
+			"CamDevice Creat Isp Device Handle Failed, ret is %d\n",
+			ret_val);
+		ret_val = VSI_ERR_TIMEOUT;
+		return ret_val;
 	}
-	IspPort->CamDeviceHandle = VSI_NULL;
 
-    return RetVal;
+	return ret_val;
 }
 
+int isp_device_distroy_m_i_m_o(struct visp_dev *isp_dev, uint8_t port)
+{
+	int ret_val = VSI_SUCCESS;
+	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 
+	/*Enter port Level Critical Section */
+
+	ret_val = vsi_cam_device_destroy(isp_dev, &isp_port->cam_device_handle);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(
+		    isp_dev->dev,
+		    "CamDevice Distroy Isp Device Handle Failed, ret is %d\n",
+		    ret_val);
+		ret_val = VSI_ERR_TIMEOUT;
+		return ret_val;
+	}
+	isp_port->cam_device_handle = VSI_NULL;
+
+	return ret_val;
+}
