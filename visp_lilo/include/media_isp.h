@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -65,8 +66,7 @@
 #define MEDIA_ISP_CHAR_LENGTH_MAX 64
 #define MEDIA_ISP_PATH_LENGTH_MAX 128
 
-enum media_isp_port_pad_e
-{
+enum media_isp_port_pad_e {
 	MEDIA_ISP_PORT_PAD_SINK = 0,
 	MEDIA_ISP_PORT_PAD_SOURCE_MP,
 	MEDIA_ISP_PORT_PAD_SOURCE_SP1,
@@ -75,78 +75,73 @@ enum media_isp_port_pad_e
 	MEDIA_ISP_PORT_PAD_COUNT,
 };
 
-typedef enum MediaIspMcmInputSelect_e
-{
+typedef enum media_isp_mcm_input_select_e {
 	MEDIA_ISP_MCM_INPUT_SELECT_RPU =
-		0, /**< alloc mcm input buffer memory from rpu*/
+	    0, /**< alloc mcm input buffer memory from rpu*/
 	MEDIA_ISP_MCM_INPUT_SELECT_APU =
-		1, /**< alloc mcm input buffer memory from apu */
-	MEDIA_ISP_MCM_INPUT_SELECT_MAX, /**< Maximum mcm input buffer memory selection. */
-} MediaIspMcmInputSelect;
+	    1, /**< alloc mcm input buffer memory from apu */
+	MEDIA_ISP_MCM_INPUT_SELECT_MAX, //< Maximum mcm input buffer memory
+					//   selection.
+} media_isp_mcm_input_select;
 
 #define MEDIA_ISP_PORT_MAX 4
 #define MEDIA_ISP_CHN_MAX (MEDIA_ISP_PORT_PAD_COUNT - 1)
 #define MEDIA_ISP_PAD_NR (MEDIA_ISP_PORT_MAX * MEDIA_ISP_PORT_PAD_COUNT)
 
-int MediaIspEventCreate(MediaEntityAttr *MediaEntity);
-int MediaIspEventDestroy(MediaEntityAttr *MediaEntity);
+int media_isp_event_create(media_entity_attr *media_entity);
+int media_isp_event_destroy(media_entity_attr *media_entity);
 
-typedef struct MediaIspChn_s
-{
-	MediaFmt Format;
-	uint8_t NumBufs;
-	MediaBuf Bufs[MEDIA_ISP_BUF_FRAME_MAX];
-	void *CamDeviceBufs[MEDIA_ISP_BUF_FRAME_MAX];
-} MediaIspChnAttr;
+typedef struct media_isp_chn_s {
+	media_fmt format;
+	uint8_t num_bufs;
+	media_buf bufs[MEDIA_ISP_BUF_FRAME_MAX];
+	void *cam_device_bufs[MEDIA_ISP_BUF_FRAME_MAX];
+} media_isp_chn_attr;
 
-typedef struct MediaIspMcm_s
-{
-	uint8_t NumBufs;
-	MediaIspMcmInputSelect InputSelect;
-	MediaBuf Bufs[MEDIA_ISP_BUF_FRAME_MAX];
-} MediaIspMcmAttr;
+typedef struct media_isp_mcm_s {
+	uint8_t num_bufs;
+	media_isp_mcm_input_select input_select;
+	media_buf bufs[MEDIA_ISP_BUF_FRAME_MAX];
+} media_isp_mcm_attr;
 
-typedef struct MediaIspSensorInfo_s
-{
-	uint8_t Mode;
-	char Name[MEDIA_ISP_CHAR_LENGTH_MAX];
-	char CalibXml[MEDIA_ISP_CHAR_LENGTH_MAX];
-	char ManuJson[MEDIA_ISP_PATH_LENGTH_MAX];
-	char AutoJson[MEDIA_ISP_PATH_LENGTH_MAX];
-	char OneJson[MEDIA_ISP_PATH_LENGTH_MAX];
-	struct CamDeviceSensorModeInfo_s ModeInfo;
-	uint32_t FrameRate;
+typedef struct media_isp_sensor_info_s {
+	uint8_t mode;
+	char name[MEDIA_ISP_CHAR_LENGTH_MAX];
+	char calib_xml[MEDIA_ISP_CHAR_LENGTH_MAX];
+	char manu_json[MEDIA_ISP_PATH_LENGTH_MAX];
+	char auto_json[MEDIA_ISP_PATH_LENGTH_MAX];
+	char one_json[MEDIA_ISP_PATH_LENGTH_MAX];
+	struct cam_device_sensor_mode_info_s mode_info;
+	uint32_t frame_rate;
 	uint8_t vc_id;
 	uint32_t sensor_id;
 	uint32_t i2c_id;
-} MediaIspSensorInfo;
+} media_isp_sensor_info;
 
 #define BUF_MODE_SIZE 16
-typedef struct MediaIspPort_s
-{
-	uint32_t RefCount;
-	uint32_t CamDeviceRefMask;
-	CamDeviceHandle_t CamDeviceHandle;
-	MediaIspChnAttr IspChns[MEDIA_ISP_CHN_MAX];
-	MediaSinkInfo SinkInfo;
-	MediaIspSensorInfo SensorInfo;
-	uint32_t pathOutType[MEDIA_ISP_CHN_MAX];
-	uint32_t CameraConnectRefCnt;
-	MediaIspMcmAttr McmAttr;
-	bool_t OneJsonMode;
-	bool_t SensorDrvRegistered;
-	struct mutex MainLock;
+typedef struct media_isp_port_s {
+	uint32_t ref_count;
+	uint32_t cam_device_ref_mask;
+	cam_device_handle_t cam_device_handle;
+	media_isp_chn_attr isp_chns[MEDIA_ISP_CHN_MAX];
+	media_sink_info sink_info;
+	media_isp_sensor_info sensor_info;
+	uint32_t path_out_type[MEDIA_ISP_CHN_MAX];
+	uint32_t camera_connect_ref_cnt;
+	media_isp_mcm_attr mcm_attr;
+	bool_t one_json_mode;
+	bool_t sensor_drv_registered;
+	struct mutex main_lock;
 	char bufmode[BUF_MODE_SIZE];
-} MediaIspPortAttr;
+} media_isp_port_attr;
 
-typedef struct MediaIspEventDev_s
-{
-	int DevId;
-	uint32_t PortsMask;
-	uint32_t RefCount;
-	MediaIspPortAttr IspPorts[MEDIA_ISP_PORT_MAX];
-	McIspHalHandle HalHandle;
-	MediaEntityAttr *MediaEntity;
-} MediaIspEventDev;
+typedef struct media_isp_event_dev_s {
+	int dev_id;
+	uint32_t ports_mask;
+	uint32_t ref_count;
+	media_isp_port_attr isp_ports[MEDIA_ISP_PORT_MAX];
+	mc_isp_hal_handle hal_handle;
+	media_entity_attr *media_entity;
+} media_isp_event_dev;
 
 #endif

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -50,7 +51,7 @@
  * version of this file.
  *
  *****************************************************************************/
- 
+
 #ifndef __VISP_APP_H__
 #define __VISP_APP_H__
 
@@ -58,29 +59,27 @@
 #include <linux/module.h>
 #include "visp_event.h"
 
-struct Chn_info
-{
-	uint32_t HwId;
-	uint32_t Mode;
-	uint32_t VtId;
+struct Chn_info {
+	uint32_t hw_id;
+	uint32_t mode;
+	uint32_t vt_id;
 	uint32_t path;
 };
 
 /**
  *
- * @brief The MediaBufferPool holds elements from type MediaBuffer_t.
+ * @brief The MediaBufferPool holds elements from type media_buffer_t.
  */
-typedef struct OutputBuffer_s
-{
-	uint32_t baseAddress; /**< HW address of system memory buffer. */
-	uint32_t
-		pOwner; /**< The buffer management context to which media buffer belongs */
-	uint8_t index; /**< The index in buffer management context */
+typedef struct output_buffer_s {
+	uint32_t base_address; /**< HW address of system memory buffer. */
+	uint32_t p_owner;      //< The buffer management context to which media
+				// buffer belongs
+	uint8_t index;	       /**< The index in buffer management context */
 
-} OutputBuffer_t;
+} output_buffer_t;
 
-int MediaIspDeviceCameraDisConnect(struct visp_dev *isp_dev, uint8_t Port,
-								   uint8_t Chn);
+int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
+					uint8_t chn);
 
 #define LOAD_CALIB_ENABLE 1
 

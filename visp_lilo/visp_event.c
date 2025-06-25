@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -50,7 +51,7 @@
  * version of this file.
  *
  *****************************************************************************/
- 
+
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
 #include <linux/delay.h>
@@ -58,7 +59,7 @@
 #include "visp_driver.h"
 
 static bool visp_event_subscribed(struct v4l2_subdev *sd, uint32_t type,
-								  uint32_t id)
+				  uint32_t id)
 {
 	struct v4l2_fh *fh;
 	unsigned long flags;
@@ -67,17 +68,15 @@ static bool visp_event_subscribed(struct v4l2_subdev *sd, uint32_t type,
 
 	spin_lock_irqsave(&sd->devnode->fh_lock, flags);
 
-	list_for_each_entry(fh, &sd->devnode->fh_list, list)
-	{
-		list_for_each_entry(sev, &fh->subscribed, list)
-		{
-			if (sev->type == type && sev->id == id)
-			{
+	list_for_each_entry(fh, &sd->devnode->fh_list, list) {
+		list_for_each_entry(sev, &fh->subscribed, list) {
+			if (sev->type == type && sev->id == id) {
 				subscribed = true;
 				break;
 			}
 		}
-		if (subscribed) break;
+		if (subscribed)
+			break;
 	}
 
 	spin_unlock_irqrestore(&sd->devnode->fh_lock, flags);
@@ -85,7 +84,8 @@ static bool visp_event_subscribed(struct v4l2_subdev *sd, uint32_t type,
 	return subscribed;
 }
 
-static int visp_post_event(struct v4l2_subdev *sd, struct visp_event_pkg *event_pkg)
+static int visp_post_event(struct v4l2_subdev *sd,
+			   struct visp_event_pkg *event_pkg)
 {
 	struct v4l2_event event;
 	int timeout_ms = 6000000;
@@ -97,53 +97,43 @@ static int visp_post_event(struct v4l2_subdev *sd, struct visp_event_pkg *event_
 	event.id = event_pkg->head.eid;
 	memcpy(event.u.data, &event_pkg->head, sizeof(event_pkg->head));
 
-	if (!visp_event_subscribed(sd, event.type, event.id))
-	{
+	if (!visp_event_subscribed(sd, event.type, event.id)) {
 		dev_err(sd->dev, "post event %d not subscribed\n", event.id);
 		return -EINVAL;
 	}
 
 	v4l2_event_queue(sd->devnode, &event);
 
-	for (i = 0; i < timeout_ms; i++)
-	{
+	for (i = 0; i < timeout_ms; i++) {
 		if (event_pkg->ack)
-		{
 			break;
-		}
 		usleep_range(5, 10);
 		if (i > 5000000)
-		{
 			i = 0;
-		}
 	}
 
-	if (event_pkg->ack == 0)
-	{
+	if (event_pkg->ack == 0) {
 		dev_err(sd->dev, "post event %d time out\n", event.id);
 		return -EIO;
 	}
 
-	if (event_pkg->result)
-	{
+	if (event_pkg->result) {
 		dev_err(sd->dev, "post event %d return error\n", event.id);
 		return -EINVAL;
 	}
 
 	return 0;
 }
-typedef struct CamDeviceContext_s
-{
-	uint32_t ispHwId;
-	uint32_t ispVtId;
-	uint32_t instanceId;
+typedef struct cam_device_context_s {
+	uint32_t isp_hw_id;
+	uint32_t isp_vt_id;
+	uint32_t instance_id;
 	uint32_t cookie;
-} CamDeviceContext_t;
+} cam_device_context_t;
 
-typedef struct test
-{
-	int ID2;
-	int ID;
+typedef struct test {
+	int id2;
+	int id;
 } test_t;
 
 int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
@@ -151,10 +141,10 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret = 0;
 	uint8_t *pdata = event_pkg->data;
-	int Port = pad / MEDIA_ISP_PORT_PAD_COUNT;
-	CamDeviceHandle_t *readback = NULL;
-	MediaIspSensorInfo *readback_1 = NULL;
-	MediaIspPortAttr *IspPort = NULL;
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	cam_device_handle_t *readback = NULL;
+	media_isp_sensor_info *readback_1 = NULL;
+	media_isp_port_attr *isp_port = NULL;
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 	event_pkg->head.pad = pad;
@@ -167,35 +157,36 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
-	memcpy(pdata, &Port, sizeof(uint32_t));
+	memcpy(pdata, &port, sizeof(uint32_t));
 	pdata += sizeof(uint32_t);
 	event_pkg->head.data_size += sizeof(uint32_t);
 
-	struct  visp_subdev_dma_buf dma_buf ;
+	struct visp_subdev_dma_buf dma_buf;
+
 	dma_buf.pa = isp_dev->reserve_mem.pa;
 	dma_buf.size = isp_dev->reserve_mem.size;
 	memcpy(pdata, &dma_buf, sizeof(struct visp_subdev_dma_buf));
 	pdata += sizeof(struct visp_subdev_dma_buf);
 	event_pkg->head.data_size += sizeof(struct visp_subdev_dma_buf);
 
-	memcpy(pdata, isp_dev->IspPorts[Port].CamDeviceHandle,
-		   sizeof(CamDeviceContext_t));
-	pdata += sizeof(CamDeviceContext_t);
-	event_pkg->head.data_size += sizeof(CamDeviceContext_t);
+	memcpy(pdata, isp_dev->isp_ports[port].cam_device_handle,
+	       sizeof(cam_device_context_t));
+	pdata += sizeof(cam_device_context_t);
+	event_pkg->head.data_size += sizeof(cam_device_context_t);
 
-	memcpy(pdata, &(isp_dev->IspPorts[Port].SensorInfo),
-		   sizeof(MediaIspSensorInfo));
-	pdata += sizeof(MediaIspSensorInfo);
-	event_pkg->head.data_size += sizeof(MediaIspSensorInfo);
+	memcpy(pdata, &(isp_dev->isp_ports[port].sensor_info),
+	       sizeof(media_isp_sensor_info));
+	pdata += sizeof(media_isp_sensor_info);
+	event_pkg->head.data_size += sizeof(media_isp_sensor_info);
 
-	readback = (CamDeviceHandle_t *)(event_pkg->data);
+	readback = (cam_device_handle_t *)(event_pkg->data);
 
-	IspPort = &(isp_dev->IspPorts[Port]);
-	readback_1 = (MediaIspSensorInfo *)(event_pkg->data + sizeof(uint32_t));
+	isp_port = &(isp_dev->isp_ports[port]);
+	readback_1 =
+	    (media_isp_sensor_info *)(event_pkg->data + sizeof(uint32_t));
 
 	ret = visp_post_event(&isp_dev->sd, event_pkg);
-	if (ret != 0)
-	{
+	if (ret != 0) {
 		dev_info(isp_dev->dev, "[FAIL] %s %d\n", __func__, __LINE__);
 		return ret;
 	}
@@ -207,7 +198,7 @@ int visp_l_json_event(struct visp_dev *isp_dev, int pad)
 {
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret = 0;
-	int Port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	uint8_t *pdata = NULL;
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
@@ -223,14 +214,14 @@ int visp_l_json_event(struct visp_dev *isp_dev, int pad)
 
 	pdata = event_pkg->data;
 
-	memcpy(pdata, &Port, sizeof(uint32_t));
+	memcpy(pdata, &port, sizeof(uint32_t));
 	pdata += sizeof(uint32_t);
 	event_pkg->head.data_size += sizeof(uint32_t);
 
 	ret = visp_post_event(&isp_dev->sd, event_pkg);
-	if (ret != 0)
-	{
-		dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__, __LINE__);
+	if (ret != 0) {
+		dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__,
+			__LINE__);
 		return ret;
 	}
 
@@ -238,7 +229,8 @@ int visp_l_json_event(struct visp_dev *isp_dev, int pad)
 	return ret;
 }
 
-int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl)
+int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
+		      struct v4l2_ctrl *ctrl)
 {
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret;
@@ -267,7 +259,8 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl)
 	return ret;
 }
 
-int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl)
+int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
+		      struct v4l2_ctrl *ctrl)
 {
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret = 0;
@@ -290,10 +283,9 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl)
 
 	ret = visp_post_event(&isp_dev->sd, event_pkg);
 
-	if (ret == 0)
-	{
+	if (ret == 0) {
 		memcpy(ctrl->p_new.p_u8, event_pkg->data + sizeof(isp_ctrl),
-			   isp_ctrl->size);
+		       isp_ctrl->size);
 	}
 
 	mutex_unlock(&isp_dev->event_shm.event_lock);
@@ -302,7 +294,7 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl)
 }
 
 int visp_s_interval_event(struct visp_dev *isp_dev, int pad,
-						  struct v4l2_fract *timeperframe)
+			  struct v4l2_fract *timeperframe)
 {
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret;

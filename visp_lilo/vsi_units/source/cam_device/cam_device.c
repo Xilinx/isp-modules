@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -53,118 +54,110 @@
 
 #include "cam_device.h"
 
-CamDeviceIspcore_t gCamDevIspcore;
+cam_device_ispcore_t g_cam_dev_ispcore;
 
-void CamDeviceIspcoreInit(void)
+void cam_device_ispcore_init(void)
 {
 	static bool_t init = BOOL_FALSE;
 
-	if (init == BOOL_FALSE)
-	{
-		uint32_t hwId = 0;
-		for (; hwId < CAMDEV_HARDWARE_ID_MAX; hwId++)
-		{
-			uint32_t vtId = 0;
-			for (; vtId < CAMDEV_VIRTUAL_ID_MAX; vtId++)
-			{
-				gCamDevIspcore.hCamDevSet[hwId][vtId] = NULL;
+	if (init == BOOL_FALSE) {
+		uint32_t hw_id = 0;
+
+		for (; hw_id < CAMDEV_HARDWARE_ID_MAX; hw_id++) {
+			uint32_t vt_id = 0;
+
+			for (; vt_id < CAMDEV_VIRTUAL_ID_MAX; vt_id++) {
+				g_cam_dev_ispcore.h_cam_dev_set[hw_id][vt_id] =
+				    NULL;
 			}
 		}
 		init = BOOL_TRUE;
 	}
-	return;
 }
 
-RESULT CamDeviceRequestInstance(uint32_t hwId, CamDeviceHandle_t *pCamDevhandle,
-								uint32_t *pvtId)
+RESULT cam_device_request_instance(uint32_t hw_id,
+				   cam_device_handle_t *p_cam_devhandle,
+				   uint32_t *pvt_id)
 {
 	uint32_t index = 0;
 
-	if (hwId > CAMDEV_HARDWARE_ID_MAX)
-	{
+	if (hw_id > CAMDEV_HARDWARE_ID_MAX)
 		return RET_OUTOFRANGE;
+	for (; index < CAMDEV_VIRTUAL_ID_MAX; index++) {
+		if (g_cam_dev_ispcore.h_cam_dev_set[hw_id][index] == NULL)
+			break;
 	}
-	for (; index < CAMDEV_VIRTUAL_ID_MAX; index++)
-	{
-		if (NULL == gCamDevIspcore.hCamDevSet[hwId][index]) break;
-	}
-	if (index < CAMDEV_VIRTUAL_ID_MAX)
-	{
-		gCamDevIspcore.hCamDevSet[hwId][index] =
-			 kzalloc(sizeof(CamDeviceContext_t), GFP_KERNEL);
-		if (NULL == gCamDevIspcore.hCamDevSet[hwId][index])
-		{
+	if (index < CAMDEV_VIRTUAL_ID_MAX) {
+		g_cam_dev_ispcore.h_cam_dev_set[hw_id][index] =
+		    kzalloc(sizeof(cam_device_context_t), GFP_KERNEL);
+		if (g_cam_dev_ispcore.h_cam_dev_set[hw_id][index] == NULL)
 			return RET_OUTOFMEM;
-		}
-		*pCamDevhandle = gCamDevIspcore.hCamDevSet[hwId][index];
-		*pvtId = index;
+		*p_cam_devhandle =
+		    g_cam_dev_ispcore.h_cam_dev_set[hw_id][index];
+		*pvt_id = index;
 		return RET_SUCCESS;
-	}
-	else
-	{
+	} else {
 		return RET_NOTAVAILABLE;
 	}
 }
 
-RESULT CamDeviceFreeInstance(CamDeviceHandle_t camDevhandle, uint32_t hwId)
+RESULT cam_device_free_instance(cam_device_handle_t cam_devhandle,
+				uint32_t hw_id)
 {
 	uint32_t index = 0;
-	if (hwId > CAMDEV_HARDWARE_ID_MAX)
-	{
+
+	if (hw_id > CAMDEV_HARDWARE_ID_MAX)
 		return RET_OUTOFRANGE;
+	for (; index < CAMDEV_VIRTUAL_ID_MAX; index++) {
+		if (cam_devhandle ==
+		    g_cam_dev_ispcore.h_cam_dev_set[hw_id][index])
+			break;
 	}
-	for (; index < CAMDEV_VIRTUAL_ID_MAX; index++)
-	{
-		if (camDevhandle == gCamDevIspcore.hCamDevSet[hwId][index]) break;
-	}
-	if (index < CAMDEV_VIRTUAL_ID_MAX)
-	{
-		kfree(camDevhandle);
-		gCamDevIspcore.hCamDevSet[hwId][index] = NULL;
+	if (index < CAMDEV_VIRTUAL_ID_MAX) {
+		kfree(cam_devhandle);
+		g_cam_dev_ispcore.h_cam_dev_set[hw_id][index] = NULL;
 		return RET_SUCCESS;
-	}
-	else
-	{
+	} else {
 		return RET_NOTAVAILABLE;
 	}
 }
 
-RESULT CamDeviceInstanceIdMapping(uint32_t hwId, uint32_t vtId,
-								  uint32_t *pInstanceId)
+RESULT cam_device_instance_id_mapping(uint32_t hw_id, uint32_t vt_id,
+				      uint32_t *p_instance_id)
 {
 	RESULT ret = RET_SUCCESS;
 
-	/* Hardware Pipeline ID / Virtual Device ID Mapping Policy */
+	/* Hardware Pipeline id / Virtual Device id Mapping Policy */
 	/* The mapping can be modified according to system configurations */
-	/*---------------------------------------------------------------------------- */
-	/*    ID                        |   HW              |   VT                     */
-	/*---------------------------------------------------------------------------- */
-	/*    0                         |   0               |   0                      */
-	/*    1                         |   0               |   1                      */
-	/*    2                         |   0               |   2                      */
-	/*    ..                        |   ..              |   ..                     */
-	/*    CAMDEV_VIRTUAL_ID_MAX-1   |   0               |   CAMDEV_VIRTUAL_ID_MAX -1      */
-	/*---------------------------------------------------------------------------- */
-	/*    CAMDEV_VIRTUAL_ID_MAX     |   1               |   0                      */
-	/*    CAMDEV_VIRTUAL_ID_MAX+1   |   1               |   1                      */
-	/*    ..                        |   ..              |   ..                     */
-	/*    CAMDEV_VIRTUAL_ID_MAX*2-1 |   1               |   CAMDEV_VIRTUAL_ID_MAX -1      */
-	/*------------------------------------------------------------------------- */
-	if (NULL == pInstanceId)
-	{
+	/*----------------------------------------------------------------------------
+	 */
+	/*    id                        |   HW              |   VT */
+	/*----------------------------------------------------------------------------
+	 */
+	/*    0                         |   0               |   0 */
+	/*    1                         |   0               |   1 */
+	/*    2                         |   0               |   2 */
+	/*    ..                        |   ..              |   .. */
+	/*    CAMDEV_VIRTUAL_ID_MAX-1   |   0               |
+	 * CAMDEV_VIRTUAL_ID_MAX -1      */
+	/*----------------------------------------------------------------------------
+	 */
+	/*    CAMDEV_VIRTUAL_ID_MAX     |   1               |   0 */
+	/*    CAMDEV_VIRTUAL_ID_MAX+1   |   1               |   1 */
+	/*    ..                        |   ..              |   .. */
+	/*    CAMDEV_VIRTUAL_ID_MAX*2-1 |   1               |
+	 * CAMDEV_VIRTUAL_ID_MAX -1      */
+	/*-------------------------------------------------------------------------
+	 */
+	if (p_instance_id == NULL)
 		return RET_NULL_POINTER;
-	}
 
-	if (hwId >= CAMDEV_HARDWARE_ID_MAX)
-	{
+	if (hw_id >= CAMDEV_HARDWARE_ID_MAX)
 		return RET_UNSUPPORT_ID;
-	}
 
-	if (vtId >= CAMDEV_VIRTUAL_ID_MAX)
-	{
+	if (vt_id >= CAMDEV_VIRTUAL_ID_MAX)
 		return RET_UNSUPPORT_ID;
-	}
 
-	*pInstanceId = hwId * CAMDEV_VIRTUAL_ID_MAX + vtId;
+	*p_instance_id = hw_id * CAMDEV_VIRTUAL_ID_MAX + vt_id;
 	return ret;
 }

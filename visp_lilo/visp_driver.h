@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -88,14 +89,13 @@
 /* IPI buffer MAX length */
 #define IPI_BUF_LEN_MAX 32U
 /* RX mailbox client buffer max length */
-#define RX_MBOX_CLIENT_BUF_MAX \
+#define RX_MBOX_CLIENT_BUF_MAX                                                 \
 	(IPI_BUF_LEN_MAX + sizeof(struct zynqmp_ipi_message))
 #define MAX_BANKS 4U
 #define MAX_PORTS 4 // Number of ports to parse
 #define MAX_NO_ISP 6
 
-enum visp_port_pad_e
-{
+enum visp_port_pad_e {
 	VISP_PORT_PAD_SINK = 0,
 	VISP_PORT_PAD_SOURCE_MP,
 	VISP_PORT_PAD_SOURCE_SP1,
@@ -106,29 +106,27 @@ enum visp_port_pad_e
 
 #define VISP_PAD_NR (VISP_PORT_NR * VISP_PORT_PAD_NR)
 typedef int (*frameout_cb_t)(void *data, struct visp_dev *dev);
-enum visp_path_out_type_e
-{
+enum visp_path_out_type_e {
 	VISP_PATH_OUT_TYPE_MEMORY = 0, /**< path out in memory type*/
 	VISP_PATH_OUT_TYPE_STREAM = 1, /**< path out in stream type */
-	VISP_PATH_OUT_TYPE_MAX,		   /**< Maximum path out type. */
+	VISP_PATH_OUT_TYPE_MAX,	       /**< Maximum path out type. */
 };
 
-enum visp_mcm_input_select_e
-{
-	VISP_MCM_INPUT_SELECT_RPU = 0, /**< alloc mcm input buffer memory from rpu*/
+enum visp_mcm_input_select_e {
+	VISP_MCM_INPUT_SELECT_RPU =
+	    0, /**< alloc mcm input buffer memory from rpu*/
 	VISP_MCM_INPUT_SELECT_APU =
-		1,					   /**< alloc mcm input buffer memory from apu */
-	VISP_MCM_INPUT_SELECT_MAX, /**< Maximum mcm input buffer memory selection. */
+	    1, /**< alloc mcm input buffer memory from apu */
+	VISP_MCM_INPUT_SELECT_MAX, //Maximum mcm input buffer memory
+				   //selection
 };
 
-struct visp_format
-{
+struct visp_format {
 	uint32_t code;
 	uint32_t fourcc;
 };
 
-struct visp_pad_data
-{
+struct visp_pad_data {
 	uint32_t sink_detected;
 	struct v4l2_mbus_framefmt format;
 	struct v4l2_fract frmival_min;
@@ -141,16 +139,14 @@ struct visp_pad_data
 	struct v4l2_fract timeperframe;
 };
 
-struct visp_event_shm
-{
+struct visp_event_shm {
 	struct mutex event_lock;
 	uint64_t phy_addr;
 	void *virt_addr;
 	uint32_t size;
 };
 
-typedef struct iba_info
-{
+typedef struct iba_info {
 	u32 baseaddress;
 	u32 iba_id;
 	u32 max_width;
@@ -165,8 +161,7 @@ typedef struct iba_info
 	u32 frame_rate;
 } __attribute((__packed__)) __attribute((aligned(8))) iba_info_t;
 
-struct visp_sensor_info
-{
+struct visp_sensor_info {
 	char sensor[MEDIA_ISP_CHAR_LENGTH_MAX];
 	uint8_t mode;
 	char xml[MEDIA_ISP_CHAR_LENGTH_MAX];
@@ -177,8 +172,7 @@ struct visp_sensor_info
 	uint32_t sensor_id;
 };
 
-struct visp_port_info
-{
+struct visp_port_info {
 	uint32_t vcid;
 	uint32_t data_format;
 	uint32_t res_ver;
@@ -186,8 +180,7 @@ struct visp_port_info
 	uint32_t fps;
 	uint32_t mode;
 };
-struct visp_ext_dma_buf
-{
+struct visp_ext_dma_buf {
 	uint64_t addr;
 	void *vaddr;
 	uint32_t size;
@@ -195,53 +188,50 @@ struct visp_ext_dma_buf
 };
 
 struct atm_prop {
-    u32 high_mem_addr;      // Higher 32-bit of memory address
-    u32 is_64bit;     // True if 64-bit, False if 32-bit
-    char node_name[50]; // Node name dynamically generated
+	u32 high_mem_addr;  // Higher 32-bit of memory address
+	u32 is_64bit;	    // True if 64-bit, False if 32-bit
+	char node_name[50]; // Node name dynamically generated
 };
 
-struct visp_subdev_dma_buf
-{
+struct visp_subdev_dma_buf {
 	uint64_t pa;
 	int size;
 };
 
-struct visp_reserve_mem
-{
+struct visp_reserve_mem {
 	dma_addr_t pa;
 	uint32_t size;
 	void *va;
 };
 
 enum isp_mode {
-    ISP_MODE_LIMO,
-    ISP_MODE_LILO,
-    ISP_MODE_MIMO,
-    ISP_MODE_UNKNOWN,
+	ISP_MODE_LIMO,
+	ISP_MODE_LILO,
+	ISP_MODE_MIMO,
+	ISP_MODE_UNKNOWN,
 };
 
 struct visp_common {
-    enum isp_mode mode;
-    void *isp_dev;  // pointer to specific driver struct
+	enum isp_mode mode;
+	void *isp_dev; // pointer to specific driver struct
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
 {
-    if (!mode_str)
-        return ISP_MODE_UNKNOWN;
+	if (!mode_str)
+		return ISP_MODE_UNKNOWN;
 
-    if (strcmp(mode_str, "limo") == 0)
-        return ISP_MODE_LIMO;
-    else if (strcmp(mode_str, "lilo") == 0)
-        return ISP_MODE_LILO;
-    else if (strcmp(mode_str, "mimo") == 0)
-        return ISP_MODE_MIMO;
+	if (strcmp(mode_str, "limo") == 0)
+		return ISP_MODE_LIMO;
+	else if (strcmp(mode_str, "lilo") == 0)
+		return ISP_MODE_LILO;
+	else if (strcmp(mode_str, "mimo") == 0)
+		return ISP_MODE_MIMO;
 
-    return ISP_MODE_UNKNOWN;
+	return ISP_MODE_UNKNOWN;
 }
 
-struct visp_dev
-{
+struct visp_dev {
 	phys_addr_t paddr;
 	struct rpu_dev *rpu;
 	uint32_t regs_size;
@@ -271,7 +261,8 @@ struct visp_dev
 
 	unsigned long pde;
 	struct iba_info iba[MAX_IBA_PER_ISP];
-	enum visp_path_out_type_e output_type[VISP_PORT_NR][VISP_PORT_PAD_NR - 1];
+	enum visp_path_out_type_e output_type[VISP_PORT_NR]
+					     [VISP_PORT_PAD_NR - 1];
 	enum visp_mcm_input_select_e mcm_input_select[VISP_PORT_NR];
 
 	struct list_head mcm_input[VISP_PORT_NR];
@@ -288,7 +279,7 @@ struct visp_dev
 	struct idr notifyids;
 
 	const char *ss_mode_i0; // Example member to store device tree property
-	u32 num_streams;		// Example member to store device tree property
+	u32 num_streams;	// Example member to store device tree property
 	u32 isp_mem;
 	u32 isp_mode;
 	u32 isp_rpu;
@@ -297,36 +288,35 @@ struct visp_dev
 	const char *sensor_name;
 	bool tile0_enable_mp0;
 	bool tile0_enable_sp0;
-	uint32_t PortsMask;
+	uint32_t ports_mask;
 	struct visp_port_info port_info[MAX_PORTS]; // Ports info (up to 4)
 	struct oba_info oba[MAX_OBA_PER_ISP];
-	MediaIspPortAttr IspPorts[MEDIA_ISP_PORT_MAX];
+	media_isp_port_attr isp_ports[MEDIA_ISP_PORT_MAX];
 	struct mutex port_lock[MEDIA_ISP_PORT_MAX];
 	int streamon[VISP_PORT_PAD_NR * MAX_PORTS];
-	//Flags
+	// flags
 	struct completion apu_wait_for_ack;
 	struct completion apu_wait_for_data;
 	struct completion mailbox_completion;
 	struct atm_prop atm;
-    wait_queue_head_t wq_frame_done_finished;
-    bool apu_wait_for_isp_frame_done;
+	wait_queue_head_t wq_frame_done_finished;
+	bool apu_wait_for_isp_frame_done;
 	int k_apu_ack_flag;
 	int k_apu_data_flag;
 	int app_wait_flag;
 	frameout_cb_t frameout_cb;
-     dma_addr_t ip_a[2];
-     dma_addr_t op_a[4];
-     unsigned int out_w;
-     unsigned int out_h;
-     unsigned int cap_w;
-     unsigned int cap_h;
-     unsigned long int out_sizeimage;
-     unsigned long int cap_sizeimage;
-     unsigned int out_fmt;
-     unsigned int cap_fmt;
-     unsigned int isp_dq_out_index;
+	dma_addr_t ip_a[2];
+	dma_addr_t op_a[4];
+	unsigned int out_w;
+	unsigned int out_h;
+	unsigned int cap_w;
+	unsigned int cap_h;
+	unsigned long int out_sizeimage;
+	unsigned long int cap_sizeimage;
+	unsigned int out_fmt;
+	unsigned int cap_fmt;
+	unsigned int isp_dq_out_index;
 };
 
-
-//int Handle_Frameout_Buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);
+// int handle_frameout_buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);
 #endif

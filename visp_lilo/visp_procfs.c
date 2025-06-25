@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -50,7 +51,7 @@
  * version of this file.
  *
  *****************************************************************************/
- 
+
 #include <linux/ctype.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
@@ -60,8 +61,7 @@
 #include "visp_driver.h"
 #include "visp_procfs.h"
 
-struct visp_procfs
-{
+struct visp_procfs {
 	struct proc_dir_entry *pde;
 	struct visp_dev *isp_dev;
 	struct mutex lock;
@@ -69,16 +69,15 @@ struct visp_procfs
 
 static char *type2str(int type)
 {
-	switch (type)
-	{
-		case VISP_PATH_OUT_TYPE_MEMORY:
-			return "memory";
+	switch (type) {
+	case VISP_PATH_OUT_TYPE_MEMORY:
+		return "memory";
 
-		case VISP_PATH_OUT_TYPE_STREAM:
-			return "stream";
+	case VISP_PATH_OUT_TYPE_STREAM:
+		return "stream";
 
-		default:
-			return "invalid";
+	default:
+		return "invalid";
 	}
 }
 
@@ -96,45 +95,48 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 	isp_dev = isp_proc->isp_dev;
 
 	seq_printf(sfile, "/******isp configuration******/\n");
-	for (pad_idx = 0; pad_idx < VISP_PAD_NR; pad_idx++)
-	{
+	for (pad_idx = 0; pad_idx < VISP_PAD_NR; pad_idx++) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
 		pad = media_pad_remote_pad_first(&isp_dev->pads[pad_idx]);
 #else
 		pad = media_entity_remote_pad(&isp_dev->pads[pad_idx]);
 #endif
 
-		if (pad && (port != (pad_idx / VISP_PORT_PAD_NR)))
-		{
+		if (pad && (port != (pad_idx / VISP_PORT_PAD_NR))) {
 			port = pad_idx / VISP_PORT_PAD_NR;
 			seq_printf(sfile, "isp%d port%d:\n", isp_dev->id, port);
 			seq_printf(sfile, "output_type: %s %s %s %s\n",
-					   type2str(isp_dev->output_type[port][0]),
-					   type2str(isp_dev->output_type[port][1]),
-					   type2str(isp_dev->output_type[port][2]),
-					   type2str(isp_dev->output_type[port][3]));
-
+				   type2str(isp_dev->output_type[port][0]),
+				   type2str(isp_dev->output_type[port][1]),
+				   type2str(isp_dev->output_type[port][2]),
+				   type2str(isp_dev->output_type[port][3]));
 			seq_printf(sfile, "sensor      : %s\n",
-					   isp_dev->IspPorts[port].SensorInfo.Name);
+				   isp_dev->isp_ports[port].sensor_info.name);
 			seq_printf(sfile, "mode        : %u\n",
-					   isp_dev->IspPorts[port].SensorInfo.Mode);
-			seq_printf(sfile, "xml         : %s\n",
-					   isp_dev->IspPorts[port].SensorInfo.CalibXml);
-			seq_printf(sfile, "manu_json   : %s\n",
-					   isp_dev->IspPorts[port].SensorInfo.ManuJson);
-			seq_printf(sfile, "auto_json   : %s\n",
-					   isp_dev->IspPorts[port].SensorInfo.AutoJson);
-			seq_printf(sfile, "one_json    : %s\n",
-					   isp_dev->IspPorts[port].SensorInfo.OneJson);
+				   isp_dev->isp_ports[port].sensor_info.mode);
+			seq_printf(
+			    sfile, "xml         : %s\n",
+			    isp_dev->isp_ports[port].sensor_info.calib_xml);
+			seq_printf(
+			    sfile, "manu_json   : %s\n",
+			    isp_dev->isp_ports[port].sensor_info.manu_json);
+			seq_printf(
+			    sfile, "auto_json   : %s\n",
+			    isp_dev->isp_ports[port].sensor_info.auto_json);
+			seq_printf(
+			    sfile, "one_json    : %s\n",
+			    isp_dev->isp_ports[port].sensor_info.one_json);
 			seq_printf(sfile, "vc_id       : %u\n",
-					   isp_dev->IspPorts[port].SensorInfo.vc_id);
-			seq_printf(sfile, "sensor_id   : %u\n",
-					   isp_dev->IspPorts[port].SensorInfo.sensor_id);
+				   isp_dev->isp_ports[port].sensor_info.vc_id);
+			seq_printf(
+			    sfile, "sensor_id   : %u\n",
+			    isp_dev->isp_ports[port].sensor_info.sensor_id);
 			seq_printf(sfile, "i2c_id      : %u\n",
-					   isp_dev->IspPorts[port].SensorInfo.i2c_id);
+				   isp_dev->isp_ports[port].sensor_info.i2c_id);
 			seq_printf(sfile, "buffer_type : %s\n",
-					   isp_dev->IspPorts[port].bufmode);
-			seq_printf(sfile, "#################################\n\n\n");
+				   isp_dev->isp_ports[port].bufmode);
+			seq_printf(sfile,
+				   "#################################\n\n\n");
 		}
 	}
 
@@ -153,7 +155,7 @@ static int visp_procfs_open(struct inode *inode, struct file *file)
 }
 
 static int32_t visp_proc_process(struct seq_file *sfile,
-								 struct visp_procfs *isp_proc, char *str_buf)
+				 struct visp_procfs *isp_proc, char *str_buf)
 {
 	struct visp_dev *isp_dev;
 	char *token = NULL, *cur = str_buf;
@@ -168,137 +170,139 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 
 	mutex_lock(&isp_proc->lock);
 
-	while ((token = strsep(&cur, delim)))
-	{
-		if (isdigit(*token))
-		{
+	while ((token = strsep(&cur, delim))) {
+		if (isdigit(*token)) {
 			port = *token - '0';
 			continue;
 		}
 
 		if ((port > VISP_PORT_NR) || (port < 0))
-		{
 			continue;
-		}
 
 		kv_cur = token;
 		val = strsep(&kv_cur, kv_delim);
-		if (val)
-		{
-			if (strcmp(val, "sensor") == 0)
-			{
+		if (val) {
+			if (strcmp(val, "sensor") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val)
-				{
-					memset(isp_dev->IspPorts[port].SensorInfo.Name, 0,
-						   sizeof(isp_dev->IspPorts[port].SensorInfo.Name));
-					strncpy(isp_dev->IspPorts[port].SensorInfo.Name, val,
-							strlen(val));
+				if (val) {
+					memset(isp_dev->isp_ports[port]
+						   .sensor_info.name,
+					       0,
+					       sizeof(isp_dev->isp_ports[port]
+							  .sensor_info.name));
+					strncpy(isp_dev->isp_ports[port]
+						    .sensor_info.name,
+						val, strlen(val));
 				}
-			}
-			else if (strcmp(val, "mode") == 0)
-			{
+			} else if (strcmp(val, "mode") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val && isdigit(*val))
-				{
-					isp_dev->IspPorts[port].SensorInfo.Mode =
-						(uint32_t)simple_strtoul(val, &end, 0);
+				if (val && isdigit(*val)) {
+					isp_dev->isp_ports[port]
+					    .sensor_info.mode =
+					    (uint32_t)simple_strtoul(val, &end,
+								     0);
 				}
-			}
-			else if (strcmp(val, "xml") == 0)
-			{
+			} else if (strcmp(val, "xml") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val)
-				{
-					memset(isp_dev->IspPorts[port].SensorInfo.CalibXml, 0,
-						   sizeof(isp_dev->IspPorts[port].SensorInfo.CalibXml));
-					strncpy(isp_dev->IspPorts[port].SensorInfo.CalibXml, val,
-							strlen(val));
+				if (val) {
+					memset(
+					    isp_dev->isp_ports[port]
+						.sensor_info.calib_xml,
+					    0,
+					    sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.calib_xml));
+					strncpy(isp_dev->isp_ports[port]
+						    .sensor_info.calib_xml,
+						val, strlen(val));
 				}
-			}
-			else if (strcmp(val, "manu_json") == 0)
-			{
+			} else if (strcmp(val, "manu_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val)
-				{
-					memset(isp_dev->IspPorts[port].SensorInfo.ManuJson, 0,
-						   sizeof(isp_dev->IspPorts[port].SensorInfo.ManuJson));
-					strncpy(isp_dev->IspPorts[port].SensorInfo.ManuJson, val,
-							strlen(val));
+				if (val) {
+					memset(
+					    isp_dev->isp_ports[port]
+						.sensor_info.manu_json,
+					    0,
+					    sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.manu_json));
+					strncpy(isp_dev->isp_ports[port]
+						    .sensor_info.manu_json,
+						val, strlen(val));
 				}
-			}
-			else if (strcmp(val, "auto_json") == 0)
-			{
+			} else if (strcmp(val, "auto_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val)
-				{
-					memset(isp_dev->IspPorts[port].SensorInfo.AutoJson, 0,
-						   sizeof(isp_dev->IspPorts[port].SensorInfo.AutoJson));
-					strncpy(isp_dev->IspPorts[port].SensorInfo.AutoJson, val,
-							strlen(val));
+				if (val) {
+					memset(
+					    isp_dev->isp_ports[port]
+						.sensor_info.auto_json,
+					    0,
+					    sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.auto_json));
+					strncpy(isp_dev->isp_ports[port]
+						    .sensor_info.auto_json,
+						val, strlen(val));
 				}
-			}
-			else if (strcmp(val, "one_json") == 0)
-			{
+			} else if (strcmp(val, "one_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val)
-				{
-					memset(isp_dev->IspPorts[port].SensorInfo.OneJson, 0,
-						   sizeof(isp_dev->IspPorts[port].SensorInfo.OneJson));
-					strncpy(isp_dev->IspPorts[port].SensorInfo.OneJson, val,
-							strlen(val));
+				if (val) {
+					memset(
+					    isp_dev->isp_ports[port]
+						.sensor_info.one_json,
+					    0,
+					    sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.one_json));
+					strncpy(isp_dev->isp_ports[port]
+						    .sensor_info.one_json,
+						val, strlen(val));
 				}
-			}
-			else if (strcmp(val, "output_type") == 0)
-			{
+			} else if (strcmp(val, "output_type") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val)
-				{
-					while ((token = strsep(&val, com_delim)))
-					{
-						if (path < VISP_PORT_PAD_NR - 1 && isdigit(*token))
-						{
-							isp_dev->output_type[port][path] = *token - '0';
+				if (val) {
+					while (
+					    (token = strsep(&val, com_delim))) {
+						if (path <
+							VISP_PORT_PAD_NR - 1 &&
+						    isdigit(*token)) {
+							isp_dev->output_type
+							    [port][path] =
+							    *token - '0';
 							path++;
 						}
 					}
 				}
-			}
-			else if (strcmp(val, "vc_id") == 0)
-			{
+			} else if (strcmp(val, "vc_id") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val && isdigit(*val))
-				{
-					isp_dev->IspPorts[port].SensorInfo.vc_id =
-						(uint32_t)simple_strtoul(val, &end, 0);
+				if (val && isdigit(*val)) {
+					isp_dev->isp_ports[port]
+					    .sensor_info.vc_id =
+					    (uint32_t)simple_strtoul(val, &end,
+								     0);
 				}
-			}
-			else if (strcmp(val, "sensor_id") == 0)
-			{
+			} else if (strcmp(val, "sensor_id") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val && isdigit(*val))
-				{
-					isp_dev->IspPorts[port].SensorInfo.sensor_id =
-						(uint32_t)simple_strtoul(val, &end, 0);
+				if (val && isdigit(*val)) {
+					isp_dev->isp_ports[port]
+					    .sensor_info.sensor_id =
+					    (uint32_t)simple_strtoul(val, &end,
+								     0);
 				}
-			}
-			else if (strcmp(val, "i2c_id") == 0)
-			{
+			} else if (strcmp(val, "i2c_id") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val && isdigit(*val))
-				{
-					isp_dev->IspPorts[port].SensorInfo.i2c_id =
-						(uint32_t)simple_strtoul(val, &end, 0);
+				if (val && isdigit(*val)) {
+					isp_dev->isp_ports[port]
+					    .sensor_info.i2c_id =
+					    (uint32_t)simple_strtoul(val, &end,
+								     0);
 				}
-			}
-			else if (strcmp(val, "bufmode") == 0)
-			{
+			} else if (strcmp(val, "bufmode") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val)
-				{
-					memset(isp_dev->IspPorts[port].bufmode, 0,
-						   sizeof(isp_dev->IspPorts[port].bufmode));
-					strncpy(isp_dev->IspPorts[port].bufmode, val, strlen(val));
+				if (val) {
+					memset(isp_dev->isp_ports[port].bufmode,
+					       0,
+					       sizeof(isp_dev->isp_ports[port]
+							  .bufmode));
+					strncpy(
+					    isp_dev->isp_ports[port].bufmode,
+					    val, strlen(val));
 				}
 			}
 		}
@@ -310,7 +314,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 }
 
 static ssize_t visp_procfs_write(struct file *file, const char __user *buffer,
-								 size_t count, loff_t *ppos)
+				 size_t count, loff_t *ppos)
 {
 	struct visp_procfs *isp_proc;
 	struct seq_file *sfile;
@@ -324,9 +328,11 @@ static ssize_t visp_procfs_write(struct file *file, const char __user *buffer,
 	sfile = file->private_data;
 
 	str_buf = (char *)kzalloc(count, GFP_KERNEL);
-	if (!str_buf) return -ENOMEM;
+	if (!str_buf)
+		return -ENOMEM;
 
-	if (copy_from_user(str_buf, buffer, count)) return -EFAULT;
+	if (copy_from_user(str_buf, buffer, count))
+		return -EFAULT;
 
 	*(str_buf + count - 1) = '\0';
 
@@ -355,8 +361,7 @@ static const struct proc_ops visp_procfs_ops = {
 };
 #endif
 
-struct finddir_callback
-{
+struct finddir_callback {
 	struct dir_context ctx;
 	const char *name;
 	int32_t files_cnt;
@@ -365,69 +370,59 @@ struct finddir_callback
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 static int readdir_callback(struct dir_context *ctx, const char *name,
-							int namelen, loff_t offset, u64 ino,
-							unsigned int d_type)
+			    int namelen, loff_t offset, u64 ino,
+			    unsigned int d_type)
 {
 	struct finddir_callback *fc =
-		container_of(ctx, struct finddir_callback, ctx);
-	if (fc->found) return 0;
+	    container_of(ctx, struct finddir_callback, ctx);
+	if (fc->found)
+		return 0;
 
 	if (strcmp(name, fc->name) == 0)
-	{
 		fc->found = true;
-	}
 	fc->files_cnt++;
 	return 0;
 }
 
 #else
 static bool readdir_callback(struct dir_context *ctx, const char *name,
-							 int namelen, loff_t offset, u64 ino,
-							 unsigned int d_type)
+			     int namelen, loff_t offset, u64 ino,
+			     unsigned int d_type)
 {
 	struct finddir_callback *fc =
-		container_of(ctx, struct finddir_callback, ctx);
-	if (fc->found) return true;
+	    container_of(ctx, struct finddir_callback, ctx);
+	if (fc->found)
+		return true;
 	if (strcmp(name, fc->name) == 0)
-	{
 		fc->found = true;
-	}
 	fc->files_cnt++;
 	return true;
 }
 #endif
 
 static int find_proc_dir_by_name(const char *root, const char *name,
-								 bool *found, int32_t *files_cnt)
+				 bool *found, int32_t *files_cnt)
 {
 	struct file *pfile;
 	int ret = 0;
 	struct finddir_callback fc = {
-		.ctx.actor = readdir_callback,
-		.name = name,
-		.found = false,
-		.files_cnt = -2,
+	    .ctx.actor = readdir_callback,
+	    .name = name,
+	    .found = false,
+	    .files_cnt = -2,
 	};
 
 	pfile = filp_open(root, O_RDONLY | O_DIRECTORY, 0);
 	if (pfile->f_op->iterate_shared)
-	{
 		ret = pfile->f_op->iterate_shared(pfile, &fc.ctx);
-	}
-	else
-	{
-		//ret = pfile->f_op->iterate(pfile, &fc.ctx);
-	}
-
+/*	else {
+ *		//ret = pfile->f_op->iterate(pfile, &fc.ctx);
+ */
 	if (ret == 0)
-	{
 		*found = fc.found;
-	}
 
 	if (files_cnt != NULL)
-	{
 		*files_cnt = fc.files_cnt;
-	}
 
 	filp_close(pfile, NULL);
 	return ret;
@@ -440,28 +435,29 @@ int visp_procfs_register(struct visp_dev *isp_dev, unsigned long *pde)
 	int ret = 0;
 	bool found = false;
 
-	if (!isp_dev) return -1;
+	if (!isp_dev)
+		return -1;
 	sprintf(isp_proc_name, "vsi/isp_subdev%d", isp_dev->id);
 
 	isp_proc =
-		devm_kzalloc(isp_dev->dev, sizeof(struct visp_procfs), GFP_KERNEL);
+	    devm_kzalloc(isp_dev->dev, sizeof(struct visp_procfs), GFP_KERNEL);
 
-	if (!isp_proc) return -ENOMEM;
+	if (!isp_proc)
+		return -ENOMEM;
 
 	ret = find_proc_dir_by_name("/proc", "vsi", &found, NULL);
-	if (ret == 0)
-	{
-		if (!found) proc_mkdir("vsi", NULL);
-	}
-	else
-	{
+	if (ret == 0) {
+		if (!found)
+			proc_mkdir("vsi", NULL);
+	} else {
 		return -EFAULT;
 	}
 
 	isp_proc->isp_dev = isp_dev;
-	isp_proc->pde =
-		proc_create_data(isp_proc_name, 0664, NULL, &visp_procfs_ops, isp_proc);
-	if (!isp_proc->pde) return -EFAULT;
+	isp_proc->pde = proc_create_data(isp_proc_name, 0664, NULL,
+					 &visp_procfs_ops, isp_proc);
+	if (!isp_proc->pde)
+		return -EFAULT;
 	*pde = (unsigned long)&isp_proc->pde;
 
 	mutex_init(&(isp_proc->lock));
@@ -476,16 +472,13 @@ void visp_procfs_unregister(unsigned long pde)
 	struct visp_procfs *isp_proc = (struct visp_procfs *)pde;
 
 	ret = find_proc_dir_by_name("/proc", "vsi", &found, NULL);
-	if (ret == 0)
-	{
-		if (found)
-		{
+	if (ret == 0) {
+		if (found) {
 			proc_remove(isp_proc->pde);
-			ret = find_proc_dir_by_name("/proc/vsi", "", &found, &files_cnt);
+			ret = find_proc_dir_by_name("/proc/vsi", "", &found,
+						    &files_cnt);
 			if (files_cnt == 0)
-			{
 				remove_proc_subtree("vsi", NULL);
-			}
 		}
 	}
 }

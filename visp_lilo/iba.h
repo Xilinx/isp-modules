@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /*
  * Copyright 2025 Advanced Micro Devices, Inc.
  *
@@ -24,7 +25,7 @@
 #ifndef __IBA_H__
 #define __IBA_H__
 
-//#include "vvdevice.h"
+// #include "vvdevice.h"
 
 #include "cam_device_calibration.h"
 #include "cam_device_common.h"
@@ -32,10 +33,9 @@
 #include "visp_driver.h"
 #define MAX_IBA_PER_TILE 5UL
 
-#define MAX_IBA_PER_ISP  5
+#define MAX_IBA_PER_ISP 5
 #define VISP_PLATFORM
-typedef enum iba_id
-{
+typedef enum iba_id {
 	IBA_0,
 	IBA_1,
 	IBA_2,
@@ -46,8 +46,7 @@ typedef enum iba_id
 
 } iba_id_t;
 
-typedef enum isp_input_mcm_port_id
-{
+typedef enum isp_input_mcm_port_id {
 	ISP0_MCM_PORT_0,
 	ISP0_MCM_PORT_1,
 	ISP0_MCM_PORT_2,
@@ -57,16 +56,14 @@ typedef enum isp_input_mcm_port_id
 	DUMMY_ISP_INPUT_MCM_PORT = 0XDEADFEED
 } iba_out_port_t;
 
-typedef enum iba_input_pixel_width
-{
+typedef enum iba_input_pixel_width {
 	SINGLE_PIXEL_WIDTH = 1,
 	DUAL_PIXEL_WIDTH = 2,
 	QUAD_PIXEL_WIDTH = 4,
 	DUMMY_IBA_INPUT_PIXEL_WIDTH = 0XDEADFEED
 } iba_input_pixel_width_t;
 
-typedef enum iba_virtual_channel
-{
+typedef enum iba_virtual_channel {
 	VC0 = 0,
 	VC1,
 	VC2,
@@ -74,23 +71,20 @@ typedef enum iba_virtual_channel
 	DUMMY_VC = 0XDEADFEED
 } iba_virtual_channel_id_t;
 
-typedef enum iba_fifo_write_mode
-{
+typedef enum iba_fifo_write_mode {
 	SINGLE_FIFO_WRITE = 0,
 	DUAL_FIFO_WRITE,
 	QUAD_FIFO_WRITE,
 	DUMMY_IBA_FIFO_WRITE_MODE = 0XDEADFEED
 } iba_fifo_write_mode_t;
 
-typedef enum tile_id
-{
+typedef enum tile_id {
 	TILE_0 = 0,
 	MAX_TILE,
 	DUMMY_TILE_ID = 0XDEADFEED
 } tile_id_t;
 
-typedef enum iba_isp_instance
-{
+typedef enum iba_isp_instance {
 	ISP0 = 0,
 	ISP1 = 1,
 	ISP2 = 2,
@@ -101,8 +95,7 @@ typedef enum iba_isp_instance
 	DUMMY_IBA_ISP = 0XDEADFEED
 } iba_isp_instance_t;
 
-typedef enum iba_mipi_number
-{
+typedef enum iba_mipi_number {
 	MIPI_0 = 0,
 	MIPI_1,
 	MIPI_2,
@@ -115,27 +108,23 @@ typedef enum iba_mipi_number
 	DUMMY_MIPI_NUMBER = 0XDEADFEED
 } iba_mipi_id_t;
 
-typedef enum iba_status
-{
+typedef enum iba_status {
 	IBA_DISABLED = 0,
 	IBA_ENABLED,
 	DUMMY_IBA_STATUS = 0XDEADFEED
 } iba_status_t;
 
-typedef struct iba_isp_combination
-{
+typedef struct iba_isp_combination {
 } iba_isp_split_t;
 
-typedef struct iba_config_params
-{
-	CamDeviceWorkMode_t workMode;
-	uint32_t ispHwId;
-	CamDeviceMcmPortId_t portId;
+typedef struct iba_config_params {
+	cam_device_work_mode_t work_mode;
+	uint32_t isp_hw_id;
+	cam_device_mcm_port_id_t port_id;
 } iba_config_params_t;
 
-typedef struct iba_instance
-{
-	u32 BaseAddress;
+typedef struct iba_instance {
+	u32 base_address;
 	u32 iba_id;
 	u32 hres;
 	u32 vres;
@@ -143,29 +132,31 @@ typedef struct iba_instance
 	iba_status_t iba_is_enabled;
 	u32 hblank_prog;
 	u32 vblank_prog;
-	u32 virtual_channel_id; /*Virtual channel of MIPI to which IBA connected*/
-	u32 input_pixel_width;	/* From Axi video stream */
+	u32 virtual_channel_id;		 //Virtual channel of MIPI to which IBA
+					 //connected
+	u32 input_pixel_width;		 /* From Axi video stream */
 	iba_isp_instance_t isp_instance; /*To which ISP is this IBA connected*/
 	u32 frame_rate;
 } __attribute((__packed__)) __attribute((aligned(8))) iba_inst_t;
 
-typedef struct iba_map
-{
+typedef struct iba_map {
 	iba_inst_t iba_inst[MAX_ISP][MAX_IBA_PER_ISP];
-	uint32_t ActiveIBACount[MAX_ISP];
-	int IsReady; //TODO : Need to remove this
+	uint32_t active_iba_count[MAX_ISP];
+	int is_ready; // TODO : Need to remove this
 } __attribute((__packed__)) __attribute((aligned(8))) iba_map_t;
 
-//int IBA_init_send_command(struct visp_dev *isp_dev,);
-int IBA_init_send_command(struct visp_dev *isp_dev,
-						  CamDeviceHandle_t hCamDevice);
+// int iba_init_send_command(struct visp_dev *isp_dev,);
+int iba_init_send_command(struct visp_dev *isp_dev,
+			  cam_device_handle_t h_cam_device);
 
-#define IBA_WriteReg(BaseAddress, RegOffset, Data)                        \
-	Xil_Out32((UINTPTR)(((u8 *)BaseAddress) + (RegOffset)), (u32)(Data)); \
-	xil_printf("RPU:IBA reg add 0x%x ,val 0x%x \n",                       \
-			   (UINTPTR)(((u8 *)BaseAddress) + (RegOffset)), Data);
-#define IBA_ReadReg(BaseAddress, RegOffset) \
-	Xil_In32((UINTPTR)(((u8 *)BaseAddress) + (RegOffset)))
+#define iba_write_reg(base_address, RegOffset, data)                            \
+	do {                                                                       \
+		Xil_Out32((UINTPTR)(((u8 *)base_address) + (RegOffset)), (u32)(data)); \
+		xil_printf("RPU:IBA reg add 0x%x ,val 0x%x\n",                         \
+		(UINTPTR)(((u8 *)base_address) + (RegOffset)), data);       \
+		} while (0)
+#define iba_read_reg(base_address, RegOffset)                                   \
+	Xil_In32((UINTPTR)(((u8 *)base_address) + (RegOffset)))
 
 #define XPAR_IBA_INSTANCES 4
 #define XPAR_ISP_INSTANCE 2
@@ -198,41 +189,41 @@ int IBA_init_send_command(struct visp_dev *isp_dev,
 #define TILE2_SLCR_BASE_ADDR (TILE_2_BASE_ADDR + 0x80000)
 #define ISP_SLCR_VIDIF3_SEL__OFFSET_ (0x2030)
 
-#define XPAR_TILE0_IBA0_BASEADDR \
-	(TILE_0_BASE_ADDR + 0x20000) //IBA0 base address
-#define XPAR_TILE0_IBA1_BASEADDR \
-	(TILE_0_BASE_ADDR + 0x21000) //IBA0 base address
-#define XPAR_TILE0_IBA2_BASEADDR \
-	(TILE_0_BASE_ADDR + 0x22000) //IBA0 base address
-#define XPAR_TILE0_IBA3_BASEADDR \
-	(TILE_0_BASE_ADDR + 0x23000) //IBA0 base address
-#define XPAR_TILE0_IBA4_BASEADDR \
-	(TILE_0_BASE_ADDR + 0x24000) //ISP1 IBA0 base address
+#define XPAR_TILE0_IBA0_BASEADDR                                               \
+	(TILE_0_BASE_ADDR + 0x20000) // IBA0 base address
+#define XPAR_TILE0_IBA1_BASEADDR                                               \
+	(TILE_0_BASE_ADDR + 0x21000) // IBA0 base address
+#define XPAR_TILE0_IBA2_BASEADDR                                               \
+	(TILE_0_BASE_ADDR + 0x22000) // IBA0 base address
+#define XPAR_TILE0_IBA3_BASEADDR                                               \
+	(TILE_0_BASE_ADDR + 0x23000) // IBA0 base address
+#define XPAR_TILE0_IBA4_BASEADDR                                               \
+	(TILE_0_BASE_ADDR + 0x24000) // ISP1 IBA0 base address
 
-#define XPAR_TILE1_IBA0_BASEADDR \
-	(TILE_1_BASE_ADDR + 0x20000) //IBA0 base address
-#define XPAR_TILE1_IBA1_BASEADDR \
-	(TILE_1_BASE_ADDR + 0x21000) //IBA0 base address
-#define XPAR_TILE1_IBA2_BASEADDR \
-	(TILE_1_BASE_ADDR + 0x22000) //IBA0 base address
-#define XPAR_TILE1_IBA3_BASEADDR \
-	(TILE_1_BASE_ADDR + 0x23000) //IBA0 base address
-#define XPAR_TILE1_IBA4_BASEADDR \
-	(TILE_1_BASE_ADDR + 0x24000) //ISP1 IBA0 base address
+#define XPAR_TILE1_IBA0_BASEADDR                                               \
+	(TILE_1_BASE_ADDR + 0x20000) // IBA0 base address
+#define XPAR_TILE1_IBA1_BASEADDR                                               \
+	(TILE_1_BASE_ADDR + 0x21000) // IBA0 base address
+#define XPAR_TILE1_IBA2_BASEADDR                                               \
+	(TILE_1_BASE_ADDR + 0x22000) // IBA0 base address
+#define XPAR_TILE1_IBA3_BASEADDR                                               \
+	(TILE_1_BASE_ADDR + 0x23000) // IBA0 base address
+#define XPAR_TILE1_IBA4_BASEADDR                                               \
+	(TILE_1_BASE_ADDR + 0x24000) // ISP1 IBA0 base address
 
-#define XPAR_TILE2_IBA0_BASEADDR \
-	(TILE_2_BASE_ADDR + 0x20000) //IBA0 base address
-#define XPAR_TILE2_IBA1_BASEADDR \
-	(TILE_2_BASE_ADDR + 0x21000) //IBA0 base address
-#define XPAR_TILE2_IBA2_BASEADDR \
-	(TILE_2_BASE_ADDR + 0x22000) //IBA0 base address
-#define XPAR_TILE2_IBA3_BASEADDR \
-	(TILE_2_BASE_ADDR + 0x23000) //IBA0 base address
-#define XPAR_TILE2_IBA4_BASEADDR \
-	(TILE_2_BASE_ADDR + 0x24000) //ISP1 IBA0 base address
+#define XPAR_TILE2_IBA0_BASEADDR                                               \
+	(TILE_2_BASE_ADDR + 0x20000) // IBA0 base address
+#define XPAR_TILE2_IBA1_BASEADDR                                               \
+	(TILE_2_BASE_ADDR + 0x21000) // IBA0 base address
+#define XPAR_TILE2_IBA2_BASEADDR                                               \
+	(TILE_2_BASE_ADDR + 0x22000) // IBA0 base address
+#define XPAR_TILE2_IBA3_BASEADDR                                               \
+	(TILE_2_BASE_ADDR + 0x23000) // IBA0 base address
+#define XPAR_TILE2_IBA4_BASEADDR                                               \
+	(TILE_2_BASE_ADDR + 0x24000) // ISP1 IBA0 base address
 
 #define ISP_MCM_CTRL_OFFSET 0x1200
 
-//int Iba_Map_Load(iba_map_t *, VvbenchVvdev_t *);
-//int Iba_Map_init(iba_map_t *, VvbenchVvdev_t *);
+// int iba_map_load(iba_map_t *, VvbenchVvdev_t *);
+// int iba_map_init(iba_map_t *, VvbenchVvdev_t *);
 #endif
