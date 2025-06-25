@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -54,19 +55,29 @@
 #define __ALIGN_H__
 
 #ifndef ALIGN_UP
-#define ALIGN_UP(addr, align)		( ((addr) + ((align)-1)) & ~(uintptr_t)((align)-1) ) //!< Aligns addr to next higher aligned addr; align must be a power of two.
+#define ALIGN_UP(addr, align)                                                  \
+	(((addr) + ((align)-1)) &                                              \
+	 ~(uintptr_t)((align)-1)) //!< Aligns addr to next higher aligned addr;
+				  //!< align must be a power of two.
 #endif
-#define ALIGN_DOWN(addr, align)		( ((addr)              ) & ~(uintptr_t)((align)-1) ) //!< Aligns addr to next lower aligned addr; align must be a power of two.
+#define ALIGN_DOWN(addr, align)                                                \
+	(((addr)) &                                                            \
+	 ~(uintptr_t)((align)-1)) //!< Aligns addr to next lower aligned addr;
+				  //!< align must be a power of two.
 
-#define ALIGN_SIZE_16BYTES          ( 0x10 )
-#define ALIGN_UP_16BYTES(addr)	    ( ALIGN_UP(addr, ALIGN_SIZE_16BYTES) )
+#define ALIGN_SIZE_16BYTES (0x10)
+#define ALIGN_UP_16BYTES(addr) (ALIGN_UP(addr, ALIGN_SIZE_16BYTES))
 
-#define ALIGN_SIZE_1K               ( 0x400 )
-#define ALIGN_UP_1K(addr)			( ALIGN_UP(addr, ALIGN_SIZE_1K) )
+#define ALIGN_SIZE_1K (0x400)
+#define ALIGN_UP_1K(addr) (ALIGN_UP(addr, ALIGN_SIZE_1K))
 
-#define ALIGN_SIZE_4K               ( 0x1000 )
-#define ALIGN_UP_4K(addr)			( ALIGN_UP(addr, ALIGN_SIZE_4K) )
+#define ALIGN_SIZE_4K (0x1000)
+#define ALIGN_UP_4K(addr) (ALIGN_UP(addr, ALIGN_SIZE_4K))
 
-#define MAX_ALIGNED_SIZE(size, align) ( ALIGN_UP(size, align) + align ) //!< Calcs max size of memory required to be able to hold a block of size bytes with a start address aligned to align.
+#define MAX_ALIGNED_SIZE(size, align)                                          \
+	(ALIGN_UP(size, align) +                                               \
+	 align) //!< Calcs max size of memory required to be able to hold a
+		//!< block of size bytes with a start address aligned to
+		//!< align.
 
 #endif /* __ALIGN_H__ */
