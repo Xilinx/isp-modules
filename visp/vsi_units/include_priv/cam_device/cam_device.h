@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -60,46 +61,43 @@
 #include "cam_device_common.h"
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 #define DEBUG_FLAG
 
-	/**
-	 *@ispcore structure define
-	 **/
-	/*******************************************/
-	typedef struct CamDeviceIspcore_s
-	{
-		CamDeviceHandle_t hCamDevSet[CAMDEV_HARDWARE_ID_MAX]
-									[CAMDEV_VIRTUAL_ID_MAX];
+/**
+ *@ispcore structure define
+ **/
+/*******************************************/
+typedef struct cam_device_ispcore_s {
+	cam_device_handle_t h_cam_dev_set[CAMDEV_HARDWARE_ID_MAX]
+					 [CAMDEV_VIRTUAL_ID_MAX];
 
-	} CamDeviceIspcore_t;
+} cam_device_ispcore_t;
 
+/**
+ *@ispcore api define
+ **/
+/*******************************************/
+void cam_device_ispcore_init(void);
 
-	/**
-	 *@ispcore api define
-	 **/
-	/*******************************************/
-	void CamDeviceIspcoreInit(void);
+RESULT cam_device_request_instance(uint32_t hw_id,
+				   cam_device_handle_t *p_cam_devhandle,
+				   uint32_t *pvt_id);
 
-	RESULT CamDeviceRequestInstance(uint32_t hwId,
-									CamDeviceHandle_t *pCamDevhandle,
-									uint32_t *pvtId);
+RESULT cam_device_free_instance(cam_device_handle_t cam_devhandle,
+				uint32_t hw_id);
 
-	RESULT CamDeviceFreeInstance(CamDeviceHandle_t camDevhandle, uint32_t hwId);
+RESULT cam_device_instance_id_mapping(uint32_t hw_id, uint32_t vt_id,
+				      uint32_t *p_instance_id);
 
-	RESULT CamDeviceInstanceIdMapping(uint32_t hwId, uint32_t vtId,
-									  uint32_t *pInstanceId);
-
-	typedef struct CamDeviceContext_s
-	{
-		uint32_t ispHwId;
-		uint32_t ispVtId;
-		uint32_t instanceId;
-		uint32_t cookie;
-	} CamDeviceContext_t;
+typedef struct cam_device_context_s {
+	uint32_t isp_hw_id;
+	uint32_t isp_vt_id;
+	uint32_t instance_id;
+	uint32_t cookie;
+} cam_device_context_t;
 
 #ifdef __cplusplus
 }

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -62,8 +63,8 @@
 #ifndef TYPES_H_
 #define TYPES_H_
 
-//#include "linux_compat.h"
-//#include <limits.h>
+// #include "linux_compat.h"
+// #include <limits.h>
 #if 0
 #ifndef __cplusplus
 	/* Only C99 compilers know stdbool */
@@ -79,11 +80,11 @@
 
 #if defined(__GNUC__)
 #if !defined(INLINE)
-#define INLINE static inline
+#define INLINE (static inline)
 #endif
 #endif
 
-//#include <stddef.h>
+// #include <stddef.h>
 #if 1
 #if 0
 #if defined(__cplusplus) || ((__STDC_VERSION__ >= 199901L))
@@ -91,7 +92,7 @@
 #else
 #endif
 #endif
-//#include <stdint.h>
+// #include <stdint.h>
 /* We only check for __int8_t_defined */
 /* as this is all that gcc defines. */
 #if !defined(__int8_t_defined)
@@ -127,7 +128,7 @@ typedef unsigned char uchar;
 #endif /* #if defined(__cplusplus) || ((__STDC_VERSION__ >= 199901L)) */
 
 #ifndef NULL
-#define NULL ((void*)0)
+#define NULL ((void *)0)
 #endif
 
 /* make lint happy: */
@@ -136,8 +137,7 @@ typedef char char_t; /* like suggested in  Misra 6.3 (P. 29) */
 typedef float float32_t;
 typedef double float64_t;
 typedef long double float128_t;
-typedef enum
-{
+typedef enum {
 	BOOL_FALSE = 0,
 	BOOL_TRUE = (!BOOL_FALSE),
 	DUMMY_BOOL = 0xDEADFEED
@@ -147,7 +147,7 @@ typedef enum
 #define CAST_POINTER_TO_UINT32(pointer) ((uint32_t)(pointer))
 #define CAST_POINTER_TO_INT32(pointer) ((int32_t)(pointer))
 #define CAST_UINT32_TO_POINTER(pointerType, value) ((pointerType)(value))
-#define CAST_INT32_TO_POINTER(value) ((int32_t*)(value))
+#define CAST_INT32_TO_POINTER(value) ((int32_t *)(value))
 #define N_ELEMENTS(s) (sizeof(s) / sizeof((s)[0]))
 #define ABS(a) ((a) > 0 ? (a) : -(a))
 

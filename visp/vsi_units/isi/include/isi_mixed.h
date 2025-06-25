@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -54,12 +55,11 @@
 #ifndef __ISI_H__
 #define __ISI_H__
 
-    typedef struct IsiCamDrvConfigMbox_s
-    {
-        uint32_t cameraDriverID;
-        uint32_t pIsiGetSensorIss;
-        uint32_t cameraDevId;
-        uint32_t instanceId;
-    } IsiCamDrvConfigMbox_t;
+typedef struct isi_cam_drv_config_mbox_s {
+	uint32_t camera_driver_id;
+	uint32_t p_isi_get_sensor_iss;
+	uint32_t camera_dev_id;
+	uint32_t instance_id;
+} isi_cam_drv_config_mbox_t;
 
 #endif
