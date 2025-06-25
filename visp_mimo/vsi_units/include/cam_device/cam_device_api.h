@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -51,23 +52,19 @@
  *
  *****************************************************************************/
 
-
 #ifndef __CAMDEV_API_H__
 #define __CAMDEV_API_H__
 
 #include "cam_device_common.h"
 #include "cam_device_calibration.h"
-//#include "visp_driver.h"
-//#include <ebase/offline_trace.h>
-
+// #include "visp_driver.h"
+// #include <ebase/offline_trace.h>
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-//typedef void* CamDeviceHandle_t;
-
+// typedef void* cam_device_handle_t;
 
 /**
  * @defgroup cam_device_pipeline Cam Device Pipeline Definitions
@@ -76,115 +73,131 @@ extern "C"
  *
  */
 
-//typedef struct CamDeviceStreamModeConfig_s {
-//    uint8_t nop;
-//}CamDeviceStreamModeConfig_t;
+// typedef struct cam_device_stream_mode_config_s {
+//	 uint8_t nop;
+// }cam_device_stream_mode_config_t;
 //
-//typedef struct CamDeviceRdmaModeConfig_s {
-//    uint8_t nop;
-//}CamDeviceRdmaModeConfig_t;
+// typedef struct CamDeviceRdmaModeConfig_s {
+//	 uint8_t nop;
+// }CamDeviceRdmaModeConfig_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to configure MCM mode parameters.
  *
  *****************************************************************************/
-typedef struct CamDeviceMcmModeConfig_s {
-    CamDeviceMcmPortId_t     portId;    /**< Port index of MCM which indicates the sensor hardware connect position*/
-    CamDeviceMcmOperation_t  mcmOp;     /**< MCM operation mode */
-    CamDeviceMcmSelection_t  mcmSel;    /**< MCM selection mode */
-}CamDeviceMcmModeConfig_t;
+typedef struct cam_device_mcm_mode_config_s {
+	cam_device_mcm_port_id_t
+		port_id; /**< port index of MCM which indicates the sensor hardware
+			connect position*/
+	cam_device_mcm_operation_t mcm_op;  /**< MCM operation mode */
+	cam_device_mcm_selection_t mcm_sel; /**< MCM selection mode */
+} cam_device_mcm_mode_config_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to configure stream mode parameters.
  *
  *****************************************************************************/
-typedef struct CamDeviceStreamModeConfig_s {
-     CamDeviceStreamPortId_t     portId;    /**< Port index of MCM which indicates the sensor hardware connect position*/
-}CamDeviceStreamModeConfig_t;
+typedef struct cam_device_stream_mode_config_s {
+	cam_device_stream_port_id_t
+		port_id; /**< port index of MCM which indicates the sensor hardware
+			connect position*/
+} cam_device_stream_mode_config_t;
 
 /*****************************************************************************/
 /**
  *  * @brief   Structure to configure betch mode parameters.
  *   *
- *    *****************************************************************************/
-typedef struct CamDeviceBatchModeConfig_s {
-	CamDeviceStreamPortId_t      portId;  /**< Port index of MCM which indicates the sensor hardware connect position*/
-	uint8_t batchNumber;                  /**< Buffer number of one batch*/
-}CamDeviceBatchModeConfig_t;
-
-
+ *	*****************************************************************************/
+typedef struct cam_device_batch_mode_config_s {
+	cam_device_stream_port_id_t
+		port_id; /**< port index of MCM which indicates the sensor hardware
+			connect position*/
+	uint8_t batch_number; /**< Buffer number of one batch*/
+} cam_device_batch_mode_config_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to configure tile mode parameters. Reserved.
  *
  *****************************************************************************/
-typedef struct CamDeviceTileModeConfig_s {
-    CamDeviceTileOperation_t tileOp;    /**< Tile operation mode */
-    CamDeviceTileJoint_t     tileNum;   /**< Tile number */
-    CamDeviceTileXAxis_t     xPices;    /**< Tile joint mode set user, x direction tile number */
-    CamDeviceTileYAxis_t     yPices;    /**< Tile joint mode set user, y direction tile number */
-}CamDeviceTileModeConfig_t;
+typedef struct cam_device_tile_mode_config_s {
+	cam_device_tile_operation_t tile_op; /**< Tile operation mode */
+	cam_device_tile_joint_t tile_num;	/**< Tile number */
+	cam_device_tile_x_axis_t
+		x_pices; /**< Tile joint mode set user, x direction tile number */
+	cam_device_tile_y_axis_t
+		y_pices; /**< Tile joint mode set user, y direction tile number */
+} cam_device_tile_mode_config_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to configure ISP work mode.
  *
  *****************************************************************************/
-typedef union CamDeviceModeConfig_s {
-    CamDeviceStreamModeConfig_t stream;   /**< Stream mode configuration parameters */
-//    CamDeviceRdmaModeConfig_t   rdma;     /**< Reseverd */
-    CamDeviceMcmModeConfig_t    mcm;     /**< MCM mode configuration parameters */
-	CamDeviceBatchModeConfig_t  batch;   /**< Batch mode configuration parameters */
-}CamDeviceModeConfig_t;
+typedef union cam_device_mode_config_s {
+	cam_device_stream_mode_config_t
+		stream; /**< Stream mode configuration parameters */
+			//	CamDeviceRdmaModeConfig_t   rdma;	 /**< Reseverd */
+	cam_device_mcm_mode_config_t
+		mcm; /**< MCM mode configuration parameters */
+	cam_device_batch_mode_config_t
+		batch; /**< Batch mode configuration parameters */
+} cam_device_mode_config_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to configure ISP input.
  *
  *****************************************************************************/
-typedef struct CamDeviceInputConfig_s {
-    CamDeviceInputType_t  inputType;    /**< ISP input type */
-    char                  inputDevName[CAMDEV_INPUT_DEV_NAME_LEN];    /**< ISP input device name */
-}CamDeviceInputConfig_t;
+typedef struct cam_device_input_config_s {
+	cam_device_input_type_t input_type;		/**< ISP input type */
+	char input_dev_name[CAMDEV_INPUT_DEV_NAME_LEN]; /**< ISP input device
+							   name */
+} cam_device_input_config_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to configure ISP output.
  *
  *****************************************************************************/
-typedef struct CamDeviceOutputConfig_s {
-    CamDeviceOutputType_t  outputType;    /**< ISP output type */
-}CamDeviceOutputConfig_t;
+typedef struct cam_device_output_config_s {
+	cam_device_output_type_t output_type; /**< ISP output type */
+} cam_device_output_config_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to configure work parameters for camera device.
  *
  *****************************************************************************/
-typedef struct CamDeviceWorkConfig_s {
-    CamDeviceWorkMode_t        workMode;         /**< ISP software work mode */
-    CamDeviceModeConfig_t      modeCfg;          /**< Work mode configurations */
-    CamDeviceTileModeConfig_t  tileCfg;          /**< Tile mode configurations. It can be used together with other modes*/
-}CamDeviceWorkConfig_t;
+typedef struct cam_device_work_config_s {
+	cam_device_work_mode_t work_mode;  /**< ISP software work mode */
+	cam_device_mode_config_t mode_cfg; /**< Work mode configurations */
+	cam_device_tile_mode_config_t
+		tile_cfg; /**< Tile mode configurations. It can be used together
+			 with other modes*/
+} cam_device_work_config_t;
 
 /*****************************************************************************/
 /**
- * @brief    Structure to create camera device instance.
+ * @brief	Structure to create camera device instance.
  *
  *****************************************************************************/
 #if 1
-typedef struct CamDeviceConfig_s {
-    uint32_t                      ispHwId;         /**< Hardware Pipeline ID. */
-    CamDeviceInputConfig_t        inputCfg;        /**< Input device configuration parameters */
-    CamDeviceWorkConfig_t         workCfg;         /**< ISP Work configuration parameters */
-    CamDeviceOutputConfig_t       outputCfg;       /**< ISP output configuration parameters */
-    CamDeviceSwitchSeqPriority_t  priority;        /**< Input device priority in switch control */
-    void *                        hCascade; /**< Cascade ctx handle */
-    struct visp_dev *isp_dev;
-}CamDeviceConfig_t;
+typedef struct cam_device_config_s {
+	uint32_t isp_hw_id; /**< Hardware Pipeline id. */
+	cam_device_input_config_t
+		input_cfg; /**< Input device configuration parameters */
+	cam_device_work_config_t
+		work_cfg; /**< ISP Work configuration parameters */
+	cam_device_output_config_t
+		output_cfg; /**< ISP output configuration parameters */
+	cam_device_switch_seq_priority_t
+		priority;	 /**< Input device priority in switch control */
+	void *h_cascade; /**< Cascade ctx handle */
+	struct visp_dev *isp_dev;
+} cam_device_config_t;
 #endif
 
 /*****************************************************************************/
@@ -192,88 +205,94 @@ typedef struct CamDeviceConfig_s {
  * @brief   Structure to set ISP pipeline output format.
  *
  *****************************************************************************/
-typedef struct CamDevicePipeOutFmt_s {
-    uint32_t outWidth;                     /**< Width of output image */
-    uint32_t outHeight;                    /**< Height of output image */
-    uint32_t pathOutType;                   /**< path out type */
-    CamDevicePipePixOutFmt_t outFormat;    /**< Format of output pixel */
-    uint32_t dataBits;                     /**< Data width of each color component [8~14] */
-    uint8_t  alpha;                        /**< Alpha value of ARGB format , range 0~255 for ARGB/yuv8bit, range 0~3 for yuv10bit */
-    CamDeviceMiYuvOrder_t  yuvOrder;       /**< The difference order of the three yuv channal save in ddr */
-    CamDeviceMiSwap_u swap;    /**< Output format swap control information */
-} CamDevicePipeOutFmt_t;
+typedef struct cam_device_pipe_out_fmt_s {
+	uint32_t out_width;			  /**< width of output image */
+	uint32_t out_height;			  /**< height of output image */
+	uint32_t path_out_type;			  /**< path out type */
+	cam_device_pipe_pix_out_fmt_t out_format; /**< format of output pixel */
+	uint32_t data_bits; /**< data width of each color component [8~14] */
+	uint8_t alpha;		/**< Alpha value of ARGB format , range 0~255 for
+				   ARGB/yuv8bit, range 0~3 for yuv10bit */
+	cam_device_mi_yuv_order_t yuv_order; /**< The difference order of the
+						three yuv channal save in ddr */
+	cam_device_mi_swap_u
+		swap; /**< Output format swap control information */
+} cam_device_pipe_out_fmt_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to set ISP output streaming.
  *
  *****************************************************************************/
-typedef struct CamDevicePathStreamingCfg_s {
-    uint8_t outPathEnable;    /**< Path streaming configuration */
-}CamDevicePathStreamingCfg_t;
+typedef struct cam_device_path_streaming_cfg_s {
+	uint8_t out_path_enable; /**< Path streaming configuration */
+} cam_device_path_streaming_cfg_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to set ISP DMA read image input format.
  *
  *****************************************************************************/
-typedef struct CamDevicePipeInFmt_s {
-    uint32_t inWidth;                     /**< Width of input image */
-    uint32_t inHeight;                    /**< Height of input image */
-    CamDeviceInputRawFmt_t   inFormat;     /**< Format of input pixel */
-    CamDeviceBitDepth_t      inBit;        /**< Bit depth of input device: tpg */
-    CamDeviceRawPattern_t    inPattern;    /**< Bayer pattern of input RAW RGB/RGBIR image */
-    CamDeviceStitchingMode_t  stitchMode;  /**< This member should be configured when loading HDR image*/
-} CamDevicePipeInFmt_t;
-
+typedef struct cam_device_pipe_in_fmt_s {
+	uint32_t in_width;			  /**< width of input image */
+	uint32_t in_height;			  /**< height of input image */
+	cam_device_input_raw_fmt_t in_format; /**< format of input pixel */
+	cam_device_bit_depth_t in_bit; /**< Bit depth of input device: tpg */
+	cam_device_raw_pattern_t
+		in_pattern; /**< Bayer pattern of input RAW rgb/RGBIR image */
+	cam_device_stitching_mode_t
+		stitch_mode; /**< This member should be configured when loading HDR
+				image*/
+} cam_device_pipe_in_fmt_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to configure windows in ISP pipeline.
  *
  *****************************************************************************/
-typedef struct CamDevicePipeIspWindow_s {
-    CamDeviceWindow_t   cropWindow;         /**< Crop window for output path */
-} CamDevicePipeIspWindow_t;
+typedef struct cam_device_pipe_isp_window_s {
+	cam_device_window_t crop_window; /**< Crop window for output path */
+} cam_device_pipe_isp_window_t;
 
 /*****************************************************************************/
 /**
- * @brief   Structure to configure submodules of pipeline when connecting camera.
+ * @brief   Structure to configure submodules of pipeline when connecting
+ *camera.
  *
  *****************************************************************************/
-typedef union CamDevicePipeSubmoduleCtrl_s {
-    struct {
-        uint32_t aeEnable : 1;      /**< bit 0: 0-disable 1-enable */
-        uint32_t afEnable : 1;      /**< bit 1 */
-        uint32_t hdrEnable : 1;     /**< bit 2 */
-        uint32_t awbEnable : 1;     /**< bit 3 */
-        uint32_t ccmEnable : 1;     /**< bit 4 */
-        uint32_t compressEnable : 1; /**< bit 5 */
-        uint32_t expandEnable : 1;  /**< bit 6 */
-        uint32_t cnrEnable : 1;     /**< bit 7 */
-        uint32_t ynrEnable : 1;     /**< bit 8 */
-        uint32_t cprocEnable : 1;   /**< bit 9 */
-        uint32_t dciEnable : 1;     /**< bit 10 */
-        uint32_t demosaicEnable : 1; /**< bit 11 */
-        uint32_t dgEnable : 1;      /**< bit 12 */
-        uint32_t dpccEnable : 1;    /**< bit 13 */
-        uint32_t dpfEnable : 1;     /**< bit 14 */
-        uint32_t eeEnable : 1;      /**< bit 15 */
-        uint32_t gcEnable : 1;      /**< bit 16 */
-        uint32_t geEnable : 1;      /**< bit 17 */
-        uint32_t gtmEnable : 1;     /**< bit 18 */
-        uint32_t lscEnable : 1;     /**< bit 19 */
-        uint32_t lut3dEnable : 1;   /**< bit 20 */
-        uint32_t pdafEnable : 1;    /**< bit 21 */
-        uint32_t rgbirEnable : 1;   /**< bit 22 */
-        uint32_t wbEnable : 1;      /**< bit 23 */
-        uint32_t wdrEnable : 1;     /**< bit 24 */
-        uint32_t dnr3Enable : 1;    /**< bit 25 */
-        uint32_t dnr2Enable : 1;    /**< bit 26 */
-        uint32_t reservedEnable : 5;/**< bit 27:31 */
-    } subCtrl;
-    uint32_t allCtrl;
-} CamDevicePipeSubmoduleCtrl_u;
+typedef union cam_device_pipe_submodule_ctrl_s {
+	struct {
+		uint32_t ae_enable : 1;		  /**< bit 0: 0-disable 1-enable */
+		uint32_t af_enable : 1;		  /**< bit 1 */
+		uint32_t hdr_enable : 1;	  /**< bit 2 */
+		uint32_t awb_enable : 1;	  /**< bit 3 */
+		uint32_t ccm_enable : 1;	  /**< bit 4 */
+		uint32_t compress_enable : 1; /**< bit 5 */
+		uint32_t expand_enable : 1;   /**< bit 6 */
+		uint32_t cnr_enable : 1;	  /**< bit 7 */
+		uint32_t ynr_enable : 1;	  /**< bit 8 */
+		uint32_t cproc_enable : 1;	/**< bit 9 */
+		uint32_t dci_enable : 1;	  /**< bit 10 */
+		uint32_t demosaic_enable : 1; /**< bit 11 */
+		uint32_t dg_enable : 1;		  /**< bit 12 */
+		uint32_t dpcc_enable : 1;	 /**< bit 13 */
+		uint32_t dpf_enable : 1;	  /**< bit 14 */
+		uint32_t ee_enable : 1;		  /**< bit 15 */
+		uint32_t gc_enable : 1;		  /**< bit 16 */
+		uint32_t ge_enable : 1;		  /**< bit 17 */
+		uint32_t gtm_enable : 1;	  /**< bit 18 */
+		uint32_t lsc_enable : 1;	  /**< bit 19 */
+		uint32_t lut3d_enable : 1;	/**< bit 20 */
+		uint32_t pdaf_enable : 1;	 /**< bit 21 */
+		uint32_t rgbir_enable : 1;	/**< bit 22 */
+		uint32_t wb_enable : 1;		  /**< bit 23 */
+		uint32_t wdr_enable : 1;	  /**< bit 24 */
+		uint32_t dnr3_enable : 1;	 /**< bit 25 */
+		uint32_t dnr2_enable : 1;	 /**< bit 26 */
+		uint32_t reserved_enable : 5; /**< bit 27:31 */
+	} sub_ctrl;
+	uint32_t all_ctrl;
+} cam_device_pipe_submodule_ctrl_u;
 
 #define CAMDEV_IMAGE_EXP_NUM_MAX 4 /**< Maximum exposure number of image*/
 
@@ -282,625 +301,541 @@ typedef union CamDevicePipeSubmoduleCtrl_s {
  * @brief   Structure to configure image exposure control information.
  *
  *****************************************************************************/
-typedef struct CamDeviceImageExposureControl_s {
-	uint32_t frameIndex;
-    float32_t imageGain[CAMDEV_IMAGE_EXP_NUM_MAX];
-        /**< In linear mode or native HDR mode:\n imageGain[0] is image gain\n
-             In stitch HDR mode:\n
-             imageGain[0]: L image gain\n
-             imageGain[1]: S image gain\n
-             imageGain[2]: VS image gain\n
-             imageGain[3]: ES image gain */
-    float32_t imageIntTime[CAMDEV_IMAGE_EXP_NUM_MAX];
-        /**< In linear mode or native HDR mode:\n imageIntTime[0] is image integration time\n
-         In stitch HDR mode:\n
-         imageIntTime[0]: L image integration time\n
-         imageIntTime[1]: S image integration time\n
-         imageIntTime[2]: VS image integration time\n
-         imageIntTime[3]: ES image integration time */
-}CamDeviceImageExposureControl_t;
-
+typedef struct cam_device_image_exposure_control_s {
+	uint32_t frame_index;
+	float32_t image_gain[CAMDEV_IMAGE_EXP_NUM_MAX];
+	/**< In linear mode or native HDR mode:\n image_gain[0] is image gain\n
+		 In stitch HDR mode:\n
+		 image_gain[0]: L image gain\n
+		 image_gain[1]: S image gain\n
+		 image_gain[2]: VS image gain\n
+		 image_gain[3]: ES image gain */
+	float32_t image_int_time[CAMDEV_IMAGE_EXP_NUM_MAX];
+	/**< In linear mode or native HDR mode:\n image_int_time[0] is image
+	 integration time\n In stitch HDR mode:\n image_int_time[0]: L image
+	 integration time\n image_int_time[1]: S image integration time\n
+	 image_int_time[2]: VS image integration time\n
+	 image_int_time[3]: ES image integration time */
+} cam_device_image_exposure_control_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to histogram metadata  information.
  *
  *****************************************************************************/
-typedef struct CamDeviceMetadataHist_s {
+typedef struct cam_device_metadata_hist_s {
 
-    uint8_t histWinNum;
-    CamDeviceWindow_t histRoiWin[CAM_DEVICE_ROI_WINDOWS_MAX];
-    CamDeviceHistBins_t redChannelBins[CAM_DEVICE_ROI_WINDOWS_MAX];
-    CamDeviceHistBins_t grChannelBins[CAM_DEVICE_ROI_WINDOWS_MAX];
-    CamDeviceHistBins_t gbChannelBins[CAM_DEVICE_ROI_WINDOWS_MAX];
-    CamDeviceHistBins_t blueChannelBins[CAM_DEVICE_ROI_WINDOWS_MAX];
-    CamDeviceHistBins_t totalBins[CAM_DEVICE_ROI_WINDOWS_MAX];
-}CamDeviceMetadataHist_t;
+	uint8_t hist_win_num;
+	cam_device_window_t hist_roi_win[CAM_DEVICE_ROI_WINDOWS_MAX];
+	cam_device_hist_bins_t red_channel_bins[CAM_DEVICE_ROI_WINDOWS_MAX];
+	cam_device_hist_bins_t gr_channel_bins[CAM_DEVICE_ROI_WINDOWS_MAX];
+	cam_device_hist_bins_t gb_channel_bins[CAM_DEVICE_ROI_WINDOWS_MAX];
+	cam_device_hist_bins_t blue_channel_bins[CAM_DEVICE_ROI_WINDOWS_MAX];
+	cam_device_hist_bins_t total_bins[CAM_DEVICE_ROI_WINDOWS_MAX];
+} cam_device_metadata_hist_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to mean luminance metadata  information.
  *
  *****************************************************************************/
-typedef struct CamDeviceMetadataMeanLuma_s {
+typedef struct cam_device_metadata_mean_luma_s {
 
-    uint8_t meanWinNum;
-    CamDeviceWindow_t meanRoiWin[CAM_DEVICE_ROI_WINDOWS_MAX];
-    uint32_t redChannelMean[CAM_DEVICE_ROI_WINDOWS_MAX];
-    uint32_t grChannelMean[CAM_DEVICE_ROI_WINDOWS_MAX];
-    uint32_t gbChannelMean[CAM_DEVICE_ROI_WINDOWS_MAX];
-    uint32_t blueChannelMean[CAM_DEVICE_ROI_WINDOWS_MAX];
-    uint32_t totalMean[CAM_DEVICE_ROI_WINDOWS_MAX];
+	uint8_t mean_win_num;
+	cam_device_window_t mean_roi_win[CAM_DEVICE_ROI_WINDOWS_MAX];
+	uint32_t red_channel_mean[CAM_DEVICE_ROI_WINDOWS_MAX];
+	uint32_t gr_channel_mean[CAM_DEVICE_ROI_WINDOWS_MAX];
+	uint32_t gb_channel_mean[CAM_DEVICE_ROI_WINDOWS_MAX];
+	uint32_t blue_channel_mean[CAM_DEVICE_ROI_WINDOWS_MAX];
+	uint32_t total_mean[CAM_DEVICE_ROI_WINDOWS_MAX];
 
-}CamDeviceMetadataMeanLuma_t;
-
+} cam_device_metadata_mean_luma_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to metadata exposure information.
  *
  *****************************************************************************/
-typedef struct CamDeviceMetadataInfo_s {
-    uint32_t chipId;
-    uint64_t frameCount;
+typedef struct cam_device_metadata_info_s {
+	uint32_t chip_id;
+	uint64_t frame_count;
 
-    float32_t    junctionTemperature;
-    uint32_t blackLevelPedestal;
+	float32_t junction_temperature;
+	uint32_t black_level_pedestal;
 
-    uint8_t exposureNum;    /**< The number of exposures */
-    uint32_t integrationTime[CAMDEV_EXPOSURE_FRAME_MAX];  /**< Exposure time(unit: us) */
-    CamDeviceIntegrationTimeRange_t integrationTimeRange[CAMDEV_EXPOSURE_FRAME_MAX]; /**< Exposure time(unit: us) */
+	uint8_t exposure_num; /**< The number of exposures */
+	uint32_t
+		integration_time[CAMDEV_EXPOSURE_FRAME_MAX]; /**< Exposure
+								time(unit: us) */
+	cam_device_integration_time_range_t integration_time_range
+		[CAMDEV_EXPOSURE_FRAME_MAX]; /**< Exposure time(unit: us) */
 
-    float32_t analogGain[CAMDEV_EXPOSURE_FRAME_MAX];
-    float32_t digitalGain[CAMDEV_EXPOSURE_FRAME_MAX];
-    float32_t wbGain[CAMDEV_EXPOSURE_FRAME_MAX][CAMDEV_RAW_CHANNEL_NUM];
-    float32_t dualConvGain[CAMDEV_EXPOSURE_FRAME_MAX];
+	float32_t analog_gain[CAMDEV_EXPOSURE_FRAME_MAX];
+	float32_t digital_gain[CAMDEV_EXPOSURE_FRAME_MAX];
+	float32_t wb_gain[CAMDEV_EXPOSURE_FRAME_MAX][CAMDEV_RAW_CHANNEL_NUM];
+	float32_t dual_conv_gain[CAMDEV_EXPOSURE_FRAME_MAX];
 
-    CamDeviceMetadataHist_t histBins[CAMDEV_EXPOSURE_FRAME_MAX]; //reserved
-    CamDeviceMetadataMeanLuma_t meanLuma[CAMDEV_EXPOSURE_FRAME_MAX]; //reserved
+	cam_device_metadata_hist_t
+		hist_bins[CAMDEV_EXPOSURE_FRAME_MAX]; // reserved
+	cam_device_metadata_mean_luma_t
+		mean_luma[CAMDEV_EXPOSURE_FRAME_MAX]; // reserved
 
-}CamDeviceMetadataInfo_t;
+} cam_device_metadata_info_t;
 
 /*****************************************************************************/
 /**
  * @brief   Structure to configure metadata information.
  *
  *****************************************************************************/
-typedef struct CamDeviceMetadataConfig_s {
-    CamDeviceAwbWorkMode_t  modeAwb;     /**< Choose awb mode */
-	CamDeviceAeWorkMode_t   modeAe;      /**< Choose ae mode */
-    CamDeviceMetadataInfo_t metaInfo;    /**< Metadata information */
-}CamDeviceMetadataConfig_t;
-
+typedef struct cam_device_metadata_config_s {
+	cam_device_awb_work_mode_t mode_awb;  /**< Choose awb mode */
+	cam_device_ae_work_mode_t mode_ae;	/**< Choose ae mode */
+	cam_device_metadata_info_t meta_info; /**< Metadata information */
+} cam_device_metadata_config_t;
 
 /*****************************************************************************/
 /**
  * @brief   This function creates and initializes a CamDevice instance.
  *
- * @param   pCamConfig          Instance configuration.
- * @param   hCamDevice          Handle to the CamDevice instance.
+ * @param   p_cam_config		  Instance configuration.
+ * @param   h_cam_device		  Handle to the CamDevice instance.
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_NULL_POINTER    The/one/all parameter(s) is a(are) NULL pointer(s)
- * @retval  RET_INVALID_PARM    Invalid configuration
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_NULL_POINTER	The/one/all parameter(s) is a(are) NULL
+ *pointer(s)
+ * @retval  RET_INVALID_PARM	Invalid configuration
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceCreate
-(
-    struct visp_dev *isp_dev,
-    CamDeviceConfig_t *pCamConfig,
-    CamDeviceHandle_t *hCamDevice
-);
+RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
+				 cam_device_config_t *p_cam_config,
+				 cam_device_handle_t *h_cam_device);
 
 /*****************************************************************************/
 /**
  * @brief   This function destroys a CamDevice instance.
  *
- * @param   hCamDevice          Handle to the CamDevice instance.
+ * @param   h_cam_device		  Handle to the CamDevice instance.
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_NULL_POINTER    The/one/all parameter(s) is a(are) NULL pointer(s)
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_NULL_POINTER	The/one/all parameter(s) is a(are) NULL
+ *pointer(s)
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceDestroy
-(
-    struct visp_dev *isp_dev,
-    CamDeviceHandle_t hCamDevice
-);
-
+RESULT vsi_cam_device_destroy(struct visp_dev *isp_dev,
+				  cam_device_handle_t h_cam_device);
 
 /*****************************************************************************/
 /**
  * @brief   This function loads the calibration parameters into the database of
- *          software stack.
+ *		  software stack.
  *
- * @param   hCamDevice          Handle to the CamDevice instance.
- * @param   defCalibIllum       Select the default illumination when pipeline is
- *                              connected.
- * @param   pCalibCfg           Configuration structure for calibration parameter.
+ * @param   h_cam_device		  Handle to the CamDevice instance.
+ * @param   def_calib_illum	   Select the default illumination when pipeline
+ *is connected.
+ * @param   p_calib_cfg		   Configuration structure for calibration
+ *parameter.
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceLoadCalibration
-(
-    CamDeviceHandle_t hCamDevice,
-    CamDeviceCalibIllumType_t defCalibIllum,
-    CamDeviceCalibCfg_t *pCalibCfg
-);
+RESULT
+vsi_cam_device_load_calibration(cam_device_handle_t h_cam_device,
+				cam_device_calib_illum_type_t def_calib_illum,
+				cam_device_calib_cfg_t *p_calib_cfg);
 
 /*****************************************************************************/
 /**
  * @brief   This function sets the output format of main or self path.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   path                    Select the output path ID
- * @param   pFmt                    Configuration structure for output format
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   path					Select the output path id
+ * @param   p_fmt					Configuration structure for output format
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceSetOutFormat
-(
-    struct visp_dev *isp_dev,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeOutPathType_t path,
-    CamDevicePipeOutFmt_t *pFmt
-);
+RESULT vsi_cam_device_set_out_format(struct visp_dev *isp_dev,
+					 cam_device_handle_t h_cam_device,
+					 cam_device_pipe_out_path_type_t path,
+					 cam_device_pipe_out_fmt_t *p_fmt);
 
 /*****************************************************************************/
 /**
  * @brief   This function sets the Input format.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   path                    Select the input path ID
- * @param   pFmt                    Configuration structure for input format
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   path					Select the input path id
+ * @param   p_fmt					Configuration structure for input format
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceSetInFormat
-(
-    struct visp_dev *isp_dev,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeInPathType_t path,
-    CamDevicePipeInFmt_t *pFmt
-);
-
+RESULT vsi_cam_device_set_in_format(struct visp_dev *isp_dev,
+					cam_device_handle_t h_cam_device,
+					cam_device_pipe_in_path_type_t path,
+					cam_device_pipe_in_fmt_t *p_fmt);
 
 /*****************************************************************************/
 /**
  * @brief   This function gets the output format of main or self path.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   path                    Select the output path ID
- * @param   pFmt                    Configuration structure for output format
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   path					Select the output path id
+ * @param   p_fmt					Configuration structure for output format
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceGetOutFormat
-(
-    CamDeviceConfig_t *pCamConfig,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeOutPathType_t path,
-    CamDevicePipeOutFmt_t *pFmt
-);
+RESULT vsi_cam_device_get_out_format(cam_device_config_t *p_cam_config,
+					 cam_device_handle_t h_cam_device,
+					 cam_device_pipe_out_path_type_t path,
+					 cam_device_pipe_out_fmt_t *p_fmt);
 
 /*****************************************************************************/
 /**
  * @brief   This function gets the input format of main or self path.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   path                    Select the input path ID
- * @param   pFmt                    Configuration structure for input format
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   path					Select the input path id
+ * @param   p_fmt					Configuration structure for input format
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceGetInFormat
-(
-    CamDeviceConfig_t *pCamConfig,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeInPathType_t path,
-    CamDevicePipeInFmt_t *pFmt
-);
+RESULT vsi_cam_device_get_in_format(cam_device_config_t *p_cam_config,
+					cam_device_handle_t h_cam_device,
+					cam_device_pipe_in_path_type_t path,
+					cam_device_pipe_in_fmt_t *p_fmt);
 
 /*****************************************************************************/
 /**
  * @brief   This function sets windows in the ISP pipeline.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   path                    Config the output path ID
- * @param   pIspWindow              Configuration structure for windows in pipeline
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   path					Config the output path id
+ * @param   p_isp_window			  Configuration structure for windows in
+ *pipeline
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceSetIspWindow
-(
-    CamDeviceConfig_t *pCamConfig,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeOutPathType_t path,
-    const CamDevicePipeIspWindow_t *pIspWindow
-);
+RESULT
+vsi_cam_device_set_isp_window(cam_device_config_t *p_cam_config,
+				  cam_device_handle_t h_cam_device,
+				  cam_device_pipe_out_path_type_t path,
+				  const cam_device_pipe_isp_window_t *p_isp_window);
 
 /*****************************************************************************/
 /**
  * @brief   This function gets windows in the ISP pipeline.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   path                    Config the output path ID
- * @param   pIspWindow              Pointer to ISP windows in pipeline
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   path					Config the output path id
+ * @param   p_isp_window			  Pointer to ISP windows in pipeline
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceGetIspWindow
-(
-    CamDeviceConfig_t *pCamConfig,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeOutPathType_t path,
-    CamDevicePipeIspWindow_t *pIspWindow
-);
+RESULT
+vsi_cam_device_get_isp_window(cam_device_config_t *p_cam_config,
+				  cam_device_handle_t h_cam_device,
+				  cam_device_pipe_out_path_type_t path,
+				  cam_device_pipe_isp_window_t *p_isp_window);
 
 /*****************************************************************************/
 /**
  * @brief   This function sets up the whole camera system. First, initialize the
- *          CamEngine and set the pipeline path. Then, connect the input
- *          (sensor or image) with the CamEngine to process the image data.
+ *		  CamEngine and set the pipeline path. Then, connect the input
+ *		  (sensor or image) with the CamEngine to process the image data.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   pSubCtrl                Control the submodules when setting up the
- *                                  camera system.
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   p_sub_ctrl				Control the submodules when setting up the
+ *								  camera system.
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceConnectCamera
-(
-    struct visp_dev *isp_dev,
-    CamDeviceHandle_t hCamDevice,
-    const CamDevicePipeSubmoduleCtrl_u *pSubCtrl
-);
+RESULT vsi_cam_device_connect_camera(
+	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
+	const cam_device_pipe_submodule_ctrl_u *p_sub_ctrl);
 
 /*****************************************************************************/
 /**
  * @brief   This function disconnects the whole camera system.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
+ * @param   h_cam_device			  Handle to the CamDevice instance.
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceDisconnectCamera
-(
-    struct visp_dev *isp_dev,
-    CamDeviceHandle_t hCamDevice
-);
+RESULT vsi_cam_device_disconnect_camera(struct visp_dev *isp_dev,
+					cam_device_handle_t h_cam_device);
 
 /*****************************************************************************/
 /**
- * @brief   This function gets the version ID.
+ * @brief   This function gets the version id.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   pVersionId              Version ID which is related to the ISP
- *                                  hardware version.
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   p_version_id			  Version id which is related to the ISP
+ *								  hardware version.
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceGetSoftwareVersion
-(
-    CamDeviceHandle_t   hCamDevice,
-    char                *pVersionId
-);
+RESULT vsi_cam_device_get_software_version(cam_device_handle_t h_cam_device,
+					   char *p_version_id);
 
 /*****************************************************************************/
 /**
  * @brief   This function sets output path streaming.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   pConfig                 Pointer to the output path streaming configuration
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   p_config				 Pointer to the output path streaming
+ *configuration
  *
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceSetPathStreaming
-(
-    struct visp_dev *isp_dev,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePathStreamingCfg_t *pConfig
-);
+RESULT
+vsi_cam_device_set_path_streaming(struct visp_dev *isp_dev,
+				  cam_device_handle_t h_cam_device,
+				  cam_device_path_streaming_cfg_t *p_config);
 
 /*****************************************************************************/
 /**
  * @brief   This function gets output path streaming status.
  *
- * @param   hCamDevice              Handle to the CamDevice instance.
- * @param   path                    Pointer to the output path streaming configuration
+ * @param   h_cam_device			  Handle to the CamDevice instance.
+ * @param   path					Pointer to the output path streaming
+ *configuration
  *
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceGetPathStreaming
-(
-    struct visp_dev *isp_dev,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePathStreamingCfg_t *pConfig
-);
-
+RESULT
+vsi_cam_device_get_path_streaming(struct visp_dev *isp_dev,
+				  cam_device_handle_t h_cam_device,
+				  cam_device_path_streaming_cfg_t *p_config);
 
 /*****************************************************************************/
 /**
  * @brief   This function starts pipeline path.
  *
- * @param   hCamDevice          Handle to the CamDevice instance.
- * @param   path                Pipeline output path.
+ * @param   h_cam_device		  Handle to the CamDevice instance.
+ * @param   path				Pipeline output path.
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceStartPath
-(
-    CamDeviceConfig_t *pCamConfig,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeOutPathType_t path
-);
+RESULT vsi_cam_device_start_path(cam_device_config_t *p_cam_config,
+				 cam_device_handle_t h_cam_device,
+				 cam_device_pipe_out_path_type_t path);
 
 /*****************************************************************************/
 /**
  * @brief   This function stops pipeline path.
  *
- * @param   hCamDevice          Handle to the CamDevice instance.
- * @param   path                Pipeline output path.
+ * @param   h_cam_device		  Handle to the CamDevice instance.
+ * @param   path				Pipeline output path.
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_FAILURE		 General failure
  *
  *****************************************************************************/
-RESULT VsiCamDeviceStopPath
-(
-    CamDeviceConfig_t *pCamConfig,
-    CamDeviceHandle_t hCamDevice,
-    CamDevicePipeOutPathType_t path
-);
-
+RESULT vsi_cam_device_stop_path(cam_device_config_t *p_cam_config,
+				cam_device_handle_t h_cam_device,
+				cam_device_pipe_out_path_type_t path);
 
 /*****************************************************************************/
 /**
- * @brief   This function gets the instance ID.
+ * @brief   This function gets the instance id.
  *
- * @param   hCamDevice          Handle to the CamDevice instance.
- * @param   pHwId               Pointer to hardware pipeline ID
+ * @param   h_cam_device		  Handle to the CamDevice instance.
+ * @param   p_hw_id			   Pointer to hardware pipeline id
  *
- * @return                      Return the instance ID.
+ * @return					  Return the instance id.
  *
  *****************************************************************************/
-RESULT VsiCamDeviceGetHardwareId
-(
-    CamDeviceHandle_t hCamDevice,
-    uint32_t          *pHwId
-);
+RESULT vsi_cam_device_get_hardware_id(cam_device_handle_t h_cam_device,
+					  uint32_t *p_hw_id);
 
-
-//uint32_t CamDeviceGetVirtualId
+// uint32_t cam_device_get_virtual_id
 //(
-//    uint32_t instanceId
+//	 uint32_t instance_id
 //);
 
 /*****************************************************************************/
 /**
  * @brief   This function allocates the memory from internal reserved memory.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
- * @param   byteSize            The total byte size of allocate memory
- * @param   pBaseAddress        The pointer of physical base address of allocated memory
- * @param   pIplAddress         The pointer of the mapped virtual base address
+ * @param   h_cam_device		  Handle to the CamDevice instance
+ * @param   byte_size			The total byte size of allocate memory
+ * @param   p_base_address		The pointer of physical base address of
+ *allocated memory
+ * @param   p_ipl_address		 The pointer of the mapped virtual base address
  *
- * @retval  RET_SUCCESS         Operation succeeded
+ * @retval  RET_SUCCESS		 Operation succeeded
  *
  *****************************************************************************/
-RESULT VsiCamDeviceAllocResMemory
-(
-    struct visp_dev *isp_dev,
-    CamDeviceHandle_t   hCamDevice,
-    uint32_t            byteSize,
-    uint32_t           *pBaseAddress,
-    void              **pIplAddress
-);
-
+RESULT vsi_cam_device_alloc_res_memory(struct visp_dev *isp_dev,
+					   cam_device_handle_t h_cam_device,
+					   uint32_t byte_size,
+					   uint32_t *p_base_address,
+					   void **p_ipl_address);
 
 /*****************************************************************************/
 /**
  * @brief   This function frees the memory of internal reserved memory.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
- * @param   baseAddress         The physical base address of free memory
+ * @param   h_cam_device		  Handle to the CamDevice instance
+ * @param   base_address		 The physical base address of free memory
  *
- * @retval  RET_SUCCESS         Operation succeeded
+ * @retval  RET_SUCCESS		 Operation succeeded
  *
  *****************************************************************************/
-RESULT VsiCamDeviceFreeResMemory
-(
-    struct visp_dev *isp_dev,
-    CamDeviceHandle_t   hCamDevice,
-    uint32_t            baseAddress
-);
-
+RESULT vsi_cam_device_free_res_memory(struct visp_dev *isp_dev,
+					  cam_device_handle_t h_cam_device,
+					  uint32_t base_address);
 
 #ifdef ISP_OFFLINE_TEST
 /*****************************************************************************/
 /**
  * @brief   This function sets the name of offline case.
  *
- * @param   pCaseName               The name of offline case
- * @param   len                     The string length for pCaseName
+ * @param   p_case_name			   The name of offline case
+ * @param   len					 The string length for p_case_name
  *
- * @return                     void.
+ * @return					 void.
  *
  *****************************************************************************/
-void VsiCamDeviceSetCaseName
-(
-    char *pCaseName,
-    uint32_t len
-);
+void vsi_cam_device_set_case_name(char *p_case_name, uint32_t len);
 #endif
 
 /*****************************************************************************/
 /**
  * @brief   This function writes data to the specified register.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
- * @param   address             Data address
- * @param   value               Data value
+ * @param   h_cam_device		  Handle to the CamDevice instance
+ * @param   address			 data address
+ * @param   value			   data value
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_WRONG_HANDLE    Invalid instance handle
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_WRONG_HANDLE	Invalid instance handle
  *
  *****************************************************************************/
-RESULT VsiCamDeviceWriteRegister
-(
-    CamDeviceHandle_t     hCamDevice,
-    uint32_t              address,
-    uint32_t              value
-);
+RESULT vsi_cam_device_write_register(cam_device_handle_t h_cam_device,
+					 uint32_t address, uint32_t value);
 
 /*****************************************************************************/
 /**
  * @brief   This function reads data from the specified register.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
- * @param   address             Data address
- * @param   pValue              Pointer to data value
+ * @param   h_cam_device		  Handle to the CamDevice instance
+ * @param   address			 data address
+ * @param   p_value			  Pointer to data value
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_WRONG_HANDLE    Invalid instance handle
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_WRONG_HANDLE	Invalid instance handle
  *
  *****************************************************************************/
-RESULT VsiCamDeviceReadRegister
-(
-    CamDeviceHandle_t     hCamDevice,
-    uint32_t              address,
-    uint32_t              *pValue
-);
+RESULT vsi_cam_device_read_register(cam_device_handle_t h_cam_device,
+					uint32_t address, uint32_t *p_value);
 
 /*****************************************************************************/
 /**
  * @brief   This function sets image metadata configuration parameters.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
- * @param   pMetadata           Pointer to metadata value
+ * @param   h_cam_device		  Handle to the CamDevice instance
+ * @param   p_metadata		   Pointer to metadata value
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_WRONG_HANDLE    Invalid instance handle
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_WRONG_HANDLE	Invalid instance handle
  *
-*****************************************************************************/
-RESULT VsiCamDeviceConfigMetadata
-(
- CamDeviceHandle_t          hCamDevice,
- CamDeviceMetadataConfig_t *pMetadata
-);
+ *****************************************************************************/
+RESULT vsi_cam_device_config_metadata(cam_device_handle_t h_cam_device,
+					  cam_device_metadata_config_t *p_metadata);
 
 /*****************************************************************************/
 /**
  * @brief   This function enables noise removal relocation.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
+ * @param   h_cam_device		  Handle to the CamDevice instance
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_WRONG_HANDLE    Invalid instance handle
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_WRONG_HANDLE	Invalid instance handle
  *
-*****************************************************************************/
-RESULT VsiCamDeviceNrRelocEnable
-(
- CamDeviceHandle_t     hCamDevice
-);
+ *****************************************************************************/
+RESULT vsi_cam_device_nr_reloc_enable(cam_device_handle_t h_cam_device);
 
 /*****************************************************************************/
 /**
  * @brief   This function disables noise removal relocation.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
+ * @param   h_cam_device		  Handle to the CamDevice instance
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_WRONG_HANDLE    Invalid instance handle
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_WRONG_HANDLE	Invalid instance handle
  *
-*****************************************************************************/
-RESULT VsiCamDeviceNrRelocDisable
-(
- CamDeviceHandle_t     hCamDevice
-);
+ *****************************************************************************/
+RESULT vsi_cam_device_nr_reloc_disable(cam_device_handle_t h_cam_device);
 
 /*****************************************************************************/
 /**
  * @brief   This function does fast ISP software reset.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
+ * @param   h_cam_device		  Handle to the CamDevice instance
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_WRONG_HANDLE    Invalid instance handle
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_WRONG_HANDLE	Invalid instance handle
  *
-*****************************************************************************/
-RESULT VsiCamDeviceSwFastStop
-(
-    CamDeviceHandle_t   hCamDevice
-);
+ *****************************************************************************/
+RESULT vsi_cam_device_sw_fast_stop(cam_device_handle_t h_cam_device);
 
 /*****************************************************************************/
 /**
  * @brief   This function does hardware system reset.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
+ * @param   h_cam_device		  Handle to the CamDevice instance
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_WRONG_HANDLE    Invalid instance handle
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_WRONG_HANDLE	Invalid instance handle
  *
-*****************************************************************************/
-RESULT VsiCamDeviceHwSystemReset
-(
-    CamDeviceHandle_t   hCamDevice
-);
+ *****************************************************************************/
+RESULT vsi_cam_device_hw_system_reset(cam_device_handle_t h_cam_device);
 
 /*****************************************************************************/
 /**
  * @brief   This function does fast ISP software reset.
  *
- * @param   hCamDevice          Handle to the CamDevice instance
+ * @param   h_cam_device		  Handle to the CamDevice instance
  *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_WRONG_HANDLE    Invalid instance handle
+ * @retval  RET_SUCCESS		 Operation succeeded
+ * @retval  RET_WRONG_HANDLE	Invalid instance handle
  *
-*****************************************************************************/
-RESULT VsiCamDeviceSwFastStart
-(
-    CamDeviceHandle_t   hCamDevice
-);
+ *****************************************************************************/
+RESULT vsi_cam_device_sw_fast_start(cam_device_handle_t h_cam_device);
 
-
-
- /* @} cam_device_pipeline */
-
+/* @} cam_device_pipeline */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif    // __CAMDEV_API_H__
+#endif // __CAMDEV_API_H__

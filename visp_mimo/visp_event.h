@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -54,82 +55,89 @@
 #ifndef __VISP_EVENT_H__
 #define __VISP_EVENT_H__
 
-#define	 VISP_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 2000)
+#define VISP_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 2000)
 
 enum visp_vevent_id {
-    VISP_EVENT_SET_FMT,
-    VISP_EVENT_REQBUFS,
-    VISP_EVENT_QBUF,
-    VISP_EVENT_BUF_DONE,
-    VISP_EVENT_STREAMON,
-    VISP_EVENT_STREAMOFF,
-    VISP_EVENT_S_CTRL,
-    VISP_EVENT_G_CTRL,
-    VISP_EVENT_LOAD_CALIB,
-    VISP_EVENT_LOAD_JSON,
+	VISP_EVENT_SET_FMT,
+	VISP_EVENT_REQBUFS,
+	VISP_EVENT_QBUF,
+	VISP_EVENT_BUF_DONE,
+	VISP_EVENT_STREAMON,
+	VISP_EVENT_STREAMOFF,
+	VISP_EVENT_S_CTRL,
+	VISP_EVENT_G_CTRL,
+	VISP_EVENT_LOAD_CALIB,
+	VISP_EVENT_LOAD_JSON,
 	VISP_EVENT_S_INTERVAL,
-    VISP_EVENT_MAX,
+	VISP_EVENT_MAX,
 };
 
 struct visp_plane {
-    uint32_t dma_addr;
+	uint32_t dma_addr;
 	uint32_t size;
 };
 
 struct visp_buf {
-    uint32_t pad;
-    uint32_t index;
-    uint32_t num_planes;
+	uint32_t pad;
+	uint32_t index;
+	uint32_t num_planes;
 	struct visp_plane planes[VIDEO_MAX_PLANES];
 };
 
 struct visp_ctrl {
-    uint32_t cid;
-    uint32_t size;
+	uint32_t cid;
+	uint32_t size;
 #ifdef __KERNEL__
-    uint8_t data[0];
+	uint8_t data[0];
 #endif
 };
 
 struct visp_event_pkg_head {
-    uint32_t pad;
-    uint8_t  dev;
-    uint32_t eid;
-    uint64_t shm_addr;
-    uint32_t shm_size;
-    uint32_t data_size;
+	uint32_t pad;
+	uint8_t dev;
+	uint32_t eid;
+	uint64_t shm_addr;
+	uint32_t shm_size;
+	uint32_t data_size;
 };
 
 struct visp_event_pkg {
-    struct visp_event_pkg_head head;
-    uint8_t  ack;
-    int32_t  result;
-    uint8_t data[2048];
+	struct visp_event_pkg_head head;
+	uint8_t ack;
+	int32_t result;
+	uint8_t data[2048];
 };
 
 struct visp_ext_buf_info {
-    uint8_t port;
-    struct visp_plane plane;
+	uint8_t port;
+	struct visp_plane plane;
 };
 
-#define VISP_IOC_BUFDONE        _IOWR('I',  BASE_VIDIOC_PRIVATE + 0, struct visp_buf)
-#define VISP_IOC_BUFFER_ALLOC   _IOWR('I',  BASE_VIDIOC_PRIVATE + 1, struct visp_ext_buf_info)
-#define VISP_IOC_BUFFER_FREE    _IOWR('I',  BASE_VIDIOC_PRIVATE + 2, struct visp_ext_buf_info)
+#define VISP_IOC_BUFDONE _IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_buf)
+#define VISP_IOC_BUFFER_ALLOC                                                  \
+	_IOWR('I', BASE_VIDIOC_PRIVATE + 1, struct visp_ext_buf_info)
+#define VISP_IOC_BUFFER_FREE                                                   \
+	_IOWR('I', BASE_VIDIOC_PRIVATE + 2, struct visp_ext_buf_info)
 
 #ifdef __KERNEL__
 #include "visp_driver.h"
 
-int visp_set_fmt_event(struct visp_dev *isp_dev, int pad, struct v4l2_mbus_framefmt *format);
-int visp_requebus_event(struct visp_dev *isp_dev, int pad, uint32_t num_buffers);
-int visp_qbuf_event(struct visp_dev *isp_dev, int pad, struct visp_vb2_buffer *buf);
+int visp_set_fmt_event(struct visp_dev *isp_dev, int pad,
+		       struct v4l2_mbus_framefmt *format);
+int visp_requebus_event(struct visp_dev *isp_dev, int pad,
+			uint32_t num_buffers);
+int visp_qbuf_event(struct visp_dev *isp_dev, int pad,
+		    struct visp_vb2_buffer *buf);
 int visp_s_stream_event(struct visp_dev *isp_dev, int pad, uint32_t status);
-int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
-int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
+int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
+		      struct v4l2_ctrl *ctrl);
+int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
+		      struct v4l2_ctrl *ctrl);
 int visp_l_calib_event(struct visp_dev *isp_dev, int pad);
 int visp_l_json_event(struct visp_dev *isp_dev, int pad);
-int visp_s_interval_event(struct visp_dev *isp_dev, int pad, struct v4l2_fract *timeperframe);
+int visp_s_interval_event(struct visp_dev *isp_dev, int pad,
+			  struct v4l2_fract *timeperframe);
 
 #endif
-
 
 #endif

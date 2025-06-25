@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -59,12 +60,12 @@ extern "C" {
 #endif
 
 typedef struct {
-    int IspFd;
-} McIspHalHandle;
+	int isp_fd;
+} mc_isp_hal_handle;
 
-int MediaIspHalCreate(MediaEntityAttr *MediaEntity);
-int MediaIspHalDestroy(MediaEntityAttr *MediaEntity);
-void* MediaIspHalEventListenThread(void *Param);
+int media_isp_hal_create(media_entity_attr *media_entity);
+int media_isp_hal_destroy(media_entity_attr *media_entity);
+void *media_isp_hal_event_listen_thread(void *Param);
 
 #ifdef __cplusplus
 }

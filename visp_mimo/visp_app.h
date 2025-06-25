@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -51,64 +52,55 @@
  *
  *****************************************************************************/
 
-
-
-
 #ifndef __VISP_APP_H__
 #define __VISP_APP_H__
 
 #include <linux/kernel.h>
 #include <linux/module.h>
 
-
-struct Chn_info
-{
-	uint32_t HwId;
-	uint32_t Mode;
-	uint32_t VtId;
+struct Chn_info {
+	uint32_t hw_id;
+	uint32_t mode;
+	uint32_t vt_id;
 	uint32_t path;
 };
 
+int handle_frameout_buffer_mimo(void *packet_from_rpu,
+				struct visp_dev *isp_dev);
+int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
+					uint8_t chn);
 
-int Handle_Frameout_Buffer_mimo(void *Packet_from_RPU, struct visp_dev *isp_dev);
-int MediaIspDeviceCameraDisConnect(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
-
-
-int MediaIspDeviceDqbuf_out(struct visp_dev *isp_dev, struct Chn_info *info, MediaBuf *Buf, void * Packet_from_RPU, MediaBuffer_t *pMediaBuffer);
-
+int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
+			    media_buf *buf, void *packet_from_rpu,
+			    media_buffer_t *p_media_buffer);
 
 #define ENABLE_LOG 1
 
 #ifdef ENABLE_LOG
-  
-    /* warning */
-    #define logs(fmt, ...) \
-       printk(KERN_ERR "%s %s:%d: " fmt,__FILE__, __func__, __LINE__, ##__VA_ARGS__)
 
+/* warning */
+#define logs(fmt, ...)                                                         \
+	printk(KERN_ERR "%s %s:%d: " fmt, __FILE__, __func__, __LINE__,        \
+	       ##__VA_ARGS__)
 
-    /* warning */
-    #define logi(fmt, ...) \
-      printk(KERN_ERR  ("WARNING: %s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
+/* warning */
+#define logi(fmt, ...) \
+	(printk(KERN_ERR ("WARNING: %s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)))
 
-    /* warning */
-    #define logw(fmt, ...) \
-        printk(KERN_ERR  ("WARNING: %s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
+/* warning */
+#define logw(fmt, ...)                                                         \
+	(printk(KERN_ERR  ("WARNING: %s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)))
 
-    /* error */
-    #define loge(fmt, ...) \
-        printk(KERN_ERR  " %s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
+/* error */
+#define loge(fmt, ...)                                                         \
+	printk(KERN_ERR " %s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
 
-    /* error */
-    #define logr() \
-         printk(KERN_ERR  " %s:%d:-R ", __func__, __LINE__)
+/* error */
+#define logr() printk(KERN_ERR " %s:%d:-r ", __func__, __LINE__)
 #else
-    /* Disable log*/
-    #define logs(fmt, ...)
-    #define logw(fmt, ...)
-    #define loge(fmt, ...)
+/* Disable log*/
+#define logs(fmt, ...)
+#define logw(fmt, ...)
+#define loge(fmt, ...)
 #endif
 #endif
-
-
-
-

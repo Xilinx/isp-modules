@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -58,93 +59,86 @@
 extern "C" {
 #endif
 
-#include <linux/types.h>
 #include <linux/list.h>
+#include <linux/types.h>
 
 struct ListHead_s {
-    struct ListHead_s *Prev;
-    struct ListHead_s *Next;
+	struct ListHead_s *prev;
+	struct ListHead_s *next;
 };
 
-#define ContainerOf(Ptr, Type, Member) ((Type *) (((char *)Ptr) - (size_t)(&((Type *) 0)->Member)))
+#define ContainerOf(Ptr, type, Member)                                         \
+	((type *)(((char *)Ptr) - (size_t)(&((type *)0)->Member)))
 
-static inline void InitListHead(struct ListHead_s *List)
+static inline void InitListHead(struct ListHead_s *list)
 {
-    List->Prev = List;
-    List->Next = List;
+	list->prev = list;
+	list->next = list;
 }
 
-static inline void __ListAdd(struct ListHead_s *New,
-                    struct ListHead_s *Prev,
-                    struct ListHead_s *Next)
+static inline void __ListAdd(struct ListHead_s *new, struct ListHead_s *prev,
+			     struct ListHead_s *next)
 {
-    Next->Prev = New;
-    New->Next = Next;
-    New->Prev = Prev;
-    Prev->Next = New;
+	next->prev = new;
+	new->next = next;
+	new->prev = prev;
+	prev->next = new;
 }
 
-static inline void ListAdd(struct ListHead_s *New, struct ListHead_s *Head)
+static inline void ListAdd(struct ListHead_s *new, struct ListHead_s *head)
 {
-    __ListAdd(New, Head, Head->Next);
+	__ListAdd(new, head, head->next);
 }
 
-static inline void ListAddTail(struct ListHead_s *New, struct ListHead_s *Head)
+static inline void ListAddTail(struct ListHead_s *new,
+			       struct ListHead_s *head)
 {
-    __ListAdd(New, Head->Prev, Head);
+	__ListAdd(new, head->prev, head);
 }
 
-static inline void __ListDel(struct ListHead_s *Prev, struct ListHead_s *Next)
+static inline void __ListDel(struct ListHead_s *prev, struct ListHead_s *next)
 {
-    Next->Prev = Prev;
-    Prev->Next = Next;
+	next->prev = prev;
+	prev->next = next;
 }
 
-static inline void __ListDelEntry(struct ListHead_s *Entry)
+static inline void __ListDelEntry(struct ListHead_s *entry)
 {
-    __ListDel(Entry->Prev, Entry->Next);
+	__ListDel(entry->prev, entry->next);
 }
 
-static inline void ListDel(struct ListHead_s *Entry)
+static inline void ListDel(struct ListHead_s *entry)
 {
-    __ListDelEntry(Entry);
-    Entry->Next = NULL;
-    Entry->Prev = NULL;
+	__ListDelEntry(entry);
+	entry->next = NULL;
+	entry->prev = NULL;
 }
 
-static inline int ListEmpty(const struct ListHead_s *Head)
+static inline int ListEmpty(const struct ListHead_s *head)
 {
-    return Head->Next == Head;
+	return head->next == head;
 }
 
+#define ListEntry(Ptr, type, Member) ContainerOf(Ptr, type, Member)
 
+#define ListFirstEntry(Ptr, type, Member) ListEntry((Ptr)->next, type, Member)
 
-#define ListEntry(Ptr, Type, Member)                             \
-        ContainerOf(Ptr, Type, Member)
+#define ListLastEntry(Ptr, type, Member) ListEntry((Ptr)->prev, type, Member)
 
-#define ListFirstEntry(Ptr, Type, Member)                        \
-        ListEntry((Ptr)->Next, Type, Member)
+#define ListNextEntry(Pos, Member)                                             \
+	ListEntry((Pos)->Member.next, typeof(*(Pos)), Member)
 
-#define ListLastEntry(Ptr, Type, Member)                         \
-        ListEntry((Ptr)->Prev, Type, Member)
+#define ListPrivEntry(Pos, Member)                                             \
+	ListEntry((Pos)->Member.prev, typeof(*(Pos)), Member)
 
-#define ListNextEntry(Pos, Member)                               \
-        ListEntry((Pos)->Member.Next, typeof(*(Pos)), Member)
+#define ListForEachEntry(Pos, head, Member)                                    \
+	for (Pos = ListFirstEntry(head, typeof(*Pos), Member);                 \
+	     &Pos->Member != (head); Pos = ListNextEntry(Pos, Member))
 
-#define ListPrivEntry(Pos, Member)                               \
-        ListEntry((Pos)->Member.Prev, typeof(*(Pos)), Member)
-
-#define ListForEachEntry(Pos, Head, Member)                      \
-        for (Pos = ListFirstEntry(Head, typeof(*Pos), Member);   \
-             &Pos->Member != (Head);                             \
-             Pos = ListNextEntry(Pos, Member))
-
-#define ListForEachEntrySafe(Pos, N, Head, Member)               \
-        for (Pos = ListFirstEntry(Head, typeof(*Pos), Member),   \
-                N = ListNextEntry(Pos, Member);                  \
-             &Pos->Member != (Head);                             \
-             Pos = N, N = ListNextEntry(N, Member))
-
+#define ListForEachEntrySafe(Pos, N, head, Member)                             \
+	for (Pos = ListFirstEntry(head, typeof(*Pos), Member),                 \
+	    N = ListNextEntry(Pos, Member);                                    \
+	     &Pos->Member != (head); Pos = N, N = ListNextEntry(N, Member))
 
 #ifdef __cplusplus
 }

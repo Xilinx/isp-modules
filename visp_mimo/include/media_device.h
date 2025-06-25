@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT*/
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -50,21 +51,21 @@
  * version of this file.
  *
  *****************************************************************************/
- 
+
 #ifndef __MEDIA_DEVICE_H__
 #define __MEDIA_DEVICE_H__
 #include <linux/types.h>
 #include "list.h"
 #include <linux/mutex.h>
 
-
-#define MEDIA_DEV_MAX       2
+#define MEDIA_DEV_MAX 2
 
 #define VISP_VIDEO "vvcam-video"
-#define VISP  "vvcam-isp"
+#define VISP "vvcam-isp"
 
-#define media_fourcc(a, b , c , d) \
-    ((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) | ((uint32_t)(d) << 24))
+#define media_fourcc(a, b, c, d)                                               \
+	((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) |        \
+	 ((uint32_t)(d) << 24))
 
 #define MEDIA_PIX_FMT_YUYV              media_fourcc('Y', 'U', 'Y', 'V')
 #define MEDIA_PIX_FMT_NV16              media_fourcc('N', 'V', '1', '6')
@@ -153,92 +154,92 @@
 #define MEDIA_PIX_FMT_SGRBG24           media_fourcc('G', 'R', '2', '4')
 #define MEDIA_PIX_FMT_SRGGB24           media_fourcc('R', 'G', '2', '4')
 
+typedef struct media_device_attr_s {
+	void *hal_handle;
+	int dev_id;
+	char dev_name[32];
+	struct mutex mutex;
+	struct ListHead_s entities_pool;
+} media_device_attr;
 
-typedef struct MediaDeviceAttr_s {
-    void *HalHandle;
-    int DevId;
-    char DevName[32];
-    struct  mutex mutex;
-    struct ListHead_s EntitiesPool;
-} MediaDeviceAttr;
+typedef struct media_pad_attr_s {
+	uint32_t flags;
+	uint32_t index;
+	struct media_pad_attr_s *remote_pad;
+	struct media_entity_attr_s *entity;
+} media_pad_attr;
 
-typedef struct MediaPadAttr_s {
-    uint32_t Flags;
-    uint32_t Index;
-    struct MediaPadAttr_s *RemotePad;
-    struct MediaEntityAttr_s *Entity;
-} MediaPadAttr;
+typedef struct media_event_module_s {
+	int (*media_event_process)(struct media_pad_attr_s *pad, int cmd,
+				   void *data);
+	void *private;
+} media_event_module;
 
-typedef struct MediaEventModule_s {
-    int (*MediaEventProcess)(struct MediaPadAttr_s *Pad, int cmd, void *data);
-    void *Private;
-} MediaEventModule;
+typedef struct media_entity_attr_s {
+	uint32_t id;
+	char name[32];
+	char dev_name[32];
+	uint32_t pads_count;
+	uint32_t links_count;
+	struct media_pad_attr_s *pads;
+	media_device_attr *media_dev;
+	struct ListHead_s list;
+	struct media_event_module_s event_module;
+} media_entity_attr;
 
-typedef struct MediaEntityAttr_s {
-    uint32_t Id;
-    char Name[32];
-    char DevName[32];
-    uint32_t PadsCount;
-    uint32_t LinksCount;
-    struct MediaPadAttr_s *Pads;
-    MediaDeviceAttr *MediaDev;
-    struct ListHead_s List;
-    struct MediaEventModule_s EventModule;
-} MediaEntityAttr;
+typedef struct media_link_s {
+	media_entity_attr *source;
+	int source_pad;
+	media_entity_attr *sink;
+	int sink_pad;
+} media_link;
 
-typedef struct MediaLink_s {
-    MediaEntityAttr *Source;
-    int SourcePad;
-    MediaEntityAttr *Sink;
-    int SinkPad;
-} MediaLink;
-
-typedef enum MediaThreadStatus_e {
-    MEDIA_THREAD_STOPPED = 0,
-    MEDIA_THREAD_PREPARE,
-    MEDIA_THREAD_RUNNING,
-    MEDIA_THREAD_EXCEPTION,
-} MediaThreadStatus;
-
-typedef struct {
-    uint32_t Left;
-    uint32_t Top;
-    uint32_t Width;
-    uint32_t Height;
-} MediaRect;
+typedef enum media_thread_status_e {
+	MEDIA_THREAD_STOPPED = 0,
+	MEDIA_THREAD_PREPARE,
+	MEDIA_THREAD_RUNNING,
+	MEDIA_THREAD_EXCEPTION,
+} media_thread_status;
 
 typedef struct {
-    uint32_t Numerator;
-    uint32_t Denominator;
-} MediaFract;
+	uint32_t left;
+	uint32_t top;
+	uint32_t width;
+	uint32_t height;
+} media_rect;
 
 typedef struct {
-    uint32_t Fourcc;
-    MediaRect Rect;
-    MediaFract FrmivalMin;
-    MediaFract FrmivalMax;
-} MediaSinkInfo;
+	uint32_t numerator;
+	uint32_t denominator;
+} media_fract;
 
 typedef struct {
-    uint32_t Width;
-    uint32_t Height;
-    uint32_t PixelFormat;
-    uint32_t ColorSpace;
-    uint32_t Quantization;
-} MediaFmt;
+	uint32_t fourcc;
+	media_rect rect;
+	media_fract frmival_min;
+	media_fract frmival_max;
+} media_sink_info;
 
 typedef struct {
-    uint32_t DmaAddr;
-	uint32_t DmaSize;
-} MediaPlane;
+	uint32_t width;
+	uint32_t height;
+	uint32_t pixel_format;
+	uint32_t color_space;
+	uint32_t quantization;
+} media_fmt;
 
 typedef struct {
-    uint32_t Index;
-    uint32_t NumPlanes;
-	MediaPlane Planes[8];
-} MediaBuf;
+	uint32_t dma_addr;
+	uint32_t dma_size;
+} media_plane;
 
-int MediaDeviceCreate(int Dev);
-int MediaDeviceRelease(int Dev);
+typedef struct {
+	uint32_t index;
+	uint32_t num_planes;
+	media_plane planes[8];
+} media_buf;
+
+int media_device_create(int Dev);
+int media_device_release(int Dev);
 
 #endif
