@@ -58,7 +58,6 @@
 #include "cam_device.h"
 #include "cam_device_api.h"
 #include "sensor_cmd.h"
-#include "kmbox.h"
 #include "visp_driver.h"
 #include "visp_mbox_driver.h"
 #include "visp_app.h"

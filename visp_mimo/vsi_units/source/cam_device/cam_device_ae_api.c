@@ -57,7 +57,6 @@
 #include <linux/delay.h>
 #include "visp_driver.h"
 #include <linux/string.h>
-#include "kmbox.h"
 #include "visp_common.h"
 #include "visp_mbox_driver.h"
 

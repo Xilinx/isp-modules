@@ -60,7 +60,6 @@
 #include "visp_mbox_driver.h"
 #include "sensor_cmd.h"
 #include "visp_app.h"
-#include "kmbox.h"
 #include "visp_driver.h"
 extern uint32_t cookie;
 

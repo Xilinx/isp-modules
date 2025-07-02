@@ -118,13 +118,9 @@ int apu_mailbox_read(/*void *CallbackRef*/ uint32_t ipi_src_mask, uint32_t *isp_
 uint32_t parse_command(mb_cmd_id_e cmd, void *data, uint32_t size, mbox_core_id id,
 		       mbox_core_id id1);
 void apu_postmsg(mbox_core_id receiver_id);
-uint32_t kmbox_write(int32_t cmd_id, void *msg, uint16_t size,
-		     mbox_core_id receiver_id, mbox_core_id core_id);
-// int32_t kmbox_register_parse(kmbox_parse_process_t parse_process);
 void mailbox_close(void);
 int send_response(mb_cmd_id_e res, payload_packet *data, uint32_t size,
 		  uint8_t dest_cpu, uint8_t src_cpu);
 void apu_mailbox_read_data(uint32_t ipi_src_mask, void *pdst);
-int32_t kmbox_unregister_parse(void);
 
 #endif

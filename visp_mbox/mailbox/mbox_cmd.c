@@ -58,7 +58,6 @@
 #include "mbox_api.h"
 #include "mbox_error_code.h"
 // #include <linux/sensor_cmd.h>
-#include <linux/arm-smccc.h>
 #include <linux/gfp.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -76,9 +75,6 @@ EXPORT_SYMBOL_GPL(data_from_interrupt);
 
 // extern int handle_frameout_buffer(void * Enque_Buff_L);
 // int (* exported_func)(void *);
-
-typedef void (*kmbox_parse_process_t)(uint16_t cmd, void *data, uint32_t size);
-static kmbox_parse_process_t kmbox_parse_process;
 
 static mbox_fifo_ctrl *rpu0_fifo_ctrl;
 static mbox_fifo_ctrl *rpu1_fifo_ctrl;
@@ -163,43 +159,6 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 }
 EXPORT_SYMBOL_GPL(write_mboxcmd);
 
-uint32_t kmbox_write(int32_t cmd_id, void *msg, uint16_t size,
-		     mbox_core_id receiver_id, mbox_core_id core_id)
-{
-	unsigned long a0, a1, a2, a3;
-	struct arm_smccc_res res;
-	uint32_t ret;
-
-	ret = write_mboxcmd(cmd_id, msg, size, receiver_id, core_id);
-
-	a0 = SMC_IPI_MAILBOX_NOTIFY;
-	a1 = 5; // Local id
-	a2 = 3; // Remote id
-	a3 = 0;
-
-	arm_smccc_smc(a0, a1, a2, a3, 0, 0, 0, 0, &res);
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(kmbox_write);
-
-int32_t kmbox_register_parse(kmbox_parse_process_t parse_process);
-int32_t kmbox_register_parse(kmbox_parse_process_t parse_process)
-{
-	kmbox_parse_process = parse_process;
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(kmbox_register_parse);
-
-int32_t kmbox_unregister_parse(void)
-{
-	kmbox_parse_process = NULL;
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(kmbox_unregister_parse);
-
 int apu_mailbox_read(uint32_t ipi_src_mask, uint32_t *isp_id)
 {
 	int core_id;
@@ -227,13 +186,8 @@ int apu_mailbox_read(uint32_t ipi_src_mask, uint32_t *isp_id)
 	}
 
 	vpi_mbox_read(apu_fifo_ctrl, rmsg_apu, core_id);
-	if (kmbox_parse_process) {
-		kmbox_parse_process(rmsg_apu->msg_id, rmsg_apu->payload,
-				    rmsg_apu->size);
-	} else {
-		parse_command(rmsg_apu->msg_id, rmsg_apu->payload,
-			      rmsg_apu->size, MBOX_CORE_APU, core_id);
-	}
+	parse_command(rmsg_apu->msg_id, rmsg_apu->payload,
+		      rmsg_apu->size, MBOX_CORE_APU, core_id);
 
 	memcpy(isp_id, ((payload_packet *)rmsg_apu->payload)->payload, sizeof(uint32_t));
 

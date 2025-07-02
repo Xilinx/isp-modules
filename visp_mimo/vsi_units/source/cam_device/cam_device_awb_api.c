@@ -58,7 +58,6 @@
 #include "visp_driver.h"
 #include "visp_mbox_driver.h"
 #include <linux/string.h>
-#include "kmbox.h"
 #include "visp_common.h"
 
 RESULT vsi_cam_device_un_register_awb_lib(struct visp_dev *isp_dev,

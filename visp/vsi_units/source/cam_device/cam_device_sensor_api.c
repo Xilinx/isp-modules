@@ -59,7 +59,6 @@
 #include "sensor_cmd.h"
 #include <linux/slab.h>
 #include <linux/string.h>
-#include "kmbox.h"
 #include "visp_driver.h"
 #include "isi_mixed.h"
 

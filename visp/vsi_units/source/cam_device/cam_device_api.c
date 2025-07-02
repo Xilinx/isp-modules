@@ -65,7 +65,6 @@
 // #include <linux/xlnx_isp_def.h>
 #include <linux/string.h>
 
-#include "kmbox.h"
 uint8_t *cam_load_calib; //[160010] __attribute__((section(".cam_load_calib")));
 
 RESULT vsi_cam_device_create(struct visp_dev *isp_dev,

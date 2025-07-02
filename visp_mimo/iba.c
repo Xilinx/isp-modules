@@ -25,7 +25,6 @@
 #include "sensor_cmd.h"
 
 #include "visp_mbox_driver.h"
-// #include "kmbox.h"
 #include "cam_device.h"
 #include "cam_device_api.h"
 #include "iba.h"

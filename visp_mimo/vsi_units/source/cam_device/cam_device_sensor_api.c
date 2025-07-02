@@ -59,7 +59,6 @@
 #include "isi_iss.h"
 #include <linux/slab.h>
 #include <linux/string.h>
-#include "kmbox.h"
 #include "visp_driver.h"
 #include "visp_mbox_driver.h"
 

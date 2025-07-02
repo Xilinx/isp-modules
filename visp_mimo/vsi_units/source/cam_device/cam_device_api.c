@@ -61,7 +61,6 @@
 #include "visp_mbox_driver.h"
 #include "visp_common.h"
 #include <linux/string.h>
-#include "kmbox.h"
 uint8_t *cam_load_calib =
 	NULL; //[160010] __attribute__((section(".cam_load_calib")));
 
