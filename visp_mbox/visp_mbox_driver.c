@@ -101,12 +101,8 @@
 #define RPU8 8
 #define RPU9 9
 #define MAX_ISP_INSTANCES 6
-#define MAX_RPU_ID 8
+#define VISP_MBOX_MAX_RPU_ID 9
 
-#define RPU6_0 0
-#define RPU6_1 1
-#define RPU6_2 2
-#define RPU6_3 3
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
@@ -128,16 +124,16 @@ int get_dest_cpu(int rpu_id)
 
 	switch (rpu_id) {
 	case 6:
-		dest_cpu = RPU6_0;
+		dest_cpu = VISP_MBOX_RPU6_0;
 		break;
 	case 7:
-		dest_cpu = RPU6_1;
+		dest_cpu = VISP_MBOX_RPU7_1;
 		break;
 	case 8:
-		dest_cpu = RPU6_2;
+		dest_cpu = VISP_MBOX_RPU8_2;
 		break;
 	case 9:
-		dest_cpu = RPU6_3;
+		dest_cpu = VISP_MBOX_RPU9_3;
 		break;
 	default:
 		// Handle invalid rpu_id (you might want to return an error
@@ -977,8 +973,7 @@ static int visp_mbox_probe(struct platform_device *pdev)
 	dev_dbg(dev, "rpu_id read from device tree: %u\n", rpu_id);
 
 	/* Validate rpu_id if there is a known range */
-	if (rpu_id < 6 || rpu_id >= MAX_RPU_ID) { // Replace MAX_RPU_ID with
-						  // your maximum allowed value
+	if (rpu_id < 6 || rpu_id > VISP_MBOX_MAX_RPU_ID) {
 		dev_err(dev, "Invalid rpu_id: %d\n", rpu_id);
 		return -EINVAL;
 	}

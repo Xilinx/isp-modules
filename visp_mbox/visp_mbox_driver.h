@@ -59,6 +59,12 @@
 #include "sensor_cmd.h"
 #define CHAR_DEV_NAME "mailbox_dev"
 #define SUCCESS 0
+
+#define VISP_MBOX_RPU6_0 0
+#define VISP_MBOX_RPU7_1 1
+#define VISP_MBOX_RPU8_2 2
+#define VISP_MBOX_RPU9_3 3
+
 struct rpu_dev *get_rpu_dev(int rpu_id);
 extern struct response_user_packet data_from_interrupt;
 uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev);

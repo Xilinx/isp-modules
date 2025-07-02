@@ -64,6 +64,7 @@
 #include "mbox_hardware.h"
 // #include <linux/sensor_cmd.h>
 #include "sensor_cmd.h"
+#include "visp_mbox_driver.h"
 
 #define MAX_MSGS_PER_BOX 12
 #define MBOX_FIFO_BLOCK_SIZE                                                   \

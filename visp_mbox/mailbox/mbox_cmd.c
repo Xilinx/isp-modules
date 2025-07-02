@@ -202,55 +202,44 @@ EXPORT_SYMBOL_GPL(kmbox_unregister_parse);
 
 int apu_mailbox_read(uint32_t ipi_src_mask, uint32_t *isp_id)
 {
-	if (ipi_src_mask == 0) { // sdvsv
-		if (vpi_mbox_is_empty(apu_fifo_ctrl, MBOX_CORE_RPU0,
-				      MBOX_CORE_APU)) // rpu0 check  the msg
-						      // from MBOX_CORE_APU
-		{
-			pr_err("there is no msg in Share memory!\n");
-		} else {
-			vpi_mbox_read(
-			    apu_fifo_ctrl, rmsg_apu,
-			    MBOX_CORE_RPU0); // rpu0 rece MBOX_CORE_APU's msg
-			if (kmbox_parse_process) {
-				kmbox_parse_process(rmsg_apu->msg_id,
-						    rmsg_apu->payload,
-						    rmsg_apu->size);
-			} else {
-				parse_command(rmsg_apu->msg_id,
-					      rmsg_apu->payload, rmsg_apu->size,
-					      MBOX_CORE_APU, MBOX_CORE_RPU0);
-			}
-		}
-	} else if (ipi_src_mask == 1 /*RPU1 id*/) {
-		if (vpi_mbox_is_empty(apu_fifo_ctrl, MBOX_CORE_RPU1,
-				      MBOX_CORE_APU)) // rpu0 check  the msg
-						      // from MBOX_CORE_APU
-		{
-			pr_err("there is no msg in Share memory!\n");
-		} else {
-			vpi_mbox_read(apu_fifo_ctrl, rmsg_apu,
-				      MBOX_CORE_RPU1); // rpu0 received
-						       // MBOX_CORE_APU's msg
-			if (kmbox_parse_process) {
-				kmbox_parse_process(rmsg_apu->msg_id,
-						    rmsg_apu->payload,
-						    rmsg_apu->size);
-			} else {
-				parse_command(rmsg_apu->msg_id,
-					      rmsg_apu->payload, rmsg_apu->size,
-					      MBOX_CORE_APU, MBOX_CORE_RPU1);
-			}
-		}
-	} else {
-		pr_err("worng  aruguement %s %d\n", __func__, __LINE__);
-		return -1;
+	int core_id;
+
+	switch (ipi_src_mask) {
+	case VISP_MBOX_RPU6_0:
+		core_id = MBOX_CORE_RPU0;
+		break;
+	case VISP_MBOX_RPU7_1:
+		core_id = MBOX_CORE_RPU1;
+		break;
+	case VISP_MBOX_RPU8_2:
+		core_id = MBOX_CORE_RPU2;
+		break;
+	case VISP_MBOX_RPU9_3:
+		core_id = MBOX_CORE_RPU3;
+		break;
+	default:
+		pr_err("Invalid ipi_src_mask %d\n", ipi_src_mask);
+		return -EINVAL;
 	}
-	memcpy(isp_id, ((payload_packet *)rmsg_apu->payload)->payload, 4);
-	//	pr_err("%s %d instance_id 0x%x, payload[0]
-	// 0x%x\n",__func__,__LINE__,isp_id,((payload_packet
-	//*)rmsg_apu->payload)->payload[0]);
+
+	if (vpi_mbox_is_empty(apu_fifo_ctrl, core_id, MBOX_CORE_APU)) {
+		pr_err("No message in shared memory for core %d!\n", core_id);
+	}
+
+	vpi_mbox_read(apu_fifo_ctrl, rmsg_apu, core_id);
+	if (kmbox_parse_process) {
+		kmbox_parse_process(rmsg_apu->msg_id, rmsg_apu->payload,
+				    rmsg_apu->size);
+	} else {
+		parse_command(rmsg_apu->msg_id, rmsg_apu->payload,
+			      rmsg_apu->size, MBOX_CORE_APU, core_id);
+	}
+
+	memcpy(isp_id, ((payload_packet *)rmsg_apu->payload)->payload, sizeof(uint32_t));
+
+	/* Normalize ISP instance ID; clarify why divided by 15 */
 	*isp_id = *isp_id / 15;
+
 	return rmsg_apu->msg_id;
 }
 EXPORT_SYMBOL_GPL(apu_mailbox_read);
