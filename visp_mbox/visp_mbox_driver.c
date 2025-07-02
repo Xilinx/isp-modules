@@ -110,12 +110,7 @@ static LIST_HEAD(rpu_devices);
 static DECLARE_COMPLETION(mailbox_completion);
 int (*exported_func1)(void *test, struct visp_dev *isp_dev);
 static void my_tasklet_function(void *data);
-/* Callback declarations */
-static void visp_mb_rx_cb(struct mbox_client *cl, void *msg, int rpu_id);
-static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg);
-static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg);
-static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg);
-static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg);
+
 typedef int (*frameout_cb_t)(void *data, struct visp_dev *dev);
 int get_dest_cpu(int rpu_id);
 int get_dest_cpu(int rpu_id)
@@ -143,8 +138,6 @@ int get_dest_cpu(int rpu_id)
 	}
 	return dest_cpu;
 }
-static void (*visp_rx_callbacks[])(struct mbox_client *, void *) = {
-	visp_mb_rx_cb_0, visp_mb_rx_cb_1, visp_mb_rx_cb_2, visp_mb_rx_cb_3};
 
 static void handle_event_notified(struct work_struct *work)
 {
@@ -223,43 +216,23 @@ static void my_tasklet_function(void *data)
 	cnt++;
 }
 
-static void visp_mb_rx_cb_0(struct mbox_client *cl, void *msg)
+static void visp_mbox_rx_cb(struct mbox_client *cl, void *msg)
 {
-	visp_mb_rx_cb(cl, msg, 6);
-}
-
-static void visp_mb_rx_cb_1(struct mbox_client *cl, void *msg)
-{
-	visp_mb_rx_cb(cl, msg, 7);
-}
-
-static void visp_mb_rx_cb_2(struct mbox_client *cl, void *msg)
-{
-	visp_mb_rx_cb(cl, msg, 8);
-}
-
-static void visp_mb_rx_cb_3(struct mbox_client *cl, void *msg)
-{
-	visp_mb_rx_cb(cl, msg, 9);
-}
-
-static void visp_mb_rx_cb(struct mbox_client *cl, void *msg, int rpu_id)
-{
-	struct rpu_dev *rpu = NULL;
 	/* Get RPU id from the received message */
-	rpu = get_rpu_dev(rpu_id);
+	struct rpu_dev *rpu = dev_get_drvdata(cl->dev);
 	if (rpu != NULL) {
 		/* Schedule work to handle the received event */
 		// if ( queue_work_on(1, system_wq, &rpu->mbox_work) )
 		if (work_pending(&rpu->mbox_work))
-			pr_err("Work already pending for RPU id %d\n", rpu_id);
+			pr_err("Work already pending for RPU id %d\n",
+			       rpu->rpu_id);
 		else
 			queue_work(system_wq, &rpu->mbox_work);
 	} else {
 		dev_err(
 		    rpu->dev,
 		    "visp_mb_rx_cb: Failed to find RPU device for RPU id %d\n",
-		    rpu_id);
+		    rpu->rpu_id);
 	}
 }
 
@@ -275,7 +248,6 @@ static int visp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
 
 	/* Setup TX mailbox channel client */
 	mclient = &rpu->tx_mc;
-	mclient->rx_callback = NULL;
 	mclient->tx_block = false;
 	mclient->knows_txdone = false;
 	mclient->tx_done = visp_mb_tx_done; // Set the TX done callback
@@ -284,11 +256,7 @@ static int visp_setup_mbox(struct rpu_dev *rpu, struct device_node *node)
 	/* Setup RX mailbox channel client */
 	mclient = &rpu->rx_mc;
 	mclient->dev = rpu->dev;
-	// mclient->rx_callback = visp_mb_rx_cb; // Set the RX callback
-	mclient->rx_callback = visp_rx_callbacks[get_dest_cpu(
-	    rpu->rpu_id)]; // visp_mb_rx_cb; // Set the RX callback
-	mclient->tx_block = false;
-	mclient->knows_txdone = false;
+	mclient->rx_callback = visp_mbox_rx_cb; // Set the RX callback
 
 	/* Initialize work */
 	INIT_WORK(&rpu->mbox_work, handle_event_notified);
