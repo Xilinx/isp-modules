@@ -100,8 +100,8 @@
 
 /*****************************************************************************/
 
-void mailbox_init(uint32_t cpu, uint64_t MBOX_FIFO_START_ADDR,
-		  uint64_t mbox_fifo_start_addr_phy);
+void visp_mbox_mailbox_init(u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
+			    uint64_t mbox_fifo_start_addr_phy);
 uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 		       mbox_core_id receiver_id, mbox_core_id core_id);
 

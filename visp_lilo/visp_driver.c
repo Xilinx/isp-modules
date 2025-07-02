@@ -2326,7 +2326,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 static int xlnx_link_mbox(struct visp_dev *isp_dev)
 {
 	/* Find or create a new RPU with the given rpu_id */
-	isp_dev->rpu = get_rpu_dev(isp_dev->isp_rpu);
+	isp_dev->rpu = visp_mbox_get_rpu_dev(isp_dev->isp_rpu);
 	if (!isp_dev->rpu) {
 		dev_err(isp_dev->dev, "Failed to find or create RPU: %d\n",
 			isp_dev->isp_rpu);

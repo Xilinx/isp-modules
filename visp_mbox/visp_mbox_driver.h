@@ -65,7 +65,7 @@
 #define VISP_MBOX_RPU8_2 2
 #define VISP_MBOX_RPU9_3 3
 
-struct rpu_dev *get_rpu_dev(int rpu_id);
+struct rpu_dev *visp_mbox_get_rpu_dev(int rpu_id);
 extern struct response_user_packet data_from_interrupt;
 uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev);
 int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,

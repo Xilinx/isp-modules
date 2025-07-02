@@ -244,9 +244,8 @@ int apu_mailbox_read(uint32_t ipi_src_mask, uint32_t *isp_id)
 }
 EXPORT_SYMBOL_GPL(apu_mailbox_read);
 
-// void mailbox_init(uint8_t cpu)
-void mailbox_init(uint32_t cpu, uint64_t MBOX_FIFO_START_ADDR,
-		  uint64_t mbox_fifo_start_addr_phy)
+void visp_mbox_mailbox_init(u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
+			    uint64_t mbox_fifo_start_addr_phy)
 {
 	rmsg_apu = (mbox_post_msg *)kmalloc(sizeof(mbox_post_msg), GFP_KERNEL);
 
@@ -272,7 +271,7 @@ void mailbox_init(uint32_t cpu, uint64_t MBOX_FIFO_START_ADDR,
 		    mbox_fifo_start_addr_phy, MBOX_FIFO_BLOCK_SIZE);
 	}
 }
-EXPORT_SYMBOL_GPL(mailbox_init);
+EXPORT_SYMBOL_GPL(visp_mbox_mailbox_init);
 
 void mailbox_close(void)
 {
