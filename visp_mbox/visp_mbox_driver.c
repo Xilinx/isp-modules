@@ -60,7 +60,6 @@
 #define MAX_ISP_INSTANCES 6
 #define VISP_MBOX_MAX_RPU_ID 9
 
-struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
 static LIST_HEAD(rpu_devices);
 static DECLARE_COMPLETION(mailbox_completion);
@@ -240,8 +239,9 @@ static int visp_mbox_rpudev_open(struct inode *inode, struct file *file)
 {
 	struct rpu_dev *rpu = NULL;
 
-	/* Retrieve the RPU device structure using container_of */
-	rpu = container_of(inode->i_cdev, struct rpu_dev, cdev);
+	/* Retrieve container structure using miscdevice */
+        struct miscdevice *visp_mbox_mdev = file->private_data;
+	rpu = container_of(visp_mbox_mdev, struct rpu_dev, visp_mbox_dev);
 	if (!rpu) {
 		pr_err("%s: Failed to retrieve RPU device\n", __func__);
 		return -ENODEV; // Return error if RPU is not found
@@ -467,43 +467,23 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	rpu->dev = &pdev->dev;
 	rpu->rpu_id = rpu_id;
 
-	/* Initialize mutexes, cdev, and reference count */
-	mutex_init(&rpu->lock);
+	/* Initialize mutexes, and reference count */
 	mutex_init(&rpu->rpu_lock);
 	mutex_init(&rpu->ack_lock);
 	mutex_init(&rpu->read_lock);
 	mutex_init(&rpu->write_lock);
-	cdev_init(&rpu->cdev, &visp_mbox_rpudev_fops);
-	rpu->cdev.owner = THIS_MODULE;
 
-	/* Allocate a device number */
-	ret = alloc_chrdev_region(&rpu->devno, rpu_id, 1, dev_name);
+	rpu->visp_mbox_dev.minor = MISC_DYNAMIC_MINOR;
+	rpu->visp_mbox_dev.name = devm_kstrdup(&pdev->dev, dev_name, GFP_KERNEL);
+	rpu->visp_mbox_dev.fops = &visp_mbox_rpudev_fops;
+	rpu->visp_mbox_dev.parent = &pdev->dev;
+
+	ret = misc_register(&rpu->visp_mbox_dev);
 	if (ret) {
-		dev_err(&pdev->dev,
-			"Failed to allocate device number (error %d)\n", ret);
+		dev_err(&pdev->dev, "Failed to register misc device (error %d)\n", ret);
 		devm_kfree(&pdev->dev, rpu);
 		mutex_unlock(&rpu_list_lock);
 		return ERR_PTR(ret);
-	}
-
-	/* Add the character device */
-	ret = cdev_add(&rpu->cdev, rpu->devno, 1);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to add cdev (error %d)\n", ret);
-		unregister_chrdev_region(rpu->devno, 1);
-		devm_kfree(&pdev->dev, rpu);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(ret);
-	}
-
-	/* Create a device node */
-	if (!device_create(mailbox_class, NULL, rpu->devno, NULL, dev_name)) {
-		dev_err(&pdev->dev, "Failed to create device node\n");
-		cdev_del(&rpu->cdev);
-		unregister_chrdev_region(rpu->devno, 1);
-		devm_kfree(&pdev->dev, rpu);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
 	}
 
 	kref_init(&rpu->refcount);
@@ -519,9 +499,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 		if (ret) {
 			dev_err(&pdev->dev,
 				"Failed to set up mailboxes (error %d)\n", ret);
-			device_destroy(mailbox_class, rpu->devno);
-			cdev_del(&rpu->cdev);
-			unregister_chrdev_region(rpu->devno, 1);
+			misc_deregister(&rpu->visp_mbox_dev);
 			devm_kfree(&pdev->dev, rpu);
 			mutex_unlock(&rpu_list_lock);
 			return ERR_PTR(ret);
@@ -938,9 +916,7 @@ static void visp_mbox_rpu_remove(void)
 		/* Check if the device is safe to remove */
 		if (atomic_read(&rpu->refcount.refcount.refs) == 1) {
 			/* Perform cleanup and removal */
-			device_destroy(mailbox_class, rpu->devno);
-			cdev_del(&rpu->cdev);
-			unregister_chrdev_region(rpu->devno, 1);
+			misc_deregister(&rpu->visp_mbox_dev);
 
 			/* Free resources using the kref_put mechanism */
 			kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
@@ -1025,19 +1001,10 @@ static int __init visp_mbox_init_module(void)
 
 	pr_info("Initializing AMD MBox driver.\n");
 
-	/* Create the mailbox class */
-	// mailbox_class = class_create(THIS_MODULE, "mailbox-class");
-	mailbox_class = class_create("mailbox-class");
-	if (IS_ERR(mailbox_class)) {
-		pr_err("Failed to create mailbox class.\n");
-		return PTR_ERR(mailbox_class);
-	}
-
 	/* Register the platform driver */
 	ret = platform_driver_register(&visp_mbox_driver);
 	if (ret) {
 		pr_err("Failed to register AMD MBox driver. Error: %d\n", ret);
-		class_destroy(mailbox_class);
 		return ret;
 	}
 
@@ -1056,11 +1023,6 @@ static void __exit visp_mbox_exit_module(void)
 	platform_driver_unregister(&visp_mbox_driver);
 	pr_info("AMD MBox driver unregistered successfully.\n");
 
-	/* Destroy the mailbox class */
-	if (mailbox_class) {
-		class_destroy(mailbox_class);
-		pr_info("Mailbox class destroyed successfully.\n");
-	}
 }
 
 module_init(visp_mbox_init_module);
