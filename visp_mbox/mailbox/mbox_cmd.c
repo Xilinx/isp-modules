@@ -248,27 +248,44 @@ void visp_mbox_mailbox_init(u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
 			    uint64_t mbox_fifo_start_addr_phy)
 {
 	rmsg_apu = (mbox_post_msg *)kmalloc(sizeof(mbox_post_msg), GFP_KERNEL);
-
-	if (cpu == MBOX_CORE_APU) {
-		apu_fifo_ctrl = vpi_mbox_init(
-		    MBOX_CORE_APU, MBOX_FIFO_START_ADDR,
-		    mbox_fifo_start_addr_phy, MBOX_FIFO_BLOCK_SIZE);
-	} else if (cpu == MBOX_CORE_RPU0) {
-		rpu0_fifo_ctrl = vpi_mbox_init(
-		    MBOX_CORE_RPU0, MBOX_FIFO_START_ADDR,
-		    mbox_fifo_start_addr_phy, MBOX_FIFO_BLOCK_SIZE);
-	} else if (cpu == MBOX_CORE_RPU1) {
-		rpu1_fifo_ctrl = vpi_mbox_init(
-		    MBOX_CORE_RPU1, MBOX_FIFO_START_ADDR,
-		    mbox_fifo_start_addr_phy, MBOX_FIFO_BLOCK_SIZE);
-	} else if (cpu == MBOX_CORE_RPU2) {
-		rpu2_fifo_ctrl = vpi_mbox_init(
-		    MBOX_CORE_RPU2, MBOX_FIFO_START_ADDR,
-		    mbox_fifo_start_addr_phy, MBOX_FIFO_BLOCK_SIZE);
-	} else if (cpu == MBOX_CORE_RPU3) {
-		rpu3_fifo_ctrl = vpi_mbox_init(
-		    MBOX_CORE_RPU3, MBOX_FIFO_START_ADDR,
-		    mbox_fifo_start_addr_phy, MBOX_FIFO_BLOCK_SIZE);
+	if (!rmsg_apu) {
+		pr_err("%s: Failed to allocate rmsg_apu\n", __func__);
+		return;
+	}
+	switch (cpu) {
+	case MBOX_CORE_APU:
+		apu_fifo_ctrl = visp_mbox_init(MBOX_CORE_APU,
+					       MBOX_FIFO_START_ADDR,
+					       mbox_fifo_start_addr_phy,
+					       MBOX_FIFO_BLOCK_SIZE);
+		break;
+	case MBOX_CORE_RPU0:
+		rpu0_fifo_ctrl = visp_mbox_init(MBOX_CORE_RPU0,
+						MBOX_FIFO_START_ADDR,
+						mbox_fifo_start_addr_phy,
+						MBOX_FIFO_BLOCK_SIZE);
+		break;
+	case MBOX_CORE_RPU1:
+		rpu1_fifo_ctrl = visp_mbox_init(MBOX_CORE_RPU1,
+						MBOX_FIFO_START_ADDR,
+						mbox_fifo_start_addr_phy,
+						MBOX_FIFO_BLOCK_SIZE);
+		break;
+	case MBOX_CORE_RPU2:
+		rpu2_fifo_ctrl = visp_mbox_init(MBOX_CORE_RPU2,
+						MBOX_FIFO_START_ADDR,
+						mbox_fifo_start_addr_phy,
+						MBOX_FIFO_BLOCK_SIZE);
+		break;
+	case MBOX_CORE_RPU3:
+		rpu3_fifo_ctrl = visp_mbox_init(MBOX_CORE_RPU3,
+						MBOX_FIFO_START_ADDR,
+						mbox_fifo_start_addr_phy,
+						MBOX_FIFO_BLOCK_SIZE);
+		break;
+	default:
+		pr_err("%s: Invalid CPU id: %u\n", __func__, cpu);
+		break;
 	}
 }
 EXPORT_SYMBOL_GPL(visp_mbox_mailbox_init);
@@ -276,11 +293,6 @@ EXPORT_SYMBOL_GPL(visp_mbox_mailbox_init);
 void mailbox_close(void)
 {
 	kfree(apu_fifo_ctrl);
-	//	kfree(rpu0_fifo_ctrl);
-	//	kfree(rpu1_fifo_ctrl);
-
-	// kfree(rmsg_rpu0);
-	// kfree(rmsg_rpu1);
 	kfree(rmsg_apu);
 }
 
@@ -293,24 +305,6 @@ int send_command(mb_cmd_id_e cmd, void *data, uint32_t size, uint8_t dest_cpu,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(send_command);
-
-int send_response(mb_cmd_id_e res, payload_packet *data, uint32_t size,
-		  uint8_t dest_cpu, uint8_t src_cpu)
-{
-	int ret = 0;
-	struct arm_smccc_res ress;
-	unsigned long a0, a1, a2, a3;
-
-	ret = write_mboxcmd(res, data, size, dest_cpu, src_cpu);
-	a0 = SMC_IPI_MAILBOX_NOTIFY;
-	a1 = 5; // Local id
-	a2 = 3; // Remote id
-	a3 = 0;
-	arm_smccc_smc(a0, a1, a2, a3, 0, 0, 0, 0, &ress);
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(send_response);
 
 volatile void *enque_buff_g;
 volatile int dq_buf_available;
@@ -386,7 +380,7 @@ int read_dq_buf_info_l(void *data, media_buffer_t *Enque_Buff_L,
 
 	return 0;
 }
-//
+
 int disp_cnt;
 uint32_t parse_command(mb_cmd_id_e cmd, void *data, uint32_t size,
 		       mbox_core_id core_id, mbox_core_id src_cpu)
@@ -466,44 +460,6 @@ uint32_t parse_command(mb_cmd_id_e cmd, void *data, uint32_t size,
 	return res;
 }
 EXPORT_SYMBOL_GPL(parse_command);
-
-void apu_mailbox_read_data(uint32_t ipi_src_mask, void *pdst)
-{
-	struct response_user_packet *dst = pdst;
-
-	if (ipi_src_mask == 0) { // sdvsv
-		if (vpi_mbox_is_empty(apu_fifo_ctrl, MBOX_CORE_RPU0,
-				      MBOX_CORE_APU)) // rpu0 check  the msg
-						      // from MBOX_CORE_APU
-		{
-			pr_err("there is no msg in Share memory!\n");
-		} else {
-			vpi_mbox_read(
-			    apu_fifo_ctrl, rmsg_apu,
-			    MBOX_CORE_RPU0); // rpu0 rece MBOX_CORE_APU's msg
-			dst->cmdid = rmsg_apu->msg_id;
-			memcpy(&dst->res_payload_pkt, rmsg_apu->payload,
-			       ALIGN(rmsg_apu->size, 8));
-		}
-	} else if (ipi_src_mask == 1 /*RPU1 id*/) {
-		if (vpi_mbox_is_empty(apu_fifo_ctrl, MBOX_CORE_RPU1,
-				      MBOX_CORE_APU)) // rpu0 check  the msg
-						      // from MBOX_CORE_APU
-		{
-			pr_err("there is no msg in Share memory!\n");
-		} else {
-			vpi_mbox_read(apu_fifo_ctrl, rmsg_apu,
-				      MBOX_CORE_RPU1); // rpu0 received
-						       // MBOX_CORE_APU's msg
-			dst->cmdid = rmsg_apu->msg_id;
-			memcpy(&dst->res_payload_pkt, rmsg_apu->payload,
-			       ALIGN(rmsg_apu->size, 8));
-		}
-	} else {
-		pr_err("worng  aruguement %s %d\n", __func__, __LINE__);
-	}
-}
-EXPORT_SYMBOL_GPL(apu_mailbox_read_data);
 
 MODULE_AUTHOR("anandam");
 MODULE_DESCRIPTION("MBOX_CMD");

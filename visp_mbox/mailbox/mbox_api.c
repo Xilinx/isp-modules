@@ -181,8 +181,8 @@ int mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 }
 EXPORT_SYMBOL_GPL(mbox_mem_map);
 
-mbox_fifo_ctrl *vpi_mbox_init(mbox_core_id core_id, uint64_t shm_addr,
-			      uint64_t shm_addr_phy, uint64_t shm_block_size)
+mbox_fifo_ctrl *visp_mbox_init(mbox_core_id core_id, u64 shm_addr,
+			       u64 shm_addr_phy, u64 shm_block_size)
 {
 	mbox_fifo_ctrl *mbox_fifo = NULL;
 
@@ -202,7 +202,7 @@ mbox_fifo_ctrl *vpi_mbox_init(mbox_core_id core_id, uint64_t shm_addr,
 
 	return mbox_fifo;
 }
-EXPORT_SYMBOL_GPL(vpi_mbox_init);
+EXPORT_SYMBOL_GPL(visp_mbox_init);
 
 static inline int mbox_fifoctrl_init_check(mbox_fifo_ctrl *mbox_fifo)
 {

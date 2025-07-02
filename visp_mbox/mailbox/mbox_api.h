@@ -116,9 +116,9 @@ typedef void (*mbox_driver_cb)(mbox_core_id receiver_id /*,int fd*/);
  * @return Return result
  * @retval mbox_fifo_ctrl point for succeed, NULL for failure
  */
-mbox_fifo_ctrl *vpi_mbox_init(mbox_core_id core_id, uint64_t shm_addr,
-			      uint64_t shm_addr_phy,
-			      uint64_t shm_block_size /*,int fd*/);
+mbox_fifo_ctrl *visp_mbox_init(mbox_core_id core_id, u64 shm_addr,
+			       u64 shm_addr_phy,
+			       u64 shm_block_size);
 
 /**
  * @brief Post meg to the designated receiver
