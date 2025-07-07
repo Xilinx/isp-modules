@@ -55,7 +55,7 @@
 #include <linux/videodev2.h>
 
 struct visp_video_plane {
-	uint32_t dma_addr;
+	uint64_t dma_addr;
 	uint32_t size;
 };
 

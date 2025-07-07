@@ -1012,6 +1012,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 ERR_TO_CAMERA_DISCONNECT:
 	MediaIspDeviceCameraDisConnect(isp_dev, Port, Chn);
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
+	isp_dev->streamon[pad_stream->pad] = 0;
 	return ret;
 }
 
@@ -1208,6 +1209,7 @@ static int visp_buffer_alloc(struct v4l2_subdev *sd, void *arg)
 		dev_err(isp_dev->dev, "%s: failed to alloc dma buffer!\n", __func__);
 		return -ENOMEM;
 	}
+	dev_info(isp_dev->dev, "RDMA Buffer is %llx\n",ext_dma_buf->addr);
 
 	ext_dma_buf->size = ext_buf_info->plane.size;
 	ext_buf_info->plane.dma_addr = (uint32_t)ext_dma_buf->addr;
@@ -1290,6 +1292,7 @@ int visp_buffer_alloc_public(struct visp_dev *isp_dev,
 		dev_err(isp_dev->dev, "%s: failed to alloc dma buffer!\n", __func__);
 		return -ENOMEM;
 	}
+	dev_info(isp_dev->dev, "ISP:%d Port:%d RDMA Buffer is 0x%llx\n", isp_dev->id, ext_buf_info->port, ext_dma_buf->addr);
 
 	ext_dma_buf->size = ext_buf_info->plane.size;
 	ext_buf_info->plane.dma_addr = (uint32_t)ext_dma_buf->addr;
@@ -2450,6 +2453,14 @@ static int visp_probe(struct platform_device *pdev)
 	}
 
 	isp_dev->PortsMask = isp_dev->num_streams;
+
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+        if (ret) {
+		dev_err(&pdev->dev, "dma_set_mask_and_coherent: %d\n", ret);
+                //goto error;
+        }
+
+
 
 	/* Register Callback function*/
 	isp_dev->frameout_cb = Handle_Frameout_Buffer;

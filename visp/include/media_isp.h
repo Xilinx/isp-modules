@@ -91,6 +91,14 @@ typedef enum MediaIspMcmInputSelect_e
 int MediaIspEventCreate(MediaEntityAttr *MediaEntity);
 int MediaIspEventDestroy(MediaEntityAttr *MediaEntity);
 
+typedef struct AtmInfo_s
+{
+	uint32_t PortsMask;
+	uint32_t RefCount;
+} AtmInfo;
+
+
+
 typedef struct MediaIspChn_s
 {
 	MediaFmt Format;
