@@ -71,6 +71,8 @@
 #include "iba.h"
 #include "visp_common.h"
 
+#include "visp_mbox_driver.h"
+
 #define MEDIA_ISP_MCM_BUF_COUNT         4
 #define MEDIA_ISP_EMPTY_BUF_WAIT_TIME   10
 #define MEDIA_ISP_FULL_BUF_WAIT_TIME    120
@@ -262,6 +264,56 @@ int MediaIspDeviceCameraDisConnect(struct visp_dev *isp_dev, uint8_t Port, uint8
 
 #endif
 
+
+static int isp_send_atm_prop_to_rpu(struct visp_dev *isp, CamDeviceHandle_t hCamDevice)
+{
+    int result = 0;
+    payload_packet *packet;
+    uint8_t *p_data;
+    CamDeviceContext_t *pCamDevCtx = (CamDeviceContext_t *)hCamDevice;
+
+    if (NULL == pCamDevCtx)
+        return RET_WRONG_HANDLE;
+
+    packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+    if (!packet) {
+        dev_err(isp->dev, "%s: Failed to allocate memory for packet\n", __func__);
+        return -ENOMEM;
+    }
+
+    p_data = packet->payload;
+    packet->cookie = 0x99;
+    packet->type = CMD;
+    packet->payload_size = 0;
+
+    // Copy instance ID
+    memcpy(p_data, &pCamDevCtx->instanceId, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    // Copy ATM properties (high_mem, is_64bit, node_name)
+    memcpy(p_data, &isp->atm.high_mem_addr, sizeof(uint32_t));
+    p_data += sizeof(uint32_t);
+    packet->payload_size += sizeof(uint32_t);
+
+    memcpy(p_data, &isp->atm.is_64bit, sizeof(int));
+    p_data += sizeof(int);
+    packet->payload_size += sizeof(int);
+
+	result = xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_CMD_SET_ATM, packet,
+            packet->payload_size + payload_extra_size, isp->isp_rpu, MBOX_CORE_APU);
+	if (RET_SUCCESS != result )
+	{
+      return RET_FAILURE;
+   }
+	kfree(packet);
+
+    return result;
+}
+
+
+
+
 int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn);
 int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port, uint8_t Chn)
 {
@@ -318,6 +370,8 @@ int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port, uint8_t 
         for (i = 0; i < NumBufs; i++) {
 		BufPoolCfg.pBaseAddrList[i] = isp_dev->op_a[i];
                 BufPoolCfg.pIplAddrList[i]   = VSI_NULL;
+        dev_err(isp_dev->dev,"%s: buff ADD CMA : %llx ",
+            __func__, isp_dev->op_a[i]);
         }
     } else if (Chn == CAMDEV_BUFCHAIN_RDMA) {
         // create mcm buf pool by camdevice reserved memory
@@ -345,7 +399,22 @@ int MediaIspDeviceCreateBufPool(struct visp_dev *isp_dev, uint8_t Port, uint8_t 
 				BufPoolCfg.pBaseAddrList[i] = isp_dev->ip_a[i];
                 BufPoolCfg.pIplAddrList[i]   = (void *)pIplAddr;
 
+        dev_info(isp_dev->dev,"%s: buff address : %llx ",
+            __func__, isp_dev->ip_a[i]);
+
             }
+	uint32_t high_mem = isp_dev->ip_a[i]>>32U;
+
+	if(high_mem)
+		{
+			isp_dev->atm.high_mem_addr = high_mem;
+			isp_dev->atm.is_64bit = true;
+		}
+
+
+
+	isp_send_atm_prop_to_rpu(isp_dev, IspPort->CamDeviceHandle);
+
         }
     }
 
