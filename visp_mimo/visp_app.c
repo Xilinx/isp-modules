@@ -131,7 +131,7 @@ int MediaIspHalFreeBuf(struct visp_dev *isp_dev, int Port, MediaBuf *BufInfo)
     ExtBufInfo.port = Port;
     ExtBufInfo.plane.dma_addr = BufInfo->Planes[0].DmaAddr;
     visp_buffer_free_public_wrapper(isp_dev, &ExtBufInfo);
-    dev_info(isp_dev->dev," Port %d buffer free: Dma 0x%x Size %d", Port, BufInfo->Planes[0].DmaAddr, BufInfo->Planes[0].DmaSize);
+    dev_info(isp_dev->dev," Port %d buffer free: Dma 0x%llx Size %d", Port, BufInfo->Planes[0].DmaAddr, BufInfo->Planes[0].DmaSize);
 
     return VSI_SUCCESS;
 }

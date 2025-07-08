@@ -228,7 +228,7 @@ typedef struct {
 } MediaFmt;
 
 typedef struct {
-    uint32_t DmaAddr;
+    uint64_t DmaAddr;
 	uint32_t DmaSize;
 } MediaPlane;
 
