@@ -86,9 +86,9 @@
 
 #define VISP_DEFAULT_SENSOR "ox03f10"
 #define VISP_DEFAULT_SENSOR_MODE 0
-#define VISP_DEFAULT_SENSOR_XML "/run/media/mmcblk0p1/OX03f10.xml"
-#define VISP_DEFAULT_SENSOR_MANU_JSON "/run/media/mmcblk0p1/manual_ext.json"
-#define VISP_DEFAULT_SENSOR_AUTO_JSON "/run/media/mmcblk0p1/auto.json"
+#define VISP_DEFAULT_SENSOR_XML "/usr/share/limo_example_jsons/OX03f10.xml"
+#define VISP_DEFAULT_SENSOR_MANU_JSON "/usr/share/limo_example_jsons/manual_ext.json"
+#define VISP_DEFAULT_SENSOR_AUTO_JSON "/usr/share/limo_example_jsons/auto.json"
 
 static uint32_t SensorDevId[VISP_PORT_NR] = {2, 6, 5, 10};
 
