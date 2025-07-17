@@ -214,7 +214,7 @@ int apu_mailbox_read(uint32_t IpiSrcMask, uint32_t *isp_id)
 				apu_fifo_ctrl, MBOX_CORE_RPU0,
 				MBOX_CORE_APU)) //rpu0 check  the msg from MBOX_CORE_APU
 		{
-			pr_err("there is no msg in Share memory!\n");
+			pr_err("there is no msg in APU Share memory!\n");
 		}
 		else
 		{
