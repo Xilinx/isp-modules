@@ -859,12 +859,12 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev, int p
 
     dev_dbg(isp_dev->dev, "Searching for input sub-device...\n");
 
-    for (pad = port; pad < VISP_PAD_NR; pad++)
-    {
+
+	pad = port * VISP_PORT_PAD_NR;
         // Check if this pad is a SINK (input pad)
         if (!(isp_dev->pads[pad].flags & MEDIA_PAD_FL_SINK)) {
             dev_dbg(isp_dev->dev, "Pad %d is not a sink, skipping...\n", pad);
-            continue;
+		return NULL;
         }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
@@ -875,22 +875,19 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev, int p
 
         if (!remote_pad) {
             dev_dbg(isp_dev->dev, "Pad %d has no remote connection.\n", pad);
-            continue;
+		return NULL;
         }
 
         if (!is_media_entity_v4l2_subdev(remote_pad->entity)) {
             dev_dbg(isp_dev->dev, "Pad %d remote entity is not a sub-device.\n", pad);
-            continue;
+		return NULL;
         }
 
         subdev = media_entity_to_v4l2_subdev(remote_pad->entity);
         dev_info(isp_dev->dev, "Found input sub-device: %s on pad %d\n", subdev->name, pad);
 
         return subdev; // Return the first valid input sub-device found
-    }
 
-    //dev_err(isp_dev->dev, "No input sub-device found!\n");
-    return NULL;
 }
 
 
