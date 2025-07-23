@@ -566,3 +566,54 @@ RESULT vsi_cam_device_sensor_get_connect_port_info(
 
 	return result;
 }
+
+RESULT hal_i2c_init(struct visp_dev *isp_dev,
+		    cam_device_handle_t h_cam_device,
+		    hal_i2c_config_t *p_hal_i2c_config)
+{
+	RESULT result = RET_SUCCESS;
+	payload_packet *packet = NULL;
+	u8 *p_data = NULL;
+	cam_device_context_t *p_cam_dev_ctx = (cam_device_context_t *)h_cam_device;
+
+	if (!p_cam_dev_ctx)
+		return RET_WRONG_HANDLE;
+
+	if (!p_hal_i2c_config)
+		return RET_NULL_POINTER;
+
+	p_cam_dev_ctx->cookie++;
+
+	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
+	if (!packet) {
+		dev_err(isp_dev->dev, "hali2cinit FAILED TO Allocate memory\n");
+		return -ENOMEM;
+	}
+
+	packet->cookie = p_cam_dev_ctx->cookie;
+	packet->type = CMD;
+	packet->payload_size = 0;
+
+	p_data = packet->payload;
+
+	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(u32));
+	packet->payload_size += sizeof(uint32_t);
+	p_data += sizeof(uint32_t);
+
+	memcpy(p_data, p_hal_i2c_config, sizeof(hal_i2c_config_t));
+	packet->payload_size += sizeof(hal_i2c_config_t);
+
+	if (packet->payload_size > MAX_ITEM) {
+		dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",
+			packet->payload_size, MAX_ITEM);
+		kfree(packet);
+		return RET_OUTOFRANGE;
+	}
+
+	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_I2C_INIT, packet,
+				 packet->payload_size + payload_extra_size,
+				 isp_dev->isp_rpu, MBOX_CORE_APU);
+
+	kfree(packet);
+	return result;
+}

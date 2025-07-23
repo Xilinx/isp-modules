@@ -493,6 +493,18 @@ typedef struct cam_device_sensor_connect_port_info_s {
 	char name[20];	  /**< Pointer to sensor name */
 } cam_device_sensor_connect_port_info_t;
 
+typedef enum hal_i2c_mode_e {
+	HAL_AXI_I2C_MODE	= 0x0000,
+	HAL_PS_I2C_MODE		= 0x0001,
+	DUMMY_HAL_I2C_MODE	= 0xDEADFEED
+} hal_i2c_mode_t;
+
+typedef struct hal_i2c_config_s {
+	uint32_t	h_hal_i2c;
+	uint8_t	i2c_bus_id;
+	hal_i2c_mode_t	hal_i2c_mode;
+} hal_i2c_config_t;
+
 /****************************************************************************/
 /**
  * @brief   Get the sensor information, e.g., sensor name, calibration file,
@@ -985,6 +997,9 @@ RESULT vsi_cam_device_sensor_get_connect_port_info(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
 	cam_device_mcm_port_id_t port_id,
 	cam_device_sensor_connect_port_info_t *p_port_info);
+
+RESULT hal_i2c_init(struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
+		    hal_i2c_config_t *p_hal_i2c_config);
 
 /* @} cam_device_sensor */
 
