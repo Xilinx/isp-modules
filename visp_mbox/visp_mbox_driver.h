@@ -59,7 +59,6 @@
 #include "sensor_cmd.h"
 #define CHAR_DEV_NAME "mailbox_dev"
 #define SUCCESS 0
-#include <linux/miscdevice.h>
 
 #define VISP_MBOX_RPU6_0 0
 #define VISP_MBOX_RPU7_1 1
@@ -83,6 +82,8 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 void mailbox_init(uint32_t cpu, uint64_t MBOX_FIFO_START_ADDR,
 		  uint64_t mbox_fifo_start_addr_phy);
 uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data);
+// extern int handle_frameout_buffer(void *Enque_Buff_L, struct visp_dev
+// *isp_dev); int (* exported_func1)(void *,struct visp_dev *isp_dev);
 typedef struct payload_user_template {
 	payload_type type;
 	mb_cmd_id_e cmd_id;
@@ -101,12 +102,13 @@ struct rpu_dev {
 	struct device *dev;
 	int rpu_id;
 	dev_t devno;
+	struct cdev cdev;
+	struct mutex lock;
 	struct mutex ack_lock;
 	struct mutex read_lock;
 	struct mutex rpu_lock;
 	struct mutex write_lock;
 	struct mutex userapp_lock;
-	struct miscdevice visp_mbox_dev;
 	int app_wait_flag;
 	struct list_head node;
 	struct kref refcount;
