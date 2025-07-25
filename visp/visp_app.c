@@ -2005,15 +2005,24 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	cam_device_sensor_drv_handle_t SensorDrvHandle = NULL;
 	cam_device_sensor_drv_cfg_t devSensorDrv = {NULL, 0};
 	char sensor_name[MEDIA_ISP_CHAR_LENGTH_MAX];
+	hal_i2c_config_t hal_i2c_config;
 
 	/*Enter port Level Critical Section */
 
 	memset(&CamConfig, 0, sizeof(CamConfig));
 
+	/****Show procfs parameters*****/
+	ret_val = media_isp_calib_load_isp_config(isp_dev, port);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(isp_dev->dev, "%s: load sensor info failed %d",
+			__func__, ret_val);
+		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
+	}
+
 	CamConfig.isp_hw_id = isp_dev->id;
 	CamConfig.input_cfg.input_type = CAMDEV_INPUT_TYPE_SENSOR;
 	if (isp_port->cam_device_handle)
-		return VSI_SUCCESS;
+		goto CHANGE_SENSOR_MODE;
 
 	if (isp_dev->ports_mask != 0x01) {
 		CamConfig.work_cfg.work_mode = CAMDEV_WORK_MODE_MCM;
@@ -2037,15 +2046,19 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 		dev_err(isp_dev->dev,
 			"CamDevice Creat Isp Device Handle Failed, ret is %d",
 			ret_val);
+		isp_port->cam_device_handle = VSI_NULL;
 		ret_val = VSI_ERR_TIMEOUT;
 		return ret_val;
 	}
 
-	/****Show procfs parameters*****/
-	ret_val = media_isp_calib_load_isp_config(isp_dev, port);
+	memset(&hal_i2c_config, 0, sizeof(hal_i2c_config));
+	hal_i2c_config.hal_i2c_mode = HAL_PS_I2C_MODE;
+	hal_i2c_config.i2c_bus_id = 0;
+
+	ret_val = hal_i2c_init(isp_dev, isp_port->cam_device_handle, &hal_i2c_config);
 	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev, "%s: load sensor info failed %d",
-			__func__, ret_val);
+		dev_err(isp_dev->dev, "I2C init Failed, ret is %d", ret_val);
+		ret_val = VSI_ERR_TIMEOUT;
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
 
@@ -2091,6 +2104,7 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	kfree(devSensorDrv.sensor_drv_handle);
 
 	/***** Query Sensor *****/
+CHANGE_SENSOR_MODE:
 	ret_val = media_isp_calib_query_sensor(isp_dev, port);
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev, "%s: query sensor failed %d", __func__,
