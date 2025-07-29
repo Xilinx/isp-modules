@@ -229,7 +229,7 @@ typedef struct {
 } media_fmt;
 
 typedef struct {
-	uint32_t dma_addr;
+	uint64_t dma_addr;
 	uint32_t dma_size;
 } media_plane;
 
