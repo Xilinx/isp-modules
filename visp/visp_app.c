@@ -283,76 +283,17 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 	return VSI_SUCCESS;
 }
 
-static int isp_read_atm_properties(struct visp_dev *isp)
-{
-	struct device_node *mem_np;
-	const __be32 *prop;
-	u64 mem_addr;
-
-	// Generate the reserved memory node name dynamically
-	snprintf(isp->atm.node_name, sizeof(isp->atm.node_name),
-		 "isp%d_reserve_memory", isp->id);
-
-	// Locate the reserved memory node
-	mem_np = of_find_node_by_name(NULL, isp->atm.node_name);
-	if (!mem_np) {
-		dev_dbg(isp->dev, "Reserved memory '%s' not found, \
-				defaulting to 32-bit memory\n",
-			isp->atm.node_name);
-		isp->atm.high_mem_addr = 0;
-		isp->atm.is_64bit = false;
-		return 0; // No error, just treating as 32-bit mode
-	}
-
-	// Read the 'reg' property from the device tree
-	prop = of_get_property(mem_np, "reg", NULL);
-	if (!prop) {
-		dev_dbg(isp->dev, "Not found 'reg' property from '%s',\
-				defaulting to 32-bit memory\n",
-			isp->atm.node_name);
-		isp->atm.high_mem_addr = 0;
-		isp->atm.is_64bit = false;
-		of_node_put(mem_np);
-		return 0;
-	}
-
-	// Extract 64-bit base address (first two cells)
-	mem_addr = of_read_number(prop, 2);
-
-	// Store the high 32-bit value
-	isp->atm.high_mem_addr = (u32)(mem_addr >> 32);
-
-	// Determine if it's 32-bit or 64-bit based on high address
-	isp->atm.is_64bit = (isp->atm.high_mem_addr ? 1 : 0);
-
-	dev_dbg(isp->dev, "Extracted high 32-bit address from %s: \
-					0x%x (%s-bit memory)\n",
-		isp->atm.node_name, isp->atm.high_mem_addr,
-		isp->atm.is_64bit ? "64" : "32");
-
-	of_node_put(mem_np);
-	return 0;
-}
-
 static int isp_send_atm_prop_to_rpu(struct visp_dev *isp,
 				    cam_device_handle_t h_cam_device)
 {
 	int result = 0;
 	payload_packet *packet;
 	uint8_t *p_data;
-	int ret = 0;
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
 
 	if (p_cam_dev_ctx == NULL)
 		return RET_WRONG_HANDLE;
-
-	ret = isp_read_atm_properties(isp);
-	if (ret) {
-		dev_err(isp->dev, "Failed to read ATM properties for ISP%d\n",
-			isp->id);
-		return ret;
-	}
 
 	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
 	if (!packet) {
@@ -407,6 +348,12 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 		num_bufs = isp_port->isp_chns[chn].num_bufs;
 	else
 		num_bufs = isp_port->mcm_attr.num_bufs;
+
+	if (num_bufs <= 0) {
+		dev_err(isp_dev->dev, "%s: invalid buffer allocations\n", __func__);
+		return -EINVAL;
+	}
+
 	/**** STEP 1.INIT BUF CHAIN **********/
 	memset(&BufferChain, 0, sizeof(cam_device_buf_chain_config_t));
 	BufferChain.skip_interval = 0;
@@ -462,12 +409,19 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 			}
 			p_media_buffer->index = i;
 			p_media_buffer->base_address =
-			    isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr;
+			    (isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr) & (0xFFFFFFFF);
 
 			dev_dbg(isp_dev->dev,
 				" %s %d idx:%d Add : %x size 0x%x \n", __func__,
 				__LINE__, p_media_buffer->index,
 				p_media_buffer->base_address, buf_size);
+
+			uint32_t high_mem = (isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr) >> 32;
+			if(high_mem)
+			{
+				isp_dev->atm.high_mem_addr = high_mem;
+				isp_dev->atm.is_64bit = true;
+			}
 		}
 	} else if (chn == CAMDEV_BUFCHAIN_RDMA) {
 		// create mcm buf pool by camdevice reserved memory
@@ -635,6 +589,7 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 	}
 	PathStatus.out_path_enable |= (1 << chn);
 
+	isp_send_atm_prop_to_rpu(isp_dev, isp_port->cam_device_handle);
 	/*Set streaming state*/
 	ret_val = vsi_cam_device_set_path_streaming(
 	    isp_dev, isp_port->cam_device_handle, &PathStatus);
@@ -2156,8 +2111,6 @@ CHANGE_SENSOR_MODE:
 	/*Exit port Level Critical Section */
 
 	iba_init_send_command(isp_dev, isp_port->cam_device_handle);
-
-	isp_send_atm_prop_to_rpu(isp_dev, isp_port->cam_device_handle);
 
 	return ret_val;
 

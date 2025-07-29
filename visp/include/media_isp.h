@@ -91,6 +91,13 @@ typedef enum media_isp_mcm_input_select_e {
 int media_isp_event_create(media_entity_attr *media_entity);
 int media_isp_event_destroy(media_entity_attr *media_entity);
 
+typedef struct atm_info_s
+{
+   uint32_t ports_mask;
+   uint32_t ref_count;
+} atm_info;
+
+
 typedef struct media_isp_chn_s {
 	media_fmt format;
 	uint8_t num_bufs;
