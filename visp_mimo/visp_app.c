@@ -70,6 +70,7 @@
 #include "cam_device_sensor_api.h"
 #include "iba.h"
 #include "visp_common.h"
+#include "visp_mbox_driver.h"
 
 #define MEDIA_ISP_MCM_BUF_COUNT 4
 #define MEDIA_ISP_EMPTY_BUF_WAIT_TIME 10
@@ -276,6 +277,54 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 	return VSI_SUCCESS;
 }
 
+static int isp_send_atm_prop_to_rpu(struct visp_dev *isp,
+				    cam_device_handle_t h_cam_device)
+{
+	int result = 0;
+	payload_packet *packet;
+	uint8_t *p_data;
+	cam_device_context_t *p_cam_dev_ctx =
+	    (cam_device_context_t *)h_cam_device;
+
+	if (p_cam_dev_ctx == NULL)
+		return RET_WRONG_HANDLE;
+
+	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+	if (!packet) {
+		dev_err(isp->dev, "%s: Failed to allocate memory for packet\n",
+			__func__);
+		return -ENOMEM;
+	}
+
+	p_data = packet->payload;
+	packet->cookie = 0x99;
+	packet->type = CMD;
+	packet->payload_size = 0;
+
+	// Copy instance id
+	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	packet->payload_size += sizeof(uint32_t);
+
+	// Copy ATM properties (high_mem, is_64bit, node_name)
+	memcpy(p_data, &isp->atm.high_mem_addr, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	packet->payload_size += sizeof(uint32_t);
+
+	memcpy(p_data, &isp->atm.is_64bit, sizeof(int));
+	p_data += sizeof(int);
+	packet->payload_size += sizeof(int);
+
+	result =
+	    xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_CMD_SET_ATM, packet,
+				     packet->payload_size + payload_extra_size,
+				     isp->isp_rpu, MBOX_CORE_APU);
+	if (result != RET_SUCCESS)
+		return RET_FAILURE;
+	kfree(packet);
+
+	return result;
+}
 
 int media_isp_device_create_buf_pool(struct visp_dev *isp_dev, uint8_t port,
 					 uint8_t chn);
@@ -373,7 +422,18 @@ int media_isp_device_create_buf_pool(struct visp_dev *isp_dev, uint8_t port,
 					isp_dev->ip_a[i];
 				BufPoolCfg.p_ipl_addr_list[i] =
 					(void *)pIpl_addr;
+				dev_info(isp_dev->dev,"%s: buff address : %llx ",
+				__func__, isp_dev->ip_a[i]);
+
 			}
+			uint32_t high_mem = isp_dev->ip_a[i]>>32U;
+
+			if(high_mem)
+			{
+				isp_dev->atm.high_mem_addr = high_mem;
+				isp_dev->atm.is_64bit = true;
+			}
+			isp_send_atm_prop_to_rpu(isp_dev, isp_port->cam_device_handle);
 		}
 	}
 

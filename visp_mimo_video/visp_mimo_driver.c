@@ -2320,6 +2320,13 @@ int isp_mimo_probe(struct platform_device *pdev)
 	device->event_misc.mode = 0666;
 	device->event_misc.parent = &pdev->dev;
 
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	if (ret) {
+		dev_err(&pdev->dev, "dma_set_mask_and_coherent: %d\n", ret);
+		return -ENOMEM;
+		//goto error;
+	}
+
 	ret = misc_register(&device->event_misc);
 	if (ret)
 		return ret;
