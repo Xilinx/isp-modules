@@ -856,7 +856,7 @@ error_free_buf:
  * Return: Pointer to the v4l2_subdev structure if found, NULL otherwise.
  */
 
-static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev)
+static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev, int port)
 {
 	struct media_pad *remote_pad;
 	struct v4l2_subdev *subdev;
@@ -864,7 +864,7 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev)
 
 	dev_dbg(isp_dev->dev, "Searching for input sub-device...\n");
 
-	for (pad = 0; pad < VISP_PAD_NR; pad++) {
+	for (pad = port; pad < VISP_PAD_NR; pad++) {
 		// Check if this pad is a SINK (input pad)
 		if (!(isp_dev->pads[pad].flags & MEDIA_PAD_FL_SINK)) {
 			dev_dbg(isp_dev->dev,
@@ -978,7 +978,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 
-		subdev = visp_get_input_subdev(isp_dev);
+		subdev = visp_get_input_subdev(isp_dev, port);
 		if (!subdev) {
 			// dev_err(isp_dev->dev, "No valid input sub-device
 			// found!\n");
@@ -997,7 +997,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 	else {
 		media_isp_stream_off(isp_dev, port, chn);
-		subdev = visp_get_input_subdev(isp_dev);
+		subdev = visp_get_input_subdev(isp_dev, port);
 		if (!subdev) {
 			dev_err(isp_dev->dev,
 				"No valid input sub-device found!\n");
