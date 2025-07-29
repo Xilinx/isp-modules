@@ -105,14 +105,15 @@ static void visp_mbox_event_notified(struct work_struct *work)
 		dev_err(NULL, "Unable to find rpud_dev from mbox_work\n");
 		return;
 	}
-	/* Send a message to the RX mailbox channel */
-	(void)mbox_send_message(rpu->rx_chan, NULL);
 
 	/* Iterate over all notify IDs and process them */
 	//    idr_for_each(&isp_dev->notifyids, event_notified_idr_cb, isp_dev);
 
 	/* Execute the tasklet function */
 	visp_mbox_read_cmd(rpu);
+
+	/* Send a message to the RX mailbox channel */
+	(void)mbox_send_message(rpu->rx_chan, NULL);
 }
 
 static void visp_mbox_tx_done(struct mbox_client *cl, void *msg, int r)
