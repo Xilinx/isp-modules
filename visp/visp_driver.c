@@ -953,6 +953,14 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				goto ERR_TO_CAMERA_DISCONNECT;
 				return ret;
 			}
+			subdev = visp_get_input_subdev(isp_dev, port);
+			if (!subdev) {
+				 dev_err(isp_dev->dev, "No valid input sub-device found!\n");
+			} else {
+				// call s_stream
+				v4l2_subdev_call(subdev, video, s_stream, 1);
+			}
+
 #endif
 		} else {
 			isp_dev->isp_ports[port].camera_connect_ref_cnt++;
@@ -978,15 +986,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 
-		subdev = visp_get_input_subdev(isp_dev, port);
-		if (!subdev) {
-			// dev_err(isp_dev->dev, "No valid input sub-device
-			// found!\n");
-		} else {
-			// call s_stream
-			v4l2_subdev_call(subdev, video, s_stream, 1);
-		}
-		ret = media_isp_device_stream_on(isp_dev, port, chn);
+			ret = media_isp_device_stream_on(isp_dev, port, chn);
 		if (ret != 0) {
 			dev_err(isp_dev->dev, "%s %d FAILED to stream  on\n",
 				__func__, __LINE__);
@@ -997,15 +997,17 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 	else {
 		media_isp_stream_off(isp_dev, port, chn);
-		subdev = visp_get_input_subdev(isp_dev, port);
-		if (!subdev) {
-			dev_err(isp_dev->dev,
-				"No valid input sub-device found!\n");
-		} else {
-			// call s_stream
-			v4l2_subdev_call(subdev, video, s_stream, 0);
-		}
 
+		if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
+			subdev = visp_get_input_subdev(isp_dev, port);
+			if (!subdev) {
+				dev_err(isp_dev->dev,
+					"No valid input sub-device found!\n");
+			} else {
+				// call s_stream
+				v4l2_subdev_call(subdev, video, s_stream, 0);
+			}
+		}
 		isp_dev->streamon[pad_stream->pad] = 0;
 	}
 
