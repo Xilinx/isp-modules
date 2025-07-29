@@ -2551,6 +2551,8 @@ static const struct of_device_id visp_of_match[] = {
 	{/* sentinel */},
 };
 
+MODULE_DEVICE_TABLE(of, visp_of_match);
+
 static struct platform_driver visp_driver = {
 	.probe = visp_probe,
 	.remove = visp_remove,

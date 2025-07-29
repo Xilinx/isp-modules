@@ -1010,6 +1010,9 @@ static const struct of_device_id visp_mbox_of_match[] = {
 	{.compatible = "xlnx,mbox"},
 	{/* sentinel */},
 };
+
+MODULE_DEVICE_TABLE(of, visp_mbox_of_match);
+
 static struct platform_driver visp_mbox_driver = {
 	.probe = visp_mbox_probe,
 	.remove = visp_mbox_remove,
