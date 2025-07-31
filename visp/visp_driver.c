@@ -95,585 +95,588 @@ static uint32_t sensor_dev_id[VISP_PORT_NR] = {2, 6, 5, 10};
 
 struct visp_format visp_mp_fmts[] = {
 	{
-	.fourcc = V4L2_PIX_FMT_NV16,
-	.code = MEDIA_BUS_FMT_YUYV8_2X8,
+		.fourcc = V4L2_PIX_FMT_NV16,
+		.code = MEDIA_BUS_FMT_YUYV8_2X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_NV12,
-	.code = MEDIA_BUS_FMT_YUYV8_1_5X8,
+		.fourcc = V4L2_PIX_FMT_NV12,
+		.code = MEDIA_BUS_FMT_YUYV8_1_5X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_YUYV,
-	.code = MEDIA_BUS_FMT_YUYV8_1X16,
+		.fourcc = V4L2_PIX_FMT_YUYV,
+		.code = MEDIA_BUS_FMT_YUYV8_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR8,
-	.code = MEDIA_BUS_FMT_SBGGR8_1X8,
+		.fourcc = V4L2_PIX_FMT_SBGGR8,
+		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG8,
-	.code = MEDIA_BUS_FMT_SGBRG8_1X8,
+		.fourcc = V4L2_PIX_FMT_SGBRG8,
+		.code = MEDIA_BUS_FMT_SGBRG8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG8,
-	.code = MEDIA_BUS_FMT_SGRBG8_1X8,
+		.fourcc = V4L2_PIX_FMT_SGRBG8,
+		.code = MEDIA_BUS_FMT_SGRBG8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB8,
-	.code = MEDIA_BUS_FMT_SRGGB8_1X8,
+		.fourcc = V4L2_PIX_FMT_SRGGB8,
+		.code = MEDIA_BUS_FMT_SRGGB8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR10,
-	.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+		.fourcc = V4L2_PIX_FMT_SBGGR10,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG10,
-	.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGBRG10,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG10,
-	.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGRBG10,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB10,
-	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.fourcc = V4L2_PIX_FMT_SRGGB10,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR12,
-	.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+		.fourcc = V4L2_PIX_FMT_SBGGR12,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG12,
-	.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGBRG12,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG12,
-	.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGRBG12,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB12,
-	.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+		.fourcc = V4L2_PIX_FMT_SRGGB12,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_P010,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P010,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_GREY,
-	.code = MEDIA_BUS_FMT_Y8_1X8,
+		.fourcc = V4L2_PIX_FMT_GREY,
+		.code = MEDIA_BUS_FMT_Y8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_Y10BPACK,
-	.code = MEDIA_BUS_FMT_Y10_1X10,
+		.fourcc = V4L2_PIX_FMT_Y10BPACK,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_Y10DWA,
-	.code = MEDIA_BUS_FMT_Y10_1X10,
+		.fourcc = V4L2_PIX_FMT_Y10DWA,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_Y10,
-	.code = MEDIA_BUS_FMT_Y10_1X10,
+		.fourcc = V4L2_PIX_FMT_Y10,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_P00BPACK,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P00BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_P00DWA,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P00DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
-	// {
-	//	 .fourcc	= V4L2_PIX_FMT_P02BPACK,
-	//	 .code	  = MEDIA_BUS_FMT_YUYV12_2X12,
-	// },
+	/* {
+	 *	.fourcc	= V4L2_PIX_FMT_P02BPACK,
+	 *	.code	= MEDIA_BUS_FMT_YUYV12_2X12,
+	 * },
+	 */
 	{
-	.fourcc = V4L2_PIX_FMT_P20BPACK,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P20BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_P20DWA,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P20DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_P210,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
-	// {
-	//	 .fourcc	= V4L2_PIX_FMT_P22BPACK,
-	//	 .code	  = MEDIA_BUS_FMT_YUYV12_2X12,
-	// },
+	/* {
+	 *	.fourcc	= V4L2_PIX_FMT_P22BPACK,
+	 *	.code	= MEDIA_BUS_FMT_YUYV12_2X12,
+	 * },
+	 */
 	{
-	.fourcc = V4L2_PIX_FMT_I20BPACK,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_I20BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_I210,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_I210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_M48BPACK,
-	.code = MEDIA_BUS_FMT_YUV8_1X24,
+		.fourcc = V4L2_PIX_FMT_M48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_I48BPACK,
-	.code = MEDIA_BUS_FMT_YUV8_1X24,
+		.fourcc = V4L2_PIX_FMT_I48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_I48DWA,
-	.code = MEDIA_BUS_FMT_YUV8_1X24,
+		.fourcc = V4L2_PIX_FMT_I48DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_I40DWA,
-	.code = MEDIA_BUS_FMT_YUV8_1X24,
+		.fourcc = V4L2_PIX_FMT_I40DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_RGB24,
-	.code = MEDIA_BUS_FMT_RGB888_1X24,
+		.fourcc = V4L2_PIX_FMT_RGB24,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_RGB24DWA,
-	.code = MEDIA_BUS_FMT_RGB888_1X24,
+		.fourcc = V4L2_PIX_FMT_RGB24DWA,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_RGB24P,
-	.code = MEDIA_BUS_FMT_RGB888_3X8,
+		.fourcc = V4L2_PIX_FMT_RGB24P,
+		.code = MEDIA_BUS_FMT_RGB888_3X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR10BPACK,
-	.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+		.fourcc = V4L2_PIX_FMT_SBGGR10BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG10BPACK,
-	.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGBRG10BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG10BPACK,
-	.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGRBG10BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB10BPACK,
-	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.fourcc = V4L2_PIX_FMT_SRGGB10BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR10DWA,
-	.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+		.fourcc = V4L2_PIX_FMT_SBGGR10DWA,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG10DWA,
-	.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGBRG10DWA,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG10DWA,
-	.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGRBG10DWA,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB10DWA,
-	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.fourcc = V4L2_PIX_FMT_SRGGB10DWA,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR12BPACK,
-	.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+		.fourcc = V4L2_PIX_FMT_SBGGR12BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG12BPACK,
-	.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGBRG12BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG12BPACK,
-	.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGRBG12BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB12BPACK,
-	.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+		.fourcc = V4L2_PIX_FMT_SRGGB12BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR12DWA,
-	.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+		.fourcc = V4L2_PIX_FMT_SBGGR12DWA,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG12DWA,
-	.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGBRG12DWA,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG12DWA,
-	.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGRBG12DWA,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB12DWA,
-	.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+		.fourcc = V4L2_PIX_FMT_SRGGB12DWA,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR14BPACK,
-	.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+		.fourcc = V4L2_PIX_FMT_SBGGR14BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG14BPACK,
-	.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGBRG14BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG14BPACK,
-	.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGRBG14BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB14BPACK,
-	.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+		.fourcc = V4L2_PIX_FMT_SRGGB14BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR14DWA,
-	.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+		.fourcc = V4L2_PIX_FMT_SBGGR14DWA,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG14DWA,
-	.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGBRG14DWA,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG14DWA,
-	.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGRBG14DWA,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB14DWA,
-	.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+		.fourcc = V4L2_PIX_FMT_SRGGB14DWA,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR14,
-	.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+		.fourcc = V4L2_PIX_FMT_SBGGR14,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG14,
-	.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGBRG14,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG14,
-	.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGRBG14,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB14,
-	.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+		.fourcc = V4L2_PIX_FMT_SRGGB14,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR16,
-	.code = MEDIA_BUS_FMT_SBGGR16_1X16,
+		.fourcc = V4L2_PIX_FMT_SBGGR16,
+		.code = MEDIA_BUS_FMT_SBGGR16_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG16,
-	.code = MEDIA_BUS_FMT_SGBRG16_1X16,
+		.fourcc = V4L2_PIX_FMT_SGBRG16,
+		.code = MEDIA_BUS_FMT_SGBRG16_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG16,
-	.code = MEDIA_BUS_FMT_SGRBG16_1X16,
+		.fourcc = V4L2_PIX_FMT_SGRBG16,
+		.code = MEDIA_BUS_FMT_SGRBG16_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB16,
-	.code = MEDIA_BUS_FMT_SRGGB16_1X16,
+		.fourcc = V4L2_PIX_FMT_SRGGB16,
+		.code = MEDIA_BUS_FMT_SRGGB16_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR24,
-	.code = MEDIA_BUS_FMT_SBGGR24_1X24,
+		.fourcc = V4L2_PIX_FMT_SBGGR24,
+		.code = MEDIA_BUS_FMT_SBGGR24_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG24,
-	.code = MEDIA_BUS_FMT_SGBRG24_1X24,
+		.fourcc = V4L2_PIX_FMT_SGBRG24,
+		.code = MEDIA_BUS_FMT_SGBRG24_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG24,
-	.code = MEDIA_BUS_FMT_SGRBG24_1X24,
+		.fourcc = V4L2_PIX_FMT_SGRBG24,
+		.code = MEDIA_BUS_FMT_SGRBG24_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB24,
-	.code = MEDIA_BUS_FMT_SRGGB24_1X24,
+		.fourcc = V4L2_PIX_FMT_SRGGB24,
+		.code = MEDIA_BUS_FMT_SRGGB24_1X24,
 	},
 };
 
 struct visp_format visp_sp_fmts[] = {
 	{
-	.fourcc = V4L2_PIX_FMT_NV16,
-	.code = MEDIA_BUS_FMT_YUYV8_2X8,
+		.fourcc = V4L2_PIX_FMT_NV16,
+		.code = MEDIA_BUS_FMT_YUYV8_2X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_NV12,
-	.code = MEDIA_BUS_FMT_YUYV8_1_5X8,
+		.fourcc = V4L2_PIX_FMT_NV12,
+		.code = MEDIA_BUS_FMT_YUYV8_1_5X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_YUYV,
-	.code = MEDIA_BUS_FMT_YUYV8_1X16,
+		.fourcc = V4L2_PIX_FMT_YUYV,
+		.code = MEDIA_BUS_FMT_YUYV8_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_P010,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P010,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_GREY,
-	.code = MEDIA_BUS_FMT_Y8_1X8,
+		.fourcc = V4L2_PIX_FMT_GREY,
+		.code = MEDIA_BUS_FMT_Y8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_Y10BPACK,
-	.code = MEDIA_BUS_FMT_Y10_1X10,
+		.fourcc = V4L2_PIX_FMT_Y10BPACK,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_Y10DWA,
-	.code = MEDIA_BUS_FMT_Y10_1X10,
+		.fourcc = V4L2_PIX_FMT_Y10DWA,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_Y10,
-	.code = MEDIA_BUS_FMT_Y10_1X10,
+		.fourcc = V4L2_PIX_FMT_Y10,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_P00BPACK,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P00BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_P00DWA,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P00DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
-	// {
-	//	 .fourcc	= V4L2_PIX_FMT_P02BPACK,
-	//	 .code	  = MEDIA_BUS_FMT_YUYV12_2X12,
-	// },
+	/* {
+	 *	.fourcc	= V4L2_PIX_FMT_P02BPACK,
+	 *	.code	= MEDIA_BUS_FMT_YUYV12_2X12,
+	 * },
+	 */
 	{
-	.fourcc = V4L2_PIX_FMT_P20BPACK,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
-	},
-	{
-	.fourcc = V4L2_PIX_FMT_P20DWA,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P20BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_P210,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
-	},
-	// {
-	//	 .fourcc	= V4L2_PIX_FMT_P22BPACK,
-	//	 .code	  = MEDIA_BUS_FMT_YUYV12_2X12,
-	// },
-	{
-	.fourcc = V4L2_PIX_FMT_I210,
-	.code = MEDIA_BUS_FMT_YUYV10_2X10,
+		.fourcc = V4L2_PIX_FMT_P20DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_M48BPACK,
-	.code = MEDIA_BUS_FMT_YUV8_1X24,
+		.fourcc = V4L2_PIX_FMT_P210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	/* {
+	 *	.fourcc	= V4L2_PIX_FMT_P22BPACK,
+	 *	.code	= MEDIA_BUS_FMT_YUYV12_2X12,
+	 * },
+	 */
+	{
+		.fourcc = V4L2_PIX_FMT_I210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_I48BPACK,
-	.code = MEDIA_BUS_FMT_YUV8_1X24,
+		.fourcc = V4L2_PIX_FMT_M48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_I48DWA,
-	.code = MEDIA_BUS_FMT_YUV8_1X24,
+		.fourcc = V4L2_PIX_FMT_I48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_I40DWA,
-	.code = MEDIA_BUS_FMT_YUV8_1X24,
+		.fourcc = V4L2_PIX_FMT_I48DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_RGB24,
-	.code = MEDIA_BUS_FMT_RGB888_1X24,
+		.fourcc = V4L2_PIX_FMT_I40DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_RGB24DWA,
-	.code = MEDIA_BUS_FMT_RGB888_1X24,
+		.fourcc = V4L2_PIX_FMT_RGB24,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_RGB24P,
-	.code = MEDIA_BUS_FMT_RGB888_3X8,
+		.fourcc = V4L2_PIX_FMT_RGB24DWA,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24P,
+		.code = MEDIA_BUS_FMT_RGB888_3X8,
 	},
 };
 
-// main path
+/* main path */
 struct visp_format visp_raw_fmts[] = {
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR8,
-	.code = MEDIA_BUS_FMT_SBGGR8_1X8,
+		.fourcc = V4L2_PIX_FMT_SBGGR8,
+		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG8,
-	.code = MEDIA_BUS_FMT_SGBRG8_1X8,
+		.fourcc = V4L2_PIX_FMT_SGBRG8,
+		.code = MEDIA_BUS_FMT_SGBRG8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG8,
-	.code = MEDIA_BUS_FMT_SGRBG8_1X8,
+		.fourcc = V4L2_PIX_FMT_SGRBG8,
+		.code = MEDIA_BUS_FMT_SGRBG8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB8,
-	.code = MEDIA_BUS_FMT_SRGGB8_1X8,
+		.fourcc = V4L2_PIX_FMT_SRGGB8,
+		.code = MEDIA_BUS_FMT_SRGGB8_1X8,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR10,
-	.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+		.fourcc = V4L2_PIX_FMT_SBGGR10,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG10,
-	.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGBRG10,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG10,
-	.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGRBG10,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB10,
-	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.fourcc = V4L2_PIX_FMT_SRGGB10,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR12,
-	.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+		.fourcc = V4L2_PIX_FMT_SBGGR12,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG12,
-	.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGBRG12,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG12,
-	.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGRBG12,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB12,
-	.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+		.fourcc = V4L2_PIX_FMT_SRGGB12,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR10BPACK,
-	.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+		.fourcc = V4L2_PIX_FMT_SBGGR10BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG10BPACK,
-	.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGBRG10BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG10BPACK,
-	.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGRBG10BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB10BPACK,
-	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.fourcc = V4L2_PIX_FMT_SRGGB10BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR10DWA,
-	.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+		.fourcc = V4L2_PIX_FMT_SBGGR10DWA,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG10DWA,
-	.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGBRG10DWA,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG10DWA,
-	.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+		.fourcc = V4L2_PIX_FMT_SGRBG10DWA,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB10DWA,
-	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.fourcc = V4L2_PIX_FMT_SRGGB10DWA,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR12BPACK,
-	.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+		.fourcc = V4L2_PIX_FMT_SBGGR12BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG12BPACK,
-	.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGBRG12BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG12BPACK,
-	.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGRBG12BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB12BPACK,
-	.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+		.fourcc = V4L2_PIX_FMT_SRGGB12BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR12DWA,
-	.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+		.fourcc = V4L2_PIX_FMT_SBGGR12DWA,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG12DWA,
-	.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGBRG12DWA,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG12DWA,
-	.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+		.fourcc = V4L2_PIX_FMT_SGRBG12DWA,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB12DWA,
-	.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+		.fourcc = V4L2_PIX_FMT_SRGGB12DWA,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR14BPACK,
-	.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+		.fourcc = V4L2_PIX_FMT_SBGGR14BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG14BPACK,
-	.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGBRG14BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG14BPACK,
-	.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGRBG14BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB14BPACK,
-	.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+		.fourcc = V4L2_PIX_FMT_SRGGB14BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR14DWA,
-	.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+		.fourcc = V4L2_PIX_FMT_SBGGR14DWA,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG14DWA,
-	.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGBRG14DWA,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG14DWA,
-	.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGRBG14DWA,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB14DWA,
-	.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+		.fourcc = V4L2_PIX_FMT_SRGGB14DWA,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR14,
-	.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+		.fourcc = V4L2_PIX_FMT_SBGGR14,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG14,
-	.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGBRG14,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG14,
-	.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+		.fourcc = V4L2_PIX_FMT_SGRBG14,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB14,
-	.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+		.fourcc = V4L2_PIX_FMT_SRGGB14,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR16,
-	.code = MEDIA_BUS_FMT_SBGGR16_1X16,
+		.fourcc = V4L2_PIX_FMT_SBGGR16,
+		.code = MEDIA_BUS_FMT_SBGGR16_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG16,
-	.code = MEDIA_BUS_FMT_SGBRG16_1X16,
+		.fourcc = V4L2_PIX_FMT_SGBRG16,
+		.code = MEDIA_BUS_FMT_SGBRG16_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG16,
-	.code = MEDIA_BUS_FMT_SGRBG16_1X16,
+		.fourcc = V4L2_PIX_FMT_SGRBG16,
+		.code = MEDIA_BUS_FMT_SGRBG16_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB16,
-	.code = MEDIA_BUS_FMT_SRGGB16_1X16,
+		.fourcc = V4L2_PIX_FMT_SRGGB16,
+		.code = MEDIA_BUS_FMT_SRGGB16_1X16,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SBGGR24,
-	.code = MEDIA_BUS_FMT_SBGGR24_1X24,
+		.fourcc = V4L2_PIX_FMT_SBGGR24,
+		.code = MEDIA_BUS_FMT_SBGGR24_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGBRG24,
-	.code = MEDIA_BUS_FMT_SGBRG24_1X24,
+		.fourcc = V4L2_PIX_FMT_SGBRG24,
+		.code = MEDIA_BUS_FMT_SGBRG24_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SGRBG24,
-	.code = MEDIA_BUS_FMT_SGRBG24_1X24,
+		.fourcc = V4L2_PIX_FMT_SGRBG24,
+		.code = MEDIA_BUS_FMT_SGRBG24_1X24,
 	},
 	{
-	.fourcc = V4L2_PIX_FMT_SRGGB24,
-	.code = MEDIA_BUS_FMT_SRGGB24_1X24,
-},
-
+		.fourcc = V4L2_PIX_FMT_SRGGB24,
+		.code = MEDIA_BUS_FMT_SRGGB24_1X24,
+	},
 };
 
 static int visp_querycap(struct v4l2_subdev *sd, void *arg)
@@ -732,8 +735,7 @@ static int visp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
 		buf.planes[i].dma_addr = pad_buf->buf->planes[i].dma_addr;
 		buf.planes[i].dma_size = pad_buf->buf->planes[i].size;
 	}
-	if (/*IspChn->ThreadStatus == MEDIA_THREAD_STOPPED*/ isp_dev
-		->streamon[pad_buf->pad] == 0) {
+	if (/*IspChn->ThreadStatus == MEDIA_THREAD_STOPPED*/ isp_dev->streamon[pad_buf->pad] == 0) {
 		memcpy(&IspChn->bufs[buf.index], &buf, sizeof(media_buf));
 	} else {
 		output_buffer_t *p_media_buffer = VSI_NULL;
@@ -745,8 +747,9 @@ static int visp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
 			return VSI_ERR_NULL_PTR;
 		}
 
-		ret_val = vsi_cam_device_en_que_buffer(
-		    isp_dev, isp_port->cam_device_handle, chn, p_media_buffer);
+		ret_val = vsi_cam_device_en_que_buffer(isp_dev,
+						       isp_port->cam_device_handle,
+						       chn, p_media_buffer);
 		if (ret_val != VSI_SUCCESS) {
 			dev_err(isp_dev->dev,
 				"CamDevice queue buf failed, ret is %d\n",
@@ -833,17 +836,15 @@ static int handle_frameout_buffer(void *packet_from_rpu,
 	return 0;
 
 error_free_buf:
-	/* Free buffer in case of any error*/
+	/* Free buffer in case of any error */
 	return ret_val;
 }
-// EXPORT_SYMBOL_GPL(handle_frameout_buffer);
-
-//
 
 /**
  * visp_get_input_subdev - Retrieve the remote sub-device connected to the ISP
- * input pad.
- * @isp_dev: Pointer to the ISP device structure.
+ *			  input pad
+ * @isp_dev: Pointer to the ISP device structure
+ * @port: Port number to search for input subdev
  *
  * This function iterates over all media pads of the ISP device and identifies
  * the input pad (MEDIA_PAD_FL_SINK). It then checks for a remote connection
@@ -856,7 +857,8 @@ error_free_buf:
  * Return: Pointer to the v4l2_subdev structure if found, NULL otherwise.
  */
 
-static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev, int port)
+static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev,
+						  int port)
 {
 	struct media_pad *remote_pad;
 	struct v4l2_subdev *subdev;
@@ -865,10 +867,10 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev, int p
 	dev_dbg(isp_dev->dev, "Searching for input sub-device...\n");
 
 	pad = port * VISP_PORT_PAD_NR;
-		// Check if this pad is a SINK (input pad)
+	/* Check if this pad is a SINK (input pad) */
 	if (!(isp_dev->pads[pad].flags & MEDIA_PAD_FL_SINK)) {
-		dev_dbg(isp_dev->dev,
-				"pad %d is not a sink, skipping...\n", pad);
+		dev_dbg(isp_dev->dev, "pad %d is not a sink, skipping...\n",
+			pad);
 		return NULL;
 	}
 
@@ -879,15 +881,14 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev, int p
 #endif
 
 	if (!remote_pad) {
-		dev_dbg(isp_dev->dev,
-			"pad %d has no remote connection.\n", pad);
+		dev_dbg(isp_dev->dev, "pad %d has no remote connection.\n",
+			pad);
 		return NULL;
 	}
 
 	if (!is_media_entity_v4l2_subdev(remote_pad->entity)) {
 		dev_dbg(isp_dev->dev,
-			"pad %d remote entity is not a sub-device.\n",
-			pad);
+			"pad %d remote entity is not a sub-device.\n", pad);
 		return NULL;
 	}
 
@@ -895,7 +896,7 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev, int p
 	dev_info(isp_dev->dev, "Found input sub-device: %s on pad %d\n",
 		 subdev->name, pad);
 
-	return subdev; // Return the first valid input sub-device found
+	return subdev; /* Return the first valid input sub-device found */
 }
 
 static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
@@ -907,15 +908,18 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 	struct v4l2_subdev *subdev;
-	//	dev_info(isp_dev->dev ,"ISPDRV %s %d pad=%d Status=%d port  =%d
-	//chn=%d\n",__func__,__LINE__,pad_stream->pad,pad_stream->status,port,chn);
+	/*
+	 * dev_info(isp_dev->dev ,"ISPDRV %s %d pad=%d Status=%d port=%d chn=%d\n",
+	 *	    __func__, __LINE__, pad_stream->pad, pad_stream->status,
+	 *	    port, chn);
+	 */
 	isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 
 	if (pad_stream->status == 0)
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 
 	if (pad_stream->status == 1) {
-		/*ENTER PORT Level CRITICAL SECITON*/
+		/* ENTER PORT Level CRITICAL SECTION */
 		mutex_lock(&isp_dev->rpu->rpu_lock);
 
 		if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
@@ -953,7 +957,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			if (!subdev) {
 				 dev_err(isp_dev->dev, "No valid input sub-device found!\n");
 			} else {
-				// call s_stream
+				/* call s_stream */
 				v4l2_subdev_call(subdev, video, s_stream, 1);
 			}
 
@@ -962,16 +966,14 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			isp_dev->isp_ports[port].camera_connect_ref_cnt++;
 		}
 
-		/*EXIT PORT Level CRITICAL SECITON*/
+		/* EXIT PORT Level CRITICAL SECTION */
 
-		ret = media_isp_device_set_frame_rate(
-		    isp_dev, port,
-		    &isp_dev->isp_ports[port].sensor_info.frame_rate);
+		ret = media_isp_device_set_frame_rate(isp_dev, port,
+				&isp_dev->isp_ports[port].sensor_info.frame_rate);
 		if (ret != VSI_SUCCESS) {
-			dev_err(
-			    isp_dev->dev,
-			    "port %d chn %d Set frame_rate failed, ret is %d",
-			    port, chn, ret);
+			dev_err(isp_dev->dev,
+				"port %d chn %d Set frame_rate failed, ret is %d",
+				port, chn, ret);
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 
@@ -982,16 +984,14 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 
-			ret = media_isp_device_stream_on(isp_dev, port, chn);
+		ret = media_isp_device_stream_on(isp_dev, port, chn);
 		if (ret != 0) {
-			dev_err(isp_dev->dev, "%s %d FAILED to stream  on\n",
+			dev_err(isp_dev->dev, "%s %d FAILED to stream on\n",
 				__func__, __LINE__);
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 		mutex_unlock(&isp_dev->rpu->rpu_lock);
-	}
-
-	else {
+	} else {
 		media_isp_stream_off(isp_dev, port, chn);
 
 		if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
@@ -1000,7 +1000,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				dev_err(isp_dev->dev,
 					"No valid input sub-device found!\n");
 			} else {
-				// call s_stream
+				/* call s_stream */
 				v4l2_subdev_call(subdev, video, s_stream, 0);
 			}
 		}
@@ -1510,11 +1510,11 @@ static int visp_get_frame_interval(struct v4l2_subdev *sd,
 }
 
 static struct v4l2_subdev_video_ops visp_video_ops = {
-    /*.s_stream = visp_s_stream,*/
+	/* .s_stream = visp_s_stream, */
 };
 
 int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
-					uint32_t fourcc_code);
+					 uint32_t fourcc_code);
 static void set_default_pad_config(struct visp_dev *isp_dev)
 {
 	int i = 0;
@@ -2084,7 +2084,10 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 
 	return 0;
 }
-//
+
+/*
+ * Parse IBA parameters
+ */
 static int parse_iba(struct visp_dev *isp_dev, struct device_node *np)
 {
 	int num_streams = isp_dev->num_streams;
@@ -2140,9 +2143,8 @@ static int parse_iba(struct visp_dev *isp_dev, struct device_node *np)
 
 		snprintf(property_name, sizeof(property_name),
 			 "xlnx,iba%d_data_format", iba_index);
-		if (of_property_read_u32(
-			np, property_name,
-			&isp_dev->iba[iba_index].data_format)) {
+		if (of_property_read_u32(np, property_name,
+					 &isp_dev->iba[iba_index].data_format)) {
 			dev_err(isp_dev->dev, "Failed to read %s\n",
 				property_name);
 			return -EINVAL;
@@ -2166,21 +2168,22 @@ static int parse_iba(struct visp_dev *isp_dev, struct device_node *np)
 			return -EINVAL;
 		}
 
-		dev_dbg(
-		    isp_dev->dev,
-		    "IBA%d: ppc=%d, vcid=%d, frame_rate=%d, data_format=%d, "
-		    "max_width=%d, max_height=%d\n",
-		    iba_index, isp_dev->iba[iba_index].ppc,
-		    isp_dev->iba[iba_index].vcid,
-		    isp_dev->iba[iba_index].frame_rate,
-		    isp_dev->iba[iba_index].data_format,
-		    isp_dev->iba[iba_index].max_width,
-		    isp_dev->iba[iba_index].max_height);
+		dev_dbg(isp_dev->dev,
+			"IBA%d: ppc=%d, vcid=%d, frame_rate=%d, data_format=%d, max_width=%d, max_height=%d\n",
+			iba_index, isp_dev->iba[iba_index].ppc,
+			isp_dev->iba[iba_index].vcid,
+			isp_dev->iba[iba_index].frame_rate,
+			isp_dev->iba[iba_index].data_format,
+			isp_dev->iba[iba_index].max_width,
+			isp_dev->iba[iba_index].max_height);
 	}
 
 	return 0;
 }
-//
+
+/*
+ * Parse device tree parameters
+ */
 static int visp_parse_params(struct visp_dev *isp_dev,
 			     struct platform_device *pdev)
 {
@@ -2216,14 +2219,13 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		dev_err(&pdev->dev, "No device tree node found\n");
 		return -EINVAL;
 	}
-	if (isp_dev->id < 0 && isp_dev->id > 5) {
+	if (isp_dev->id < 0 || isp_dev->id > 5) {
 		dev_err(&pdev->dev, "Invalid ISP id %d\n", isp_dev->id);
 		return -EINVAL;
 	}
 
-	// Read string property for SS-MODE-i0 (LIMO, etc.)
-	ret =
-	    of_property_read_string(node, "xlnx,io_mode", &isp_dev->ss_mode_i0);
+	/* Read string property for SS-MODE-i0 (LIMO, etc.) */
+	ret = of_property_read_string(node, "xlnx,io_mode", &isp_dev->ss_mode_i0);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to read xlnx,io_mode\n");
 		return ret;
@@ -2231,7 +2233,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		dev_dbg(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
 	}
 
-	// Read stream info (multi-stream, single-stream)
+	/* Read stream info (multi-stream, single-stream) */
 	ret = of_property_read_u32(node, "xlnx,num_streams",
 				   &isp_dev->num_streams);
 	if (ret) {
@@ -2267,6 +2269,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 
 	uint32_t num_mems = of_count_phandle_with_args(pdev->dev.of_node,
 						       "memory-region", NULL);
+	int i;
 
 	if (num_mems < 0) {
 		dev_err(isp_dev->dev, "%s no memory for calibration\n",
@@ -2274,7 +2277,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		return -ENOMEM;
 	}
 
-	for (int i = 0; i < num_mems; i++) {
+	for (i = 0; i < num_mems; i++) {
 		struct device_node *node;
 		struct reserved_mem *rmem;
 
@@ -2313,9 +2316,11 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 
 	isp_dev->tx_chan = isp_dev->rpu->tx_chan;
 	isp_dev->rx_chan = isp_dev->rpu->rx_chan;
-	isp_dev->rpu->isp_dev[isp_dev->id] =
-	    isp_dev; // Assigning isp_dev structure value to isp_dev present in
-		     // rpu_dev struct
+	isp_dev->rpu->isp_dev[isp_dev->id] = isp_dev;
+	/*
+	 * Assigning isp_dev structure value to isp_dev present in
+	 * rpu_dev struct
+	 */
 
 	return 0;
 }
@@ -2378,8 +2383,7 @@ static int visp_probe(struct platform_device *pdev)
 		dev_err(dev, "register subdev error\n");
 		goto error_regiter_subdev;
 	}
-	// Assign the XML path to sensor_info[0].xml
-	//
+	/* Assign the XML path to sensor_info[0].xml */
 	ret = visp_procfs_register(isp_dev, &isp_dev->pde);
 	if (ret) {
 		dev_err(dev, "register procfs failed.\n");
@@ -2408,12 +2412,12 @@ static int visp_probe(struct platform_device *pdev)
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
 	if (ret) {
 		dev_err(&pdev->dev, "dma_set_mask_and_coherent: %d\n", ret);
-		//goto error;
+		/* goto error; */
 	}
 
-	/* Register Callback function*/
+	/* Register Callback function */
 	isp_dev->frameout_cb = handle_frameout_buffer;
-	// sensor_pipeline_init(isp_dev);
+	/* sensor_pipeline_init(isp_dev); */
 
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
 
@@ -2476,7 +2480,8 @@ static struct platform_driver visp_driver = {
 		.name = VISP_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = visp_of_match,
-	}};
+	}
+};
 
 static int __init visp_init_module(void)
 {
@@ -2484,7 +2489,7 @@ static int __init visp_init_module(void)
 
 	ret = platform_driver_register(&visp_driver);
 	if (ret) {
-		printk(KERN_ERR "Failed to register isp driver\n");
+		pr_err("Failed to register isp driver\n");
 		return ret;
 	}
 
