@@ -107,6 +107,7 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 
 int send_command(mb_cmd_id_e cmd, void *data, uint32_t size, uint8_t dest_cpu,
 		 uint8_t src_cpu);
+
 struct response_user_packet {
 	/*Define your data fields*/
 	u32 cmdid;
@@ -114,13 +115,12 @@ struct response_user_packet {
 	payload_packet res_payload_pkt;
 };
 
-int apu_mailbox_read(/*void *CallbackRef*/ uint32_t ipi_src_mask, uint32_t *isp_id);
+int apu_mailbox_read(struct rpu_dev *rpu);
 uint32_t parse_command(mb_cmd_id_e cmd, void *data, uint32_t size, mbox_core_id id,
 		       mbox_core_id id1);
 void apu_postmsg(mbox_core_id receiver_id);
 void mailbox_close(void);
 int send_response(mb_cmd_id_e res, payload_packet *data, uint32_t size,
 		  uint8_t dest_cpu, uint8_t src_cpu);
-void apu_mailbox_read_data(uint32_t ipi_src_mask, void *pdst);
 
 #endif

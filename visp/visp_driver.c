@@ -768,15 +768,16 @@ int media_isp_device_dqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 			   media_buf *buf, void *enque_buff_g,
 			   output_buffer_t *output_buffer);
 
-static int handle_frameout_buffer(void *packet_from_rpu,
-				  struct visp_dev *isp_dev)
+static int handle_frameout_buffer(struct visp_dev *isp_dev)
 {
-	int ret_val = 0;
 	output_buffer_t *output_buffer = NULL;
-
 	struct Chn_info info;
+	mbox_post_msg *msg;
+	size_t size;
+	void *packet_from_rpu;
 	uint8_t buf_index;
 	int pad = -1;
+	int ret_val = 0;
 
 	/* Validate inputs */
 	if (!isp_dev) {
@@ -784,14 +785,32 @@ static int handle_frameout_buffer(void *packet_from_rpu,
 			"handle_frameout_buffer: isp_dev is NULL\n");
 		return -EINVAL;
 	}
-	if (!packet_from_rpu) {
-		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: packet_from_rpu is NULL\n");
-		return -EINVAL;
+
+	if (!kfifo_out(&isp_dev->display_fifo, &msg, 1)) {
+		pr_err("Failed to queue into kfifo\n");
+		return -ENOMEM;
 	}
+
+	if (!msg) {
+		dev_err(isp_dev->dev, "%s: invalid msg or payload\n", __func__);
+		ret_val = -EINVAL;
+		goto error_free_buf;
+	}
+
+	size = msg->size;
+	packet_from_rpu = kzalloc(size, GFP_KERNEL);
+	if (!packet_from_rpu) {
+		dev_err(isp_dev->dev, "Failed to allocate packet_from_rpu\n");
+		return -ENOMEM;
+	}
+
+	memcpy(packet_from_rpu, msg->payload, size);
 
 	/* Dequeue buffer from the ISP device*/
 	read_dq_buf_info(packet_from_rpu, isp_dev, &info, &buf_index);
+
+	if (msg)
+		kfree(msg);
 
 	output_buffer = isp_dev->isp_ports[info.vt_id]
 			    .isp_chns[info.path]
@@ -813,9 +832,9 @@ static int handle_frameout_buffer(void *packet_from_rpu,
 
 	/* Mark buffer as done*/
 	ret_val = media_isp_hal_buf_done(&isp_dev->sd, pad,
-					&(isp_dev->isp_ports[info.vt_id]
-					      .isp_chns[info.path]
-					      .bufs[output_buffer->index]));
+					 &(isp_dev->isp_ports[info.vt_id]
+					 .isp_chns[info.path]
+					 .bufs[output_buffer->index]));
 	if (ret_val != 0) {
 		dev_dbg(isp_dev->dev,
 			"handle_frameout_buffer: MediaIspHalBufDone failed "
@@ -833,10 +852,11 @@ static int handle_frameout_buffer(void *packet_from_rpu,
 	// output_buffer->base_address);
 
 	/* Free allocated buffer after successful processing*/
+	kfree(packet_from_rpu);
 	return 0;
 
 error_free_buf:
-	/* Free buffer in case of any error */
+	/* Free buffer in case of any error*/
 	return ret_val;
 }
 
@@ -2350,6 +2370,8 @@ static int visp_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to init mbox\n");
 		return -EINVAL;
 	}
+
+	INIT_KFIFO(isp_dev->display_fifo);
 
 	v4l2_subdev_init(&isp_dev->sd, &visp_subdev_ops);
 	snprintf(isp_dev->sd.name, VISP_SUBDEV_NAME_SIZE, "%s.%d", VISP_NAME,

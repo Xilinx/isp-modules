@@ -52,38 +52,26 @@
  *
  *****************************************************************************/
 
-// #include <linux/mbox_api.h>
 #include "mbox_cmd.h"
-
 #include "mbox_api.h"
 #include "mbox_error_code.h"
-// #include <linux/sensor_cmd.h>
 #include <linux/gfp.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 
 #include "sensor_cmd.h"
-// #include "buf_defs.h"
 #include <linux/kernel.h>
 #include <linux/ktime.h>
 
 #include "visp_driver.h"
-
-struct response_user_packet data_from_interrupt;
-EXPORT_SYMBOL_GPL(data_from_interrupt);
-
-// extern int handle_frameout_buffer(void * Enque_Buff_L);
-// int (* exported_func)(void *);
+#include "visp_mbox_driver.h"
 
 static mbox_fifo_ctrl *rpu0_fifo_ctrl;
 static mbox_fifo_ctrl *rpu1_fifo_ctrl;
 static mbox_fifo_ctrl *rpu2_fifo_ctrl;
 static mbox_fifo_ctrl *rpu3_fifo_ctrl;
 static mbox_fifo_ctrl *apu_fifo_ctrl;
-// static mbox_post_msg *rmsg_rpu0 = NULL;
-// static mbox_post_msg *rmsg_rpu1 = NULL;
-static mbox_post_msg *rmsg_apu;
 
 #define XPAR_PS_0_PSPMC_0_PSV_IPI_0_BIT_MASK 0x00000004U
 #define XPAR_PS_0_PSPMC_0_PSV_IPI_1_BIT_MASK 0x00000008U
@@ -159,53 +147,133 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 }
 EXPORT_SYMBOL_GPL(write_mboxcmd);
 
-int apu_mailbox_read(uint32_t ipi_src_mask, uint32_t *isp_id)
+int apu_mailbox_read(struct rpu_dev *rpu)
 {
-	int core_id;
+	struct visp_dev *isp_dev;
+	mbox_post_msg *msg;
+	uint32_t core_id, cmd, isp_id;
+	int ret = 0;
 
-	switch (ipi_src_mask) {
-	case VISP_MBOX_RPU6_0:
+	switch (rpu->rpu_id) {
+	case VISP_MBOX_RPU6:
 		core_id = MBOX_CORE_RPU0;
 		break;
-	case VISP_MBOX_RPU7_1:
+	case VISP_MBOX_RPU7:
 		core_id = MBOX_CORE_RPU1;
 		break;
-	case VISP_MBOX_RPU8_2:
+	case VISP_MBOX_RPU8:
 		core_id = MBOX_CORE_RPU2;
 		break;
-	case VISP_MBOX_RPU9_3:
+	case VISP_MBOX_RPU9:
 		core_id = MBOX_CORE_RPU3;
 		break;
 	default:
-		pr_err("Invalid ipi_src_mask %d\n", ipi_src_mask);
+		(void)mbox_send_message(rpu->rx_chan, NULL);
+		dev_err(rpu->dev, "%s:Invalid rpu_id:%d\n",
+			__func__, rpu->rpu_id);
 		return -EINVAL;
 	}
 
 	if (vpi_mbox_is_empty(apu_fifo_ctrl, core_id, MBOX_CORE_APU)) {
-		pr_err("No message in shared memory for core %d!\n", core_id);
+		(void)mbox_send_message(rpu->rx_chan, NULL);
+		pr_err("No message in shared memory for rpu_id %d!\n", rpu->rpu_id);
+		return -ENOMSG;
 	}
 
-	vpi_mbox_read(apu_fifo_ctrl, rmsg_apu, core_id);
-	parse_command(rmsg_apu->msg_id, rmsg_apu->payload,
-		      rmsg_apu->size, MBOX_CORE_APU, core_id);
+	mutex_lock(&rpu->read_lock);
 
-	memcpy(isp_id, ((payload_packet *)rmsg_apu->payload)->payload, sizeof(uint32_t));
+	msg = kzalloc(sizeof(mbox_post_msg), GFP_KERNEL);
+	if (!msg) {
+		pr_err("Failed to allocate memory\n");
+		ret = -ENOMEM;
+		goto DONE;
+	}
+
+	vpi_mbox_read(apu_fifo_ctrl, msg, core_id);
+
+	memcpy(&isp_id, ((payload_packet *)msg->payload)->payload, sizeof(uint32_t));
 
 	/* Normalize ISP instance ID; clarify why divided by 15 */
-	*isp_id = *isp_id / 15;
+	isp_id = isp_id / 15;
+	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES) {
+		dev_err(rpu->dev, "%s: Invalid isp_id %u\n", __func__,
+			isp_id);
+		ret = -EINVAL;
+		goto ERROR;
+	}
 
-	return rmsg_apu->msg_id;
+	isp_dev = rpu->isp_dev[isp_id];
+	if (!isp_dev) {
+		pr_err("%s: Invalid or uninitialized isp_dev for isp_id = %d\n", __func__, isp_id);
+		ret = -EINVAL;
+		goto ERROR;
+	}
+
+	cmd = msg->msg_id;
+	/* Handle specific commands */
+	if (isp_dev->k_apu_ack_flag && cmd == MB_CMD_RES_SUCCESS) {
+		if (!kfifo_in(&rpu->ack_fifo, &msg, 1)) {
+			pr_err("Failed to queue into apu ack kfifo\n");
+			ret = -ENOMEM;
+			goto ERROR;
+		}
+		isp_dev->k_apu_ack_flag = 0;
+		complete(&isp_dev->apu_wait_for_ack);
+		goto DONE;
+	} else if (isp_dev->k_apu_data_flag && cmd == MB_CMD_GET_SUCCESS) {
+		if (!kfifo_in(&rpu->data_fifo, &msg, 1)) {
+			pr_err("Failed to queue into apu data kfifo\n");
+			ret = -ENOMEM;
+			goto ERROR;
+		}
+		isp_dev->k_apu_data_flag = 0;
+		complete(&isp_dev->apu_wait_for_data);
+		goto DONE;
+	} else if ((rpu->app_wait_flag && cmd == MB_CMD_RES_SUCCESS) ||
+		   (rpu->app_wait_flag && cmd == MB_CMD_GET_SUCCESS)) {
+		if (!kfifo_in(&rpu->app_fifo, &msg, 1)) {
+			pr_err("Failed to queue into kfifo\n");
+			ret = -ENOMEM;
+			goto ERROR;
+		}
+		rpu->app_wait_flag = 0;
+		complete(&rpu->mailbox_completion);
+		goto DONE;
+	} else if (cmd == RPU_2_APU_CMD_DISPLAY_BUFFER) {
+		if (isp_dev->frameout_cb) {
+			if (!kfifo_in(&isp_dev->display_fifo, &msg, 1)) {
+				pr_err("Failed to queue into display kfifo\n");
+				ret = -ENOMEM;
+				goto ERROR;
+			}
+			isp_dev->frameout_cb(isp_dev);
+			goto DONE;
+		} else {
+			pr_err("%s %d CALLBACK IS NULL\n", __func__, __LINE__);
+			ret = -EINVAL;
+			goto ERROR;
+		}
+	} else {
+		dev_err(rpu->dev, "%s: Unexpected command id %d received\n",
+			__func__, cmd);
+		ret = -EINVAL;
+		goto ERROR;
+	}
+
+	/* Send a message to the RX mailbox channel */
+ERROR:
+	if (msg)
+		kfree(msg);
+DONE:
+	(void)mbox_send_message(rpu->rx_chan, NULL);
+	mutex_unlock(&rpu->read_lock);
+	return ret;
 }
 EXPORT_SYMBOL_GPL(apu_mailbox_read);
 
 void visp_mbox_mailbox_init(u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
 			    uint64_t mbox_fifo_start_addr_phy)
 {
-	rmsg_apu = (mbox_post_msg *)kmalloc(sizeof(mbox_post_msg), GFP_KERNEL);
-	if (!rmsg_apu) {
-		pr_err("%s: Failed to allocate rmsg_apu\n", __func__);
-		return;
-	}
 	switch (cpu) {
 	case MBOX_CORE_APU:
 		apu_fifo_ctrl = visp_mbox_init(MBOX_CORE_APU,
@@ -247,7 +315,6 @@ EXPORT_SYMBOL_GPL(visp_mbox_mailbox_init);
 void mailbox_close(void)
 {
 	kfree(apu_fifo_ctrl);
-	kfree(rmsg_apu);
 }
 
 int send_command(mb_cmd_id_e cmd, void *data, uint32_t size, uint8_t dest_cpu,
@@ -334,86 +401,6 @@ int read_dq_buf_info_l(void *data, media_buffer_t *Enque_Buff_L,
 
 	return 0;
 }
-
-int disp_cnt;
-uint32_t parse_command(mb_cmd_id_e cmd, void *data, uint32_t size,
-		       mbox_core_id core_id, mbox_core_id src_cpu)
-{
-	int res = 0;
-
-	switch (cmd) {
-		/*These cases handle the commands sent by the RPU's*/
-	case MB_CMD_RES_SUCCESS: // xilinx flow
-		data_from_interrupt.cmdid = MB_CMD_RES_SUCCESS;
-		data_from_interrupt.data = data;
-		memcpy(&data_from_interrupt.res_payload_pkt, rmsg_apu->payload,
-		       ALIGN(size, 8) /*sizeof(payload_packet)*/);
-		break;
-
-	case MB_CMD_GET_SUCCESS: // xilinx flow
-		data_from_interrupt.cmdid = MB_CMD_GET_SUCCESS;
-		data_from_interrupt.data = rmsg_apu->payload;
-		memcpy(&data_from_interrupt.res_payload_pkt, rmsg_apu->payload,
-		       ALIGN(size, 8) /*sizeof(payload_packet)*/);
-		break;
-
-	case RPU_2_APU_CMD_DISPLAY_BUFFER /*RPU_2_APU_MB_CMD_FULL_BUFFER_INFORM*/:
-		data_from_interrupt.data = data;
-		break;
-
-	case RPU_2_APU_MB_CMD_REPORT_INTERNAL_FAILURE:
-
-	case MB_CMD_END:
-	case APU_2_RPU_MB_CMB_INIT_FIRMWARE:
-	case MB_CMD_RES_ERR:	 // xilinx flow
-	case MB_CMD_RES_TIMEOUT: // xilinx flow
-	case MB_CMD_BUF_RET:
-	case RPU_2_APU_MB_CMD_ISP_ERR_REPORT:
-	case RPU_2_APU_MB_CMD_FUSA_EVENT_CB:
-	case RPU_2_APU_MB_CMD_IsiCreateIss:
-	case RPU_2_APU_MB_CMD_IsiReleaseIss:
-	case RPU_2_APU_MB_CMD_IsiEnumModeIss:
-	case RPU_2_APU_MB_CMD_IsiCheckConnectionIss:
-	case RPU_2_APU_MB_CMD_IsiOpenIss:
-	case RPU_2_APU_MB_CMD_IsiCloseIss:
-	case RPU_2_APU_MB_CMD_IsiGetModeIss:
-	case RPU_2_APU_MB_CMD_IsiGetCapsIss:
-	case RPU_2_APU_MB_CMD_IsiGetRevisionIss:
-	case RPU_2_APU_MB_CMD_IsiSetStreamingIss:
-	case RPU_2_APU_MB_CMD_IsiGetAeBaseInfoIss:
-	case RPU_2_APU_MB_CMD_IsiGetAGainIss:
-	case RPU_2_APU_MB_CMD_IsiGetDGainIss:
-	case RPU_2_APU_MB_CMD_IsiSetAGainIss:
-	case RPU_2_APU_MB_CMD_IsiSetDGainIss:
-	case RPU_2_APU_MB_CMD_IsiGetIntTimeIss:
-	case RPU_2_APU_MB_CMD_IsiSetIntTimeIss:
-	case RPU_2_APU_MB_CMD_IsiGetFpsIss:
-	case RPU_2_APU_MB_CMD_IsiSetFpsIss:
-	case RPU_2_APU_MB_CMD_IsiGetIspStatusIss:
-	case RPU_2_APU_MB_CMD_IsiSetWBIss:
-	case RPU_2_APU_MB_CMD_IsiGetWBIss:
-	case RPU_2_APU_MB_CMD_IsiSetBlcIss:
-	case RPU_2_APU_MB_CMD_IsiGetBlcIss:
-	case RPU_2_APU_MB_CMD_IsiSetTpgIss:
-	case RPU_2_APU_MB_CMD_IsiGetTpgIss:
-	case RPU_2_APU_MB_CMD_IsiGetExpandCurveIss:
-	case RPU_2_APU_MB_CMD_IsiWriteRegIss:
-	case RPU_2_APU_MB_CMD_IsiReadRegIss:
-		data_from_interrupt.cmdid = cmd;
-		data_from_interrupt.data = rmsg_apu->payload;
-		memcpy(&data_from_interrupt.res_payload_pkt, rmsg_apu->payload,
-		       ALIGN(size, 8) /*sizeof(payload_packet)*/);
-		pr_err("RPU to APU cmd: %d\n", cmd);
-		break;
-
-	default:
-		pr_err("DRIVER::In default\n");
-		break;
-	}
-	// TODO:Send response tacket
-	return res;
-}
-EXPORT_SYMBOL_GPL(parse_command);
 
 MODULE_AUTHOR("anandam");
 MODULE_DESCRIPTION("MBOX_CMD");

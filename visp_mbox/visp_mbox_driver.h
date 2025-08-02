@@ -57,6 +57,7 @@
 
 #include "visp_driver.h"
 #include "sensor_cmd.h"
+#include <linux/kfifo.h>
 #define CHAR_DEV_NAME "mailbox_dev"
 #define SUCCESS 0
 
@@ -74,7 +75,6 @@
 #define VISP_MBOX_MAX_RPU_ID 9
 
 struct rpu_dev *visp_mbox_get_rpu_dev(int rpu_id);
-extern struct response_user_packet data_from_interrupt;
 uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev);
 int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 			    void *data, uint32_t size, uint8_t dest_cpu,
@@ -105,6 +105,9 @@ struct reserved_memory {
 	phys_addr_t phys_addr;
 	void __iomem *virt_addr;
 };
+
+#define RPU_CMD_KFIFO_SIZE 8
+
 /* Structures to hold the rpu_device specific information */
 struct rpu_dev {
 	struct device *dev;
@@ -130,7 +133,9 @@ struct rpu_dev {
 	struct work_struct mbox_work;
 	struct sk_buff_head tx_mc_skbs;
 	struct completion mailbox_completion;
+	DECLARE_KFIFO(app_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
+	DECLARE_KFIFO(ack_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
+	DECLARE_KFIFO(data_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
 };
-//
 
 #endif

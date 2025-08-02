@@ -69,6 +69,7 @@
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/kernel.h>
+#include <linux/kfifo.h>
 
 #include <linux/mailbox_client.h>
 #include <linux/mailbox_controller.h>
@@ -193,7 +194,7 @@ struct atm_prop {
 	char node_name[50]; // Node name dynamically generated
 };
 
-typedef int (*frameout_cb_t)(void *data, struct visp_dev *dev);
+typedef int (*frameout_cb_t)(struct visp_dev *dev);
 
 struct visp_reserve_mem {
 	dma_addr_t pa;
@@ -208,6 +209,8 @@ struct oba_info {
 	uint32_t bpp;
 	const char *data_format;
 };
+
+#define VISP_DISPLAY_KFIFO_SIZE 16
 
 struct visp_dev {
 	phys_addr_t paddr;
@@ -294,6 +297,7 @@ struct visp_dev {
 	unsigned int out_fmt;
 	unsigned int cap_fmt;
 	unsigned int isp_dq_out_index;
+	DECLARE_KFIFO(display_fifo, struct mbox_post_msg *, VISP_DISPLAY_KFIFO_SIZE);
 };
 
 int handle_frameout_buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);

@@ -766,27 +766,43 @@ int media_isp_device_dqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 			   media_buf *buf, void *enque_buff_g,
 			   output_buffer_t *output_buffer);
 
-static int handle_frameout_buffer(void *packet_from_rpu,
-				  struct visp_dev *isp_dev)
+static int handle_frameout_buffer(struct visp_dev *isp_dev)
 {
-	int ret_val = 0;
 	output_buffer_t *output_buffer = NULL;
-
 	struct Chn_info info;
+	mbox_post_msg *msg;
+	void *packet_from_rpu;
+	size_t size;
 	uint8_t buf_index;
 	int pad = -1;
+	int ret = 0;
 
 	/* Validate inputs */
 	if (!isp_dev) {
 		dev_err(isp_dev->dev,
 			"handle_frameout_buffer: isp_dev is NULL\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto error_free_buf;
 	}
+
+	if (!kfifo_out(&isp_dev->display_fifo, &msg, 1)) {
+		pr_err("Failed to queue into kfifo\n");
+		ret = -ENOMEM;
+		goto error_free_buf;
+	}
+
+	size = msg->size;
+	packet_from_rpu = kzalloc(size, GFP_KERNEL);
 	if (!packet_from_rpu) {
-		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: packet_from_rpu is NULL\n");
-		return -EINVAL;
+		dev_err(isp_dev->dev, "Failed to allocate packet_from_rpu\n");
+		ret = -ENOMEM;
+		goto error_free_buf;
 	}
+
+	memcpy(packet_from_rpu, msg->payload, size);
+
+	if (msg)
+		kfree(msg);
 
 	/* Dequeue buffer from the ISP device*/
 	read_dq_buf_info(packet_from_rpu, isp_dev, &info, &buf_index);
@@ -797,7 +813,8 @@ static int handle_frameout_buffer(void *packet_from_rpu,
 	if (!output_buffer) {
 		dev_err(isp_dev->dev,
 			"handle_frameout_buffer: Outputbuffer is NULL...!\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto error_free_buf;
 	}
 
 	/* Calculate the pad index */
@@ -805,37 +822,33 @@ static int handle_frameout_buffer(void *packet_from_rpu,
 	if (pad <= 0) {
 		dev_err(isp_dev->dev,
 			"handle_frameout_buffer: Invalid pad value %d\n", pad);
-		ret_val = -EINVAL;
+		ret = -EINVAL;
 		goto error_free_buf;
 	}
 
 	/* Mark buffer as done*/
-	ret_val = media_isp_hal_buf_done(&isp_dev->sd, pad,
-					&(isp_dev->isp_ports[info.vt_id]
-						  .isp_chns[info.path]
-						  .bufs[output_buffer->index]));
-	if (ret_val != 0) {
+	ret = media_isp_hal_buf_done(&isp_dev->sd, pad,
+				     &(isp_dev->isp_ports[info.vt_id]
+				     .isp_chns[info.path]
+				     .bufs[output_buffer->index]));
+	if (ret != 0) {
 		dev_dbg(isp_dev->dev,
 			"handle_frameout_buffer: MediaIspHalBufDone failed "
 			"with error %d\n",
-			ret_val);
+			ret);
 		dev_dbg(
 			isp_dev->dev,
-			"Skip buf: ret_val=%d, ISP=%d, port=%d, chn=%d, BUF=0x%x\n",
-			ret_val, isp_dev->id, info.vt_id, info.path,
+			"Skip buf: ret=%d, ISP=%d, port=%d, chn=%d, BUF=0x%x\n",
+			ret, isp_dev->id, info.vt_id, info.path,
 			output_buffer ? output_buffer->base_address : 0);
 		goto error_free_buf;
 	}
-	// dev_err(isp_dev->dev,"[ISPDRV] Received DQ BUFF : Isp : %d port : %d
-	// Path : %d BufAddr : 0x%x\n",info.hw_id,info.vt_id, info.path,
-	// output_buffer->base_address);
-
-	/* Free allocated buffer after successful processing*/
-	return 0;
 
 error_free_buf:
+	if (packet_from_rpu)
+		kfree(packet_from_rpu);
 	/* Free buffer in case of any error*/
-	return ret_val;
+	return ret;
 }
 // EXPORT_SYMBOL_GPL(handle_frameout_buffer);
 
@@ -2449,7 +2462,8 @@ static int visp_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to init mbox\n");
 		return -EINVAL;
 	}
-	// store the instance pointer in the array
+
+	INIT_KFIFO(isp_dev->display_fifo);
 
 	v4l2_subdev_init(&isp_dev->sd, &visp_subdev_ops);
 	snprintf(isp_dev->sd.name, VISP_SUBDEV_NAME_SIZE, "%s.%d", VISP_NAME,

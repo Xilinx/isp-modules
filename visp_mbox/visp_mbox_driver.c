@@ -57,14 +57,13 @@
 #include <linux/kernel.h>
 #include "visp_mbox_driver.h"
 #include "mbox_cmd.h"
+#include "mbox_api.h"
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
 static LIST_HEAD(rpu_devices);
-static DECLARE_COMPLETION(mailbox_completion);
-static void visp_mbox_read_cmd(void *data);
 
-typedef int (*frameout_cb_t)(void *data, struct visp_dev *dev);
+typedef int (*frameout_cb_t)(struct visp_dev *dev);
 int visp_mbox_get_dest_cpu(int rpu_id);
 
 int visp_mbox_get_dest_cpu(int rpu_id)
@@ -92,8 +91,8 @@ int visp_mbox_get_dest_cpu(int rpu_id)
 
 static void visp_mbox_event_notified(struct work_struct *work)
 {
-	// struct visp_dev *isp_dev;
 	struct rpu_dev *rpu;
+	int ret;
 
 	/* Get the visp_dev structure from the work struct */
 	rpu = container_of(work, struct rpu_dev, mbox_work);
@@ -102,69 +101,17 @@ static void visp_mbox_event_notified(struct work_struct *work)
 		return;
 	}
 
-	/* Iterate over all notify IDs and process them */
-	//    idr_for_each(&isp_dev->notifyids, event_notified_idr_cb, isp_dev);
-
-	/* Execute the tasklet function */
-	visp_mbox_read_cmd(rpu);
-
-	/* Send a message to the RX mailbox channel */
-	(void)mbox_send_message(rpu->rx_chan, NULL);
+	/* Read command from mailbox */
+	ret = apu_mailbox_read(rpu);
+	if (ret != 0) {
+		dev_err(rpu->dev, "%s:Failed to read mailbox command:%d\n",
+			__func__, rpu->rpu_id);
+		return;
+	}
 }
 
 static void visp_mbox_tx_done(struct mbox_client *cl, void *msg, int r)
 {
-}
-
-static void visp_mbox_read_cmd(void *data)
-{
-	struct rpu_dev *rpu = (struct rpu_dev *)data;
-	uint32_t recv_cmd_id;
-	uint32_t isp_id;
-	struct visp_dev *isp_dev;
-	static int cnt;
-	/* Check for a valid RPU device */
-	if (!rpu) {
-		dev_err(NULL, "%s: rpu_dev is NULL\n", __func__);
-		return;
-	}
-	/* Read command id and ISP id from mailbox */
-	mutex_lock(&rpu->read_lock);
-	/* Read command id and ISP id from mailbox */
-	recv_cmd_id = apu_mailbox_read(visp_mbox_get_dest_cpu(rpu->rpu_id),
-				       &isp_id);
-	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES) {
-		dev_err(rpu->dev, "%s: Invalid isp_id %u\n", __func__,
-			isp_id);
-		mutex_unlock(&rpu->read_lock);
-		return;
-	}
-	isp_dev = rpu->isp_dev[isp_id];
-	/* Handle specific commands */
-	if (isp_dev->k_apu_ack_flag && (recv_cmd_id == MB_CMD_RES_SUCCESS)) {
-		complete(&isp_dev->apu_wait_for_ack);
-	} else if (isp_dev->k_apu_data_flag &&
-		   (recv_cmd_id == MB_CMD_GET_SUCCESS)) {
-		complete(&isp_dev->apu_wait_for_data);
-	} else if ((rpu->app_wait_flag &&
-		    (recv_cmd_id == MB_CMD_RES_SUCCESS)) ||
-		   (rpu->app_wait_flag &&
-		    (recv_cmd_id == MB_CMD_GET_SUCCESS))) {
-		complete(&mailbox_completion);
-	} else if (recv_cmd_id == RPU_2_APU_CMD_DISPLAY_BUFFER) {
-		if (isp_dev->frameout_cb) {
-			mutex_unlock(&rpu->read_lock);
-			isp_dev->frameout_cb(data_from_interrupt.data, isp_dev);
-		} else {
-			pr_err("%s %d CALLBACK IS NULL\n", __func__, __LINE__);
-			mutex_unlock(&rpu->read_lock);
-		}
-	} else {
-		mutex_unlock(&rpu->read_lock);
-		dev_err(rpu->dev, "%s: Unexpected command id %d received\n",
-			__func__, recv_cmd_id);
-	}
-	cnt++;
 }
 
 static void visp_mbox_rx_cb(struct mbox_client *cl, void *msg)
@@ -226,6 +173,10 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 		rpu->rx_chan = NULL;
 		return PTR_ERR(rpu->rx_chan);
 	}
+
+	INIT_KFIFO(rpu->ack_fifo);
+	INIT_KFIFO(rpu->data_fifo);
+	INIT_KFIFO(rpu->app_fifo);
 
 	/* Initialize TX mailbox client SKB queue */
 	skb_queue_head_init(&rpu->tx_mc_skbs);
@@ -351,39 +302,62 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 				     size_t count, loff_t *offset)
 {
 	struct rpu_dev *rpu = file->private_data;
-	int result;
 	ssize_t bytes_copied = sizeof(struct response_user_packet);
+	mbox_post_msg *msg;
+	struct response_user_packet *visp_mbox_app_data;
+	size_t size;
+	int result;
 
 	if (!rpu) {
 		pr_err("%s: Invalid RPU device pointer\n", __func__);
-		mutex_unlock(&rpu->read_lock);
 		return -EINVAL;
 	}
 
 	mutex_lock(&rpu->ack_lock);
+
 	rpu->app_wait_flag = 1;
 	/* Acquire lock to protect RPU structure */
 	/* Wait for completion interruptibly */
-	result = wait_for_completion_interruptible(&mailbox_completion);
+	result = wait_for_completion_interruptible(&rpu->mailbox_completion);
 	if (result != 0) {
 		pr_err("%s: Completion wait interrupted, error code: %d\n",
 		       __func__, result);
-		mutex_unlock(&rpu->read_lock);
-		return -ERESTARTSYS; // Return appropriate error for
+		bytes_copied = -ERESTARTSYS; // Return appropriate error for
 				     // interruption
+		goto ERROR;
 	}
 
-	//    mutex_lock(&rpu->read_lock);
+	visp_mbox_app_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
+	if (!visp_mbox_app_data) {
+		pr_err("%s:Failed to allocate memory\n", __func__);
+		bytes_copied = -ENOMEM;
+		goto ERROR;
+	}
+
+	if (!kfifo_out(&rpu->app_fifo, &msg, 1)) {
+		pr_err("Failed to queue into kfifo\n");
+		bytes_copied = -ENOMSG;
+		goto ERROR;
+	}
+
+	visp_mbox_app_data->cmdid = msg->msg_id;
+	visp_mbox_app_data->data = msg->payload;
+	size = msg->size;
+	memcpy(&visp_mbox_app_data->res_payload_pkt, msg->payload,
+	       ALIGN(size, 8));
+
+	if (msg)
+		kfree(msg);
 	/* Copy data to user space */
-	if (copy_to_user(buf, &data_from_interrupt, bytes_copied)) {
+	if (copy_to_user(buf, visp_mbox_app_data, bytes_copied)) {
 		pr_err("%s: Failed to copy data to user space\n", __func__);
-		mutex_unlock(&rpu->read_lock);
-		return -EFAULT; // Handle the copy_to_user error
+		bytes_copied = -EFAULT; // Handle the copy_to_user error
+		goto ERROR;
 	}
-	rpu->app_wait_flag = 0;
+ERROR:
+	if (visp_mbox_app_data)
+		kfree(visp_mbox_app_data);
 	mutex_unlock(&rpu->ack_lock);
-	mutex_unlock(&rpu->read_lock);
-
 	return bytes_copied; // Return the size of data copied on success
 }
 
@@ -583,25 +557,32 @@ static void visp_mbox_reserved_memory_exit(void)
 
 uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 {
-	long result = 0;
+	struct response_user_packet *visp_mbox_intr_data;
 	struct rpu_dev *rpu = NULL;
+	mbox_post_msg *msg;
+	size_t size;
+	long result = 0;
+	int ret;
 
 	if (!isp_dev) {
 		pr_err("xlnx_mbox_apu_wait_for_data: Invalid ISP device (NULL "
 		       "pointer).\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto ERROR;
 	}
 
 	rpu = isp_dev->rpu;
 	if (!rpu) {
 		dev_err(isp_dev->dev, "RPU device is NULL in %s.\n", __func__);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto ERROR;
 	}
 
 	if (!data) {
 		dev_err(isp_dev->dev, "Invalid data pointer in %s.\n",
 			__func__);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto ERROR;
 	}
 
 	long timeout_jiffies =
@@ -611,29 +592,45 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	if (result == 0) {
 		dev_err(rpu->dev,
 			"Timeout occurred while waiting for APU ACK\n");
-		isp_dev->k_apu_data_flag = 0; // Clear the data flag
-		//    mutex_unlock(&rpu->lock);
-		mutex_unlock(&rpu->read_lock);
-		return -1;
+		ret = -ETIMEDOUT;
+		goto ERROR;
 	} else if (result < 0) {
 		dev_err(rpu->dev, "Wait interrupted\n");
-		isp_dev->k_apu_data_flag = 0; // Clear the data flag
-		//    mutex_unlock(&rpu->lock);
-		mutex_unlock(&rpu->read_lock);
-		return -1;
+		ret = -EINVAL;
+		goto ERROR;
 	}
 
+	visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
+	if (!visp_mbox_intr_data) {
+		pr_err("%s:Failed to allocate memory\n", __func__);
+		ret = -ENOMEM;
+		goto ERROR;
+	}
+
+	if (!kfifo_out(&rpu->data_fifo, &msg, 1)) {
+		pr_err("Failed to queue into kfifo\n");
+		ret = -ENOMEM;
+		goto ERROR;
+	}
+
+	size = msg->size;
+	visp_mbox_intr_data->cmdid = msg->msg_id;
+	visp_mbox_intr_data->data = msg->payload;
+	memcpy(&visp_mbox_intr_data->res_payload_pkt, msg->payload,
+	       ALIGN(size, 8) /*sizeof(payload_packet)*/);
 	/* Copy the received data */
-	memcpy(data, data_from_interrupt.res_payload_pkt.payload,
-	       sizeof(data_from_interrupt.res_payload_pkt.payload));
+	memcpy(data, &visp_mbox_intr_data->res_payload_pkt.payload,
+	       sizeof(visp_mbox_intr_data->res_payload_pkt.payload));
 
-	/* Clear the data flag */
-	isp_dev->k_apu_data_flag = 0;
+	if (msg)
+		kfree(msg);
 
-	/* Unlock the data mutex */
-	mutex_unlock(&rpu->read_lock);
+	ret = visp_mbox_intr_data->res_payload_pkt.resp_field.error_subcode_t;
+ERROR:
+	if (visp_mbox_intr_data)
+		kfree(visp_mbox_intr_data);
 	/* Return the error code from the interrupt's response payload */
-	return data_from_interrupt.res_payload_pkt.resp_field.error_subcode_t;
+	return ret;
 }
 EXPORT_SYMBOL(xlnx_mbox_apu_wait_for_data);
 
@@ -781,23 +778,25 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 {
 	struct rpu_dev *rpu = NULL;
 	long result;
+	mbox_post_msg *msg;
+	size_t size;
+	struct response_user_packet *visp_mbox_intr_data;
+	int ret;
 
 	if (!isp_dev) {
 		pr_err("xlnx_mbox_apu_wait_for_ack: Invalid ISP device (NULL "
 		       "pointer).\n");
-		return -1;
+		ret = -EINVAL;
+		goto ERROR;
 	}
 	rpu = isp_dev->rpu;
 	if (!rpu) {
 		dev_err(isp_dev->dev, "RPU device is NULL in %s.\n", __func__);
-		return -1;
+		ret = -EINVAL;
+		goto ERROR;
 	}
 
-	/* Lock the acknowledgment mutex */
-	//    mutex_lock(&rpu->ack_lock);
-
 	/* Wait for acknowledgment completion */
-	/* Read command id and ISP id from mailbox */
 	long timeout_jiffies =
 	    msecs_to_jiffies(1000 * 60 * 5); // Timeout of 5000ms (5 seconds)
 	result = wait_for_completion_interruptible_timeout(
@@ -805,20 +804,46 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 	if (result == 0) {
 		dev_err(rpu->dev,
 			"Timeout occurred while waiting for APU ACK\n");
-		return -1;
+		ret = -ETIMEDOUT;
+		goto ERROR;
 	} else if (result < 0) {
 		dev_err(rpu->dev, "Wait interrupted\n");
-		return -1;
+		ret = -1;
+		goto ERROR;
 	}
 
-	/* Clear acknowledgment flag */
-	isp_dev->k_apu_ack_flag = 0;
-	// mutex_unlock(&rpu->ack_lock);
+	visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
+	if (!visp_mbox_intr_data) {
+		pr_err("%s:Failed to allocate memory\n", __func__);
+		ret = -ENOMEM;
+		goto ERROR;
+	}
 
-	/* Unlock the acknowledgment mutex */
-	mutex_unlock(&rpu->read_lock);
+	if (!kfifo_out(&rpu->ack_fifo, &msg, 1)) {
+		pr_err("Failed to queue into kfifo\n");
+		ret = -ENOMSG;
+	}
 
-	return data_from_interrupt.res_payload_pkt.resp_field.error_subcode_t;
+	if (!msg) {
+		pr_err("Received invalid message or payload\n");
+		ret = -EINVAL;
+		goto ERROR;
+	}
+
+	visp_mbox_intr_data->cmdid = msg->msg_id;
+	visp_mbox_intr_data->data = msg->payload;
+	size = msg->size;
+	memcpy(&visp_mbox_intr_data->res_payload_pkt, msg->payload,
+	       ALIGN(size, 8));
+
+	if (msg)
+		kfree(msg);
+	ret = visp_mbox_intr_data->res_payload_pkt.resp_field.error_subcode_t;
+ERROR:
+	if (visp_mbox_intr_data)
+		kfree(visp_mbox_intr_data);
+	return ret;
+
 }
 EXPORT_SYMBOL(xlnx_mbox_apu_wait_for_ack);
 
@@ -893,6 +918,8 @@ static int visp_mbox_probe(struct platform_device *pdev)
 			rpu_id);
 		return -ENOMEM;
 	}
+
+	init_completion(&rpu->mailbox_completion);
 
 	/* Store the RPU pointer in the platform device's driver data */
 	platform_set_drvdata(pdev, rpu);

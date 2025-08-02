@@ -766,62 +766,76 @@ int media_isp_device_dqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 			   media_buf *buf, void *enque_buff_g,
 			   media_buffer_t *p_media_buffer);
 
-int handle_frameout_buffer_mimo(void *packet_from_rpu,
-				struct visp_dev *isp_dev)
+int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
 {
-	int ret_val = 0;
 	media_buf *buf = NULL;
 	media_buffer_t *p_media_buffer = NULL;
-
 	struct Chn_info info;
+	mbox_post_msg *msg;
+	size_t size;
+	int ret = 0;
+	void *packet_from_rpu;
 
 	/* Validate inputs */
 	if (!isp_dev) {
 		dev_err(isp_dev->dev,
 			"handle_frameout_buffer: isp_dev is NULL\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto error;
 	}
+
+	if (!kfifo_out(&isp_dev->display_fifo, &msg, 1)) {
+		pr_err("Failed to queue into kfifo\n");
+		ret = -ENOMEM;
+		goto error;
+	}
+
+	size = msg->size;
+	packet_from_rpu = kzalloc(size, GFP_KERNEL);
 	if (!packet_from_rpu) {
-		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: packet_from_rpu is NULL\n");
-		return -EINVAL;
+		dev_err(isp_dev->dev, "Failed to allocate packet_from_rpu\n");
+		ret = -ENOMEM;
+		goto error;
 	}
+
+	memcpy(packet_from_rpu, msg->payload, size);
 
 	/* Allocate memory for the buffer */
 	p_media_buffer = kzalloc(sizeof(media_buffer_t), GFP_KERNEL);
 	if (!p_media_buffer) {
 		dev_err(isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__,
 			__LINE__);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto error;
 	}
 
 	buf = kzalloc(sizeof(media_buf), GFP_KERNEL);
 	if (!buf) {
 		dev_err(isp_dev->dev, "handle_frameout_buffer: Failed to "
 					  "allocate memory for media_buf\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto error;
 	}
 
 	/* Dequeue buffer from the ISP device*/
-	ret_val = media_isp_device_dq_buf_out(isp_dev, &info, buf, packet_from_rpu,
-					 p_media_buffer);
-	if (ret_val != VSI_SUCCESS) {
+	ret = media_isp_device_dq_buf_out(isp_dev, &info, buf, packet_from_rpu,
+					  p_media_buffer);
+	if (ret != VSI_SUCCESS) {
 		dev_err(isp_dev->dev,
 			"handle_frameout_buffer: MediaIspDeviceDqbuf failed "
 			"with error %d\n",
-			ret_val);
-		goto error_free_buf;
+			ret);
+		goto error;
 	}
 
 	wake_up(&isp_dev->wq_frame_done_finished);
-	/* Free allocated buffer after successful processing*/
-	kfree(buf);
-	return 0;
 
-error_free_buf:
-	/* Free buffer in case of any error*/
+error:
+	if(msg)
+		kfree(msg);
 	kfree(buf);
-	return ret_val;
+	kfree(packet_from_rpu);
+	return ret;
 }
 EXPORT_SYMBOL(handle_frameout_buffer_mimo);
 
@@ -2292,7 +2306,8 @@ static int visp_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to init mbox\n");
 		return -EINVAL;
 	}
-	// store the instance pointer in the array
+
+	INIT_KFIFO(isp_dev->display_fifo);
 
 	v4l2_subdev_init(&isp_dev->sd, &visp_subdev_ops);
 	snprintf(isp_dev->sd.name, V4L2_SUBDEV_NAME_SIZE, "%s.%d", VISP_NAME,

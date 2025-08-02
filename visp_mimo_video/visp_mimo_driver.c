@@ -2134,12 +2134,14 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 
 //
 
-int handle_frameout_buffer_mimo(void *packet_from_rpu,
-				struct visp_dev *isp_dev)
+int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
 {
 	int ret_val = 0;
 	media_buf *buf = NULL;
 	media_buffer_t *p_media_buffer = NULL;
+	mbox_post_msg *msg;
+	void *packet_from_rpu;
+	size_t size;
 
 	struct Chn_info info;
 	/* Validate inputs */
@@ -2148,11 +2150,19 @@ int handle_frameout_buffer_mimo(void *packet_from_rpu,
 			"handle_frameout_buffer: isp_dev is NULL\n");
 		return -EINVAL;
 	}
-	if (!packet_from_rpu) {
-		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: packet_from_rpu is NULL\n");
-		return -EINVAL;
+
+	if (!kfifo_out(&isp_dev->display_fifo, &msg, 1)) {
+		pr_err("Failed to queue into kfifo\n");
+		return -ENOMEM;
 	}
+
+	size = msg->size;
+	packet_from_rpu = kzalloc(size, GFP_KERNEL);
+	if (!packet_from_rpu) {
+		dev_err(isp_dev->dev, "Failed to allocate packet_from_rpu\n");
+		return -ENOMEM;
+	}
+	memcpy(packet_from_rpu, msg->payload, size);
 
 	/* Allocate memory for the buffer */
 	p_media_buffer = kzalloc(sizeof(media_buffer_t), GFP_KERNEL);
@@ -2161,6 +2171,7 @@ int handle_frameout_buffer_mimo(void *packet_from_rpu,
 			__LINE__);
 		return -ENOMEM;
 	}
+
 	buf = kzalloc(sizeof(media_buf), GFP_KERNEL);
 	if (!buf) {
 		dev_err(isp_dev->dev, "handle_frameout_buffer: Failed to "
@@ -2185,6 +2196,9 @@ int handle_frameout_buffer_mimo(void *packet_from_rpu,
 
 error_free_buf:
 	/* Free buffer in case of any error*/
+	if(msg)
+		kfree(msg);
+	kfree(packet_from_rpu);
 	kfree(buf);
 	return ret_val;
 }

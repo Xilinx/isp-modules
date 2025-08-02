@@ -73,6 +73,7 @@
 #include <linux/mailbox_client.h>
 #include <linux/mailbox_controller.h>
 #include <linux/skbuff.h>
+#include <linux/kfifo.h>
 #define VISP_NAME "visp-isp-subdev"
 #define VISP_SUBDEV_NAME_SIZE 52
 
@@ -102,7 +103,7 @@ enum visp_port_pad_e {
 };
 
 #define VISP_PAD_NR (VISP_PORT_NR * VISP_PORT_PAD_NR)
-typedef int (*frameout_cb_t)(void *data, struct visp_dev *dev);
+typedef int (*frameout_cb_t)(struct visp_dev *dev);
 enum visp_path_out_type_e {
 	VISP_PATH_OUT_TYPE_MEMORY = 0, /**< path out in memory type*/
 	VISP_PATH_OUT_TYPE_STREAM = 1, /**< path out in stream type */
@@ -233,7 +234,7 @@ struct oba_info {
 };
 
 //
-
+#define VISP_KFIFO_SIZE 16
 struct visp_dev {
 	phys_addr_t paddr;
 	struct rpu_dev *rpu;
@@ -319,6 +320,7 @@ struct visp_dev {
 	unsigned int out_fmt;
 	unsigned int cap_fmt;
 	unsigned int isp_dq_out_index;
+	DECLARE_KFIFO(display_fifo, struct mbox_post_msg *, VISP_KFIFO_SIZE);
 };
 
 //
