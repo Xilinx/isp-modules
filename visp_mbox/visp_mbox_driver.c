@@ -57,8 +57,6 @@
 #include <linux/kernel.h>
 #include "visp_mbox_driver.h"
 #include "mbox_cmd.h"
-#define MAX_ISP_INSTANCES 6
-#define VISP_MBOX_MAX_RPU_ID 9
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
@@ -73,21 +71,19 @@ int visp_mbox_get_dest_cpu(int rpu_id)
 {
 	int dest_cpu;
 	switch (rpu_id) {
-	case 6:
+	case VISP_MBOX_RPU6:
 		dest_cpu = VISP_MBOX_RPU6_0;
 		break;
-	case 7:
+	case VISP_MBOX_RPU7:
 		dest_cpu = VISP_MBOX_RPU7_1;
 		break;
-	case 8:
+	case VISP_MBOX_RPU8:
 		dest_cpu = VISP_MBOX_RPU8_2;
 		break;
-	case 9:
+	case VISP_MBOX_RPU9:
 		dest_cpu = VISP_MBOX_RPU9_3;
 		break;
 	default:
-		// Handle invalid rpu_id (you might want to return an error
-		// code)
 		dest_cpu = -1; // Or another indicator of an invalid id
 		break;
 	}

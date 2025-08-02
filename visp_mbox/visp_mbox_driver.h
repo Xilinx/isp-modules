@@ -60,10 +60,18 @@
 #define CHAR_DEV_NAME "mailbox_dev"
 #define SUCCESS 0
 
+#define VISP_MBOX_RPU6 6
+#define VISP_MBOX_RPU7 7
+#define VISP_MBOX_RPU8 8
+#define VISP_MBOX_RPU9 9
+
 #define VISP_MBOX_RPU6_0 0
 #define VISP_MBOX_RPU7_1 1
 #define VISP_MBOX_RPU8_2 2
 #define VISP_MBOX_RPU9_3 3
+
+#define MAX_ISP_INSTANCES 6
+#define VISP_MBOX_MAX_RPU_ID 9
 
 struct rpu_dev *visp_mbox_get_rpu_dev(int rpu_id);
 extern struct response_user_packet data_from_interrupt;
