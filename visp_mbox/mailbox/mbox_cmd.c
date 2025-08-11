@@ -150,48 +150,23 @@ EXPORT_SYMBOL_GPL(write_mboxcmd);
 int apu_mailbox_read(struct rpu_dev *rpu)
 {
 	struct visp_dev *isp_dev;
-	mbox_post_msg *msg;
-	uint32_t core_id, cmd, isp_id;
+	uint32_t cmd, isp_id;
 	int ret = 0;
 
-	switch (rpu->rpu_id) {
-	case VISP_MBOX_RPU6:
-		core_id = MBOX_CORE_RPU0;
-		break;
-	case VISP_MBOX_RPU7:
-		core_id = MBOX_CORE_RPU1;
-		break;
-	case VISP_MBOX_RPU8:
-		core_id = MBOX_CORE_RPU2;
-		break;
-	case VISP_MBOX_RPU9:
-		core_id = MBOX_CORE_RPU3;
-		break;
-	default:
+	if (vpi_mbox_is_empty(apu_fifo_ctrl, rpu->core_id, MBOX_CORE_APU)) {
 		(void)mbox_send_message(rpu->rx_chan, NULL);
-		dev_err(rpu->dev, "%s:Invalid rpu_id:%d\n",
-			__func__, rpu->rpu_id);
-		return -EINVAL;
-	}
-
-	if (vpi_mbox_is_empty(apu_fifo_ctrl, core_id, MBOX_CORE_APU)) {
-		(void)mbox_send_message(rpu->rx_chan, NULL);
+		if (mutex_is_locked(&rpu->write_lock)) {
+			mutex_unlock(&rpu->write_lock);
+		}
 		pr_err("No message in shared memory for rpu_id %d!\n", rpu->rpu_id);
 		return -ENOMSG;
 	}
 
 	mutex_lock(&rpu->read_lock);
 
-	msg = kzalloc(sizeof(mbox_post_msg), GFP_KERNEL);
-	if (!msg) {
-		pr_err("Failed to allocate memory\n");
-		ret = -ENOMEM;
-		goto DONE;
-	}
+	vpi_mbox_read(apu_fifo_ctrl, rpu->msg, rpu->core_id);
 
-	vpi_mbox_read(apu_fifo_ctrl, msg, core_id);
-
-	memcpy(&isp_id, ((payload_packet *)msg->payload)->payload, sizeof(uint32_t));
+	memcpy(&isp_id, ((payload_packet *)rpu->msg->payload)->payload, sizeof(uint32_t));
 
 	/* Normalize ISP instance ID; clarify why divided by 15 */
 	isp_id = isp_id / 15;
@@ -209,10 +184,10 @@ int apu_mailbox_read(struct rpu_dev *rpu)
 		goto ERROR;
 	}
 
-	cmd = msg->msg_id;
+	cmd = rpu->msg->msg_id;
 	/* Handle specific commands */
 	if (isp_dev->k_apu_ack_flag && cmd == MB_CMD_RES_SUCCESS) {
-		if (!kfifo_in(&rpu->ack_fifo, &msg, 1)) {
+		if (!kfifo_in(&rpu->ack_fifo, &rpu->msg, 1)) {
 			pr_err("Failed to queue into apu ack kfifo\n");
 			ret = -ENOMEM;
 			goto ERROR;
@@ -221,7 +196,7 @@ int apu_mailbox_read(struct rpu_dev *rpu)
 		complete(&isp_dev->apu_wait_for_ack);
 		goto DONE;
 	} else if (isp_dev->k_apu_data_flag && cmd == MB_CMD_GET_SUCCESS) {
-		if (!kfifo_in(&rpu->data_fifo, &msg, 1)) {
+		if (!kfifo_in(&rpu->data_fifo, &rpu->msg, 1)) {
 			pr_err("Failed to queue into apu data kfifo\n");
 			ret = -ENOMEM;
 			goto ERROR;
@@ -231,7 +206,7 @@ int apu_mailbox_read(struct rpu_dev *rpu)
 		goto DONE;
 	} else if ((rpu->app_wait_flag && cmd == MB_CMD_RES_SUCCESS) ||
 		   (rpu->app_wait_flag && cmd == MB_CMD_GET_SUCCESS)) {
-		if (!kfifo_in(&rpu->app_fifo, &msg, 1)) {
+		if (!kfifo_in(&rpu->app_fifo, &rpu->msg, 1)) {
 			pr_err("Failed to queue into kfifo\n");
 			ret = -ENOMEM;
 			goto ERROR;
@@ -241,13 +216,15 @@ int apu_mailbox_read(struct rpu_dev *rpu)
 		goto DONE;
 	} else if (cmd == RPU_2_APU_CMD_DISPLAY_BUFFER) {
 		if (isp_dev->frameout_cb) {
-			if (!kfifo_in(&isp_dev->display_fifo, &msg, 1)) {
+			if (!kfifo_in(&isp_dev->display_fifo, &rpu->msg, 1)) {
 				pr_err("Failed to queue into display kfifo\n");
 				ret = -ENOMEM;
 				goto ERROR;
 			}
+			(void)mbox_send_message(rpu->rx_chan, NULL);
+			mutex_unlock(&rpu->read_lock);
 			isp_dev->frameout_cb(isp_dev);
-			goto DONE;
+			goto DISP_DONE;
 		} else {
 			pr_err("%s %d CALLBACK IS NULL\n", __func__, __LINE__);
 			ret = -EINVAL;
@@ -262,11 +239,10 @@ int apu_mailbox_read(struct rpu_dev *rpu)
 
 	/* Send a message to the RX mailbox channel */
 ERROR:
-	if (msg)
-		kfree(msg);
 DONE:
 	(void)mbox_send_message(rpu->rx_chan, NULL);
 	mutex_unlock(&rpu->read_lock);
+DISP_DONE:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(apu_mailbox_read);

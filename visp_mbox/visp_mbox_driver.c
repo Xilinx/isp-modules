@@ -64,30 +64,6 @@ static DEFINE_MUTEX(rpu_list_lock);
 static LIST_HEAD(rpu_devices);
 
 typedef int (*frameout_cb_t)(struct visp_dev *dev);
-int visp_mbox_get_dest_cpu(int rpu_id);
-
-int visp_mbox_get_dest_cpu(int rpu_id)
-{
-	int dest_cpu;
-	switch (rpu_id) {
-	case VISP_MBOX_RPU6:
-		dest_cpu = VISP_MBOX_RPU6_0;
-		break;
-	case VISP_MBOX_RPU7:
-		dest_cpu = VISP_MBOX_RPU7_1;
-		break;
-	case VISP_MBOX_RPU8:
-		dest_cpu = VISP_MBOX_RPU8_2;
-		break;
-	case VISP_MBOX_RPU9:
-		dest_cpu = VISP_MBOX_RPU9_3;
-		break;
-	default:
-		dest_cpu = -1; // Or another indicator of an invalid id
-		break;
-	}
-	return dest_cpu;
-}
 
 static void visp_mbox_event_notified(struct work_struct *work)
 {
@@ -125,7 +101,7 @@ static void visp_mbox_rx_cb(struct mbox_client *cl, void *msg)
 			pr_err("Work already pending for RPU id %d\n",
 			       rpu->rpu_id);
 		else
-			queue_work(system_wq, &rpu->mbox_work);
+			queue_work(rpu->visp_mbox_evt_wq, &rpu->mbox_work);
 	} else {
 		dev_err(rpu->dev, "%s:Failed to find rpu_dev for rpu_id:%d\n",
 			__func__, rpu->rpu_id);
@@ -153,6 +129,14 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 	mclient = &rpu->rx_mc;
 	mclient->dev = rpu->dev;
 	mclient->rx_callback = visp_mbox_rx_cb; // Set the RX callback
+
+	/* Alloc Work_Queue */
+	rpu->visp_mbox_evt_wq = alloc_workqueue("visp_mbox_evt_wq",
+						WQ_UNBOUND, 0);
+	if (!rpu->visp_mbox_evt_wq) {
+		dev_err(rpu->dev, "Failed to create visp_mbox_evt_wq\n");
+		return -ENOMEM;
+	}
 
 	/* Initialize work */
 	INIT_WORK(&rpu->mbox_work, visp_mbox_event_notified);
@@ -275,7 +259,7 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 	mutex_lock(&rpu->write_lock); // Replaced spinlock with mutex
 	/* Send command and message */
 	ret = send_command(user_packet->cmd_id, packet, sizeof(payload_packet),
-			   visp_mbox_get_dest_cpu(rpu->rpu_id), MBOX_CORE_APU);
+			   rpu->core_id, MBOX_CORE_APU);
 
 	if (ret < 0) {
 		pr_err("%s: send_command failed with error: %d\n", __func__,
@@ -304,7 +288,6 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 	struct rpu_dev *rpu = file->private_data;
 	ssize_t bytes_copied = sizeof(struct response_user_packet);
 	mbox_post_msg *msg;
-	struct response_user_packet *visp_mbox_app_data;
 	size_t size;
 	int result;
 
@@ -327,36 +310,25 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 		goto ERROR;
 	}
 
-	visp_mbox_app_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
-	if (!visp_mbox_app_data) {
-		pr_err("%s:Failed to allocate memory\n", __func__);
-		bytes_copied = -ENOMEM;
-		goto ERROR;
-	}
-
 	if (!kfifo_out(&rpu->app_fifo, &msg, 1)) {
 		pr_err("Failed to queue into kfifo\n");
 		bytes_copied = -ENOMSG;
 		goto ERROR;
 	}
 
-	visp_mbox_app_data->cmdid = msg->msg_id;
-	visp_mbox_app_data->data = msg->payload;
+	rpu->visp_mbox_app_data->cmdid = msg->msg_id;
+	rpu->visp_mbox_app_data->data = msg->payload;
 	size = msg->size;
-	memcpy(&visp_mbox_app_data->res_payload_pkt, msg->payload,
+	memcpy(&rpu->visp_mbox_app_data->res_payload_pkt, msg->payload,
 	       ALIGN(size, 8));
 
-	if (msg)
-		kfree(msg);
 	/* Copy data to user space */
-	if (copy_to_user(buf, visp_mbox_app_data, bytes_copied)) {
+	if (copy_to_user(buf, rpu->visp_mbox_app_data, bytes_copied)) {
 		pr_err("%s: Failed to copy data to user space\n", __func__);
 		bytes_copied = -EFAULT; // Handle the copy_to_user error
 		goto ERROR;
 	}
 ERROR:
-	if (visp_mbox_app_data)
-		kfree(visp_mbox_app_data);
 	mutex_unlock(&rpu->ack_lock);
 	return bytes_copied; // Return the size of data copied on success
 }
@@ -437,7 +409,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 
 	rpu->dev = &pdev->dev;
 	rpu->rpu_id = rpu_id;
-
+	rpu->core_id = rpu_id - VISP_MBOX_RPU6;
 	/* Initialize mutexes, cdev, and reference count */
 	mutex_init(&rpu->lock);
 	mutex_init(&rpu->rpu_lock);
@@ -457,12 +429,51 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 		return ERR_PTR(ret);
 	}
 
+	rpu->visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
+	if (!rpu->visp_mbox_intr_data) {
+		pr_err("Failed to allocate memory\n");
+		devm_kfree(&pdev->dev, rpu);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+	rpu->msg = kzalloc(sizeof(mbox_post_msg), GFP_KERNEL);
+	if (!rpu->msg) {
+		pr_err("Failed to allocate memory\n");
+		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+	rpu->visp_mbox_app_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
+	if (!rpu->visp_mbox_app_data) {
+		pr_err("Failed to allocate memory\n");
+		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		kfree(rpu->msg);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+	rpu->visp_mbox_apu_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
+	if (!rpu->visp_mbox_apu_data) {
+		pr_err("Failed to allocate memory\n");
+		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		kfree(rpu->msg);
+		kfree(rpu->visp_mbox_app_data);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+
 	/* Add the character device */
 	ret = cdev_add(&rpu->cdev, rpu->devno, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add cdev (error %d)\n", ret);
 		unregister_chrdev_region(rpu->devno, 1);
 		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		kfree(rpu->msg);
+		kfree(rpu->visp_mbox_app_data);
+		kfree(rpu->visp_mbox_apu_data);
 		mutex_unlock(&rpu_list_lock);
 		return ERR_PTR(ret);
 	}
@@ -473,6 +484,10 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 		cdev_del(&rpu->cdev);
 		unregister_chrdev_region(rpu->devno, 1);
 		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		kfree(rpu->msg);
+		kfree(rpu->visp_mbox_app_data);
+		kfree(rpu->visp_mbox_apu_data);
 		mutex_unlock(&rpu_list_lock);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -494,6 +509,10 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 			cdev_del(&rpu->cdev);
 			unregister_chrdev_region(rpu->devno, 1);
 			devm_kfree(&pdev->dev, rpu);
+			kfree(rpu->visp_mbox_intr_data);
+			kfree(rpu->msg);
+			kfree(rpu->visp_mbox_app_data);
+			kfree(rpu->visp_mbox_apu_data);
 			mutex_unlock(&rpu_list_lock);
 			return ERR_PTR(ret);
 		}
@@ -557,7 +576,7 @@ static void visp_mbox_reserved_memory_exit(void)
 
 uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 {
-	struct response_user_packet *visp_mbox_intr_data;
+	//struct response_user_packet *visp_mbox_intr_data;
 	struct rpu_dev *rpu = NULL;
 	mbox_post_msg *msg;
 	size_t size;
@@ -600,13 +619,6 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 		goto ERROR;
 	}
 
-	visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
-	if (!visp_mbox_intr_data) {
-		pr_err("%s:Failed to allocate memory\n", __func__);
-		ret = -ENOMEM;
-		goto ERROR;
-	}
-
 	if (!kfifo_out(&rpu->data_fifo, &msg, 1)) {
 		pr_err("Failed to queue into kfifo\n");
 		ret = -ENOMEM;
@@ -614,21 +626,16 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	}
 
 	size = msg->size;
-	visp_mbox_intr_data->cmdid = msg->msg_id;
-	visp_mbox_intr_data->data = msg->payload;
-	memcpy(&visp_mbox_intr_data->res_payload_pkt, msg->payload,
+	rpu->visp_mbox_apu_data->cmdid = msg->msg_id;
+	rpu->visp_mbox_apu_data->data = msg->payload;
+	memcpy(&rpu->visp_mbox_apu_data->res_payload_pkt, msg->payload,
 	       ALIGN(size, 8) /*sizeof(payload_packet)*/);
 	/* Copy the received data */
-	memcpy(data, &visp_mbox_intr_data->res_payload_pkt.payload,
-	       sizeof(visp_mbox_intr_data->res_payload_pkt.payload));
+	memcpy(data, &rpu->visp_mbox_apu_data->res_payload_pkt.payload,
+	       sizeof(rpu->visp_mbox_apu_data->res_payload_pkt.payload));
 
-	if (msg)
-		kfree(msg);
-
-	ret = visp_mbox_intr_data->res_payload_pkt.resp_field.error_subcode_t;
+	ret = rpu->visp_mbox_apu_data->res_payload_pkt.resp_field.error_subcode_t;
 ERROR:
-	if (visp_mbox_intr_data)
-		kfree(visp_mbox_intr_data);
 	/* Return the error code from the interrupt's response payload */
 	return ret;
 }
@@ -650,7 +657,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = send_command(cmd, data, size, visp_mbox_get_dest_cpu(dest_cpu),
+	result = send_command(cmd, data, size, rpu->core_id,
 			      src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
@@ -701,7 +708,7 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		return -EINVAL;
 	}
 	rpu = isp_dev->rpu;
-	result = send_command(cmd, data, size, visp_mbox_get_dest_cpu(dest_cpu),
+	result = send_command(cmd, data, size, rpu->core_id,
 			      src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
@@ -738,7 +745,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = send_command(cmd, data, size, visp_mbox_get_dest_cpu(dest_cpu),
+	result = send_command(cmd, data, size, rpu->core_id,
 			      src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
@@ -765,6 +772,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	result = xlnx_mbox_apu_wait_for_ack(isp_dev);
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: Failed to get ack\n", __func__);
+		mutex_unlock(&rpu->write_lock);
 		goto unlock_and_exit;
 	}
 
@@ -780,7 +788,6 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 	long result;
 	mbox_post_msg *msg;
 	size_t size;
-	struct response_user_packet *visp_mbox_intr_data;
 	int ret;
 
 	if (!isp_dev) {
@@ -812,13 +819,6 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 		goto ERROR;
 	}
 
-	visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
-	if (!visp_mbox_intr_data) {
-		pr_err("%s:Failed to allocate memory\n", __func__);
-		ret = -ENOMEM;
-		goto ERROR;
-	}
-
 	if (!kfifo_out(&rpu->ack_fifo, &msg, 1)) {
 		pr_err("Failed to queue into kfifo\n");
 		ret = -ENOMSG;
@@ -830,18 +830,14 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 		goto ERROR;
 	}
 
-	visp_mbox_intr_data->cmdid = msg->msg_id;
-	visp_mbox_intr_data->data = msg->payload;
+	rpu->visp_mbox_intr_data->cmdid = msg->msg_id;
+	rpu->visp_mbox_intr_data->data = msg->payload;
 	size = msg->size;
-	memcpy(&visp_mbox_intr_data->res_payload_pkt, msg->payload,
+	memcpy(&rpu->visp_mbox_intr_data->res_payload_pkt, msg->payload,
 	       ALIGN(size, 8));
 
-	if (msg)
-		kfree(msg);
-	ret = visp_mbox_intr_data->res_payload_pkt.resp_field.error_subcode_t;
+	return rpu->visp_mbox_intr_data->res_payload_pkt.resp_field.error_subcode_t;
 ERROR:
-	if (visp_mbox_intr_data)
-		kfree(visp_mbox_intr_data);
 	return ret;
 
 }
@@ -929,8 +925,8 @@ static int visp_mbox_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(dev, "Failed to initialize mailbox for RPU id: %d\n",
 			rpu_id);
-		platform_set_drvdata(pdev,
-				     NULL); // Clear driver data on failure
+		 /* Clear driver data on failure */
+		platform_set_drvdata(pdev, NULL);
 		return ret;
 	}
 
@@ -962,6 +958,11 @@ static void visp_mbox_rpu_remove(void)
 		/* Check if the device is safe to remove */
 		if (atomic_read(&rpu->refcount.refcount.refs) == 1) {
 			/* Perform cleanup and removal */
+			kfree(rpu->visp_mbox_intr_data);
+			kfree(rpu->msg);
+			kfree(rpu->visp_mbox_app_data);
+			kfree(rpu->visp_mbox_apu_data);
+
 			device_destroy(mailbox_class, rpu->devno);
 			cdev_del(&rpu->cdev);
 			unregister_chrdev_region(rpu->devno, 1);

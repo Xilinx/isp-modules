@@ -801,9 +801,6 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev)
 
 	memcpy(packet_from_rpu, msg->payload, size);
 
-	if (msg)
-		kfree(msg);
-
 	/* Dequeue buffer from the ISP device*/
 	read_dq_buf_info(packet_from_rpu, isp_dev, &info, &buf_index);
 

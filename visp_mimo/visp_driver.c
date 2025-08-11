@@ -831,8 +831,6 @@ int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
 	wake_up(&isp_dev->wq_frame_done_finished);
 
 error:
-	if(msg)
-		kfree(msg);
 	kfree(buf);
 	kfree(packet_from_rpu);
 	return ret;

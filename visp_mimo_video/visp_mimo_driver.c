@@ -2196,8 +2196,6 @@ int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
 
 error_free_buf:
 	/* Free buffer in case of any error*/
-	if(msg)
-		kfree(msg);
 	kfree(packet_from_rpu);
 	kfree(buf);
 	return ret_val;

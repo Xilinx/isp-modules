@@ -836,9 +836,6 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev)
 	/* Dequeue buffer from the ISP device*/
 	read_dq_buf_info(packet_from_rpu, isp_dev, &info, &buf_index);
 
-	if (msg)
-		kfree(msg);
-
 	output_buffer = isp_dev->isp_ports[info.vt_id]
 			    .isp_chns[info.path]
 			    .cam_device_bufs[buf_index];
