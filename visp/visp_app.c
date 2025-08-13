@@ -1910,6 +1910,7 @@ int media_isp_calib_load_isp_config(struct visp_dev *isp_dev, uint8_t port)
 	dev_dbg(isp_dev->dev, "%s: port: %u", __func__, port);
 	dev_dbg(isp_dev->dev, "%s: buf_mode: %s", __func__, isp_port->bufmode);
 	dev_dbg(isp_dev->dev, "%s: port: %u", __func__, port);
+	dev_dbg(isp_dev->dev, "%s: hw_mcm: %s", __func__, isp_dev->isp_ports[port].hw_mcm ? "1/Enable" : "0/Disable" );
 
 	return ret_val;
 }
@@ -1984,7 +1985,8 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 		CamConfig.work_cfg.mode_cfg.mcm.port_id =
 		    port + 1; //"1:CAMDEV_MCM_PORT_0, 2:CAMDEV_MCM_PORT_1, ..."
 		CamConfig.work_cfg.mode_cfg.mcm.mcm_op =
-		    1; //"1:CAMDEV_MCM_OP_SW, 2:CAMDEV_MCM_OP_HW"
+			isp_dev->isp_ports[port].hw_mcm ? CAMDEV_MCM_OP_HW : CAMDEV_MCM_OP_SW;; //"1:CAMDEV_MCM_OP_SW, 2:CAMDEV_MCM_OP_HW"
+		dev_info(isp_dev->dev, "isp : %d Port :%d MCM Mode %s", isp_dev->id, port, CamConfig.work_cfg.mode_cfg.mcm.mcm_op ? "hw_mcm" : "sw_mcm");
 	} else {
 		CamConfig.work_cfg.work_mode = CAMDEV_WORK_MODE_STREAM;
 		CamConfig.work_cfg.mode_cfg.stream.port_id =

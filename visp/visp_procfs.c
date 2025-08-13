@@ -135,6 +135,8 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 				   isp_dev->isp_ports[port].sensor_info.i2c_id);
 			seq_printf(sfile, "buffer_type : %s\n",
 				   isp_dev->isp_ports[port].bufmode);
+			seq_printf(sfile, "hw_mcm      : %s\n",
+					isp_dev->isp_ports[port].hw_mcm ? "1 / Enable" : "0 / Disable" );
 			seq_printf(sfile,
 				   "#################################\n\n\n");
 		}
@@ -303,6 +305,19 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					strncpy(
 					    isp_dev->isp_ports[port].bufmode,
 					    val, strlen(val));
+				}
+			}
+			else if (strcmp(val, "hw_mcm") == 0) {
+				val = strsep(&kv_cur, kv_delim);
+				if (val && isdigit(*val)) {
+					if((uint32_t)simple_strtoul(val, &end, 0) == 1 )
+					{
+						isp_dev->isp_ports[port].hw_mcm=(bool)true;
+					}
+					else
+					{
+						isp_dev->isp_ports[port].hw_mcm=(bool)false;
+					}
 				}
 			}
 		}

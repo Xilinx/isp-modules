@@ -134,6 +134,7 @@ typedef struct media_isp_port_s {
 	bool_t sensor_drv_registered;
 	struct mutex main_lock;
 	char bufmode[BUF_MODE_SIZE];
+	bool_t hw_mcm;
 } media_isp_port_attr;
 
 typedef struct media_isp_event_dev_s {
