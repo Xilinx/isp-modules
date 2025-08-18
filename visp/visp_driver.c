@@ -2126,6 +2126,40 @@ static const struct media_entity_operations visp_entity_ops = {
 
 };
 
+/* Forward declaration */
+static struct media_entity *visp_find_entity_by_fwnode(struct visp_dev *isp_dev,
+							struct fwnode_handle *fwnode);
+
+/**
+ * visp_find_entity_by_fwnode - Find media entity by its fwnode
+ * @isp_dev: ISP device structure
+ * @fwnode: Firmware node to search for
+ *
+ * Returns: Pointer to media entity if found, NULL otherwise
+ */
+static struct media_entity *visp_find_entity_by_fwnode(struct visp_dev *isp_dev,
+						       struct fwnode_handle *fwnode)
+{
+	struct media_device *mdev = isp_dev->sd.entity.graph_obj.mdev;
+	struct media_entity *entity;
+	struct v4l2_subdev *subdev;
+
+	if (!mdev || !fwnode)
+		return NULL;
+
+	media_device_for_each_entity(entity, mdev) {
+		if (is_media_entity_v4l2_subdev(entity)) {
+			subdev = media_entity_to_v4l2_subdev(entity);
+			/* Direct fwnode comparison */
+			if (subdev->fwnode == fwnode) {
+				return entity;
+			}
+		}
+	}
+
+	return NULL;
+}
+
 static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
 			       struct v4l2_subdev *sd,
 			       struct v4l2_async_connection *asc)
@@ -2193,11 +2227,36 @@ static void visp_notifier_unbound(struct v4l2_async_notifier *notifier,
 				  struct v4l2_subdev *sd,
 				  struct v4l2_async_connection *asc)
 {
+	struct visp_dev *isp_dev = container_of(notifier, struct visp_dev, notifier);
+
+	dev_dbg(isp_dev->dev, "Notifier unbound: subdev %s\n", sd->name);
+}
+
+static int visp_notifier_complete(struct v4l2_async_notifier *notifier)
+{
+	struct visp_dev *isp_dev = container_of(notifier, struct visp_dev, notifier);
+	int i;
+
+	dev_info(isp_dev->dev, "=== Async notifier complete - all subdevices bound ===\n");
+	dev_info(isp_dev->dev, "ISP entity: %s (num_pads=%u)\n",
+		 isp_dev->sd.entity.name, isp_dev->sd.entity.num_pads);
+
+	/* Print ISP pad information */
+	for (i = 0; i < isp_dev->sd.entity.num_pads; i++) {
+		dev_info(isp_dev->dev, "  ISP pad[%d]: %s\n", i,
+			 (isp_dev->pads[i].flags & MEDIA_PAD_FL_SOURCE) ? "source" : "sink");
+	}
+
+	/* Now that all subdevices are bound, discover the complete pipeline */
+	dev_info(isp_dev->dev, "=== Pipeline discovery after all bindings ===\n");
+
+	return 0;
 }
 
 static const struct v4l2_async_notifier_operations visp_notify_ops = {
 	.bound = visp_notifier_bound,
 	.unbind = visp_notifier_unbound,
+	.complete = visp_notifier_complete,
 };
 
 static int visp_async_notifier(struct visp_dev *isp_dev)

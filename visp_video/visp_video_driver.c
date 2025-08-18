@@ -74,6 +74,84 @@
 
 #include "visp_video_register.h"
 
+/**
+ * visp_video_discover_pipeline_subdevs - Discover all subdevices in the pipeline
+ * @visp_mdev: visp media device
+ *
+ * This function generically discovers all subdevices connected to the video device
+ * using device tree and V4L2 async framework APIs, without hardcoding device types.
+ */
+static int visp_video_discover_pipeline_subdevs(struct visp_media_dev *visp_mdev)
+{
+	struct v4l2_subdev *subdev;
+	struct media_entity *entity;
+	int discovered_count = 0;
+
+	dev_info(visp_mdev->dev, "=== Starting generic pipeline discovery ===\n");
+
+	/* Iterate through all entities in the media graph */
+	media_device_for_each_entity(entity, &visp_mdev->mdev) {
+		if (is_media_entity_v4l2_subdev(entity)) {
+			subdev = media_entity_to_v4l2_subdev(entity);
+			dev_info(visp_mdev->dev,
+				 "Found subdev: '%s' (entity_id=%u, function=0x%x, pads=%u)\n",
+				 subdev->name, entity->graph_obj.id,
+				 entity->function, entity->num_pads);
+			discovered_count++;
+		} else if (is_media_entity_v4l2_video_device(entity)) {
+			struct video_device *vdev = media_entity_to_video_device(entity);
+			dev_info(visp_mdev->dev,
+				 "Found video device: '%s' (entity_id=%u, minor=%d)\n",
+				 video_device_node_name(vdev), entity->graph_obj.id,
+				 vdev->minor);
+		}
+	}
+
+	dev_info(visp_mdev->dev,
+		 "=== Pipeline discovery complete: %d subdevices found ===\n",
+		 discovered_count);
+	return 0;
+}
+
+/**
+ * visp_video_list_pipeline_connections - List all media links in the pipeline
+ * @visp_mdev: visp media device
+ */
+static void visp_video_list_pipeline_connections(struct visp_media_dev *visp_mdev)
+{
+	struct media_entity *entity;
+	struct media_link *link;
+	struct media_pad *pad;
+	int link_count = 0;
+
+	dev_info(visp_mdev->dev, "=== Media Pipeline Links ===\n");
+
+	media_device_for_each_entity(entity, &visp_mdev->mdev) {
+		/* List all pads for this entity */
+		media_entity_for_each_pad(entity, pad) {
+			/* List outgoing links from source pads */
+			if (pad->flags & MEDIA_PAD_FL_SOURCE) {
+				list_for_each_entry(link, &entity->links, list) {
+					if (link->source == pad) {
+						dev_info(visp_mdev->dev,
+							 "Link %d: %s:%u -> %s:%u %s\n",
+							 ++link_count,
+							 link->source->entity->name, link->source->index,
+							 link->sink->entity->name, link->sink->index,
+							 (link->flags & MEDIA_LNK_FL_ENABLED) ? "[ENABLED]" : "[disabled]");
+					}
+				}
+			}
+		}
+	}
+
+	if (link_count == 0) {
+		dev_info(visp_mdev->dev, "No media links found in pipeline\n");
+	} else {
+		dev_info(visp_mdev->dev, "=== Total %d media links ===\n", link_count);
+	}
+}
+
 static int visp_video_register_ports(struct visp_media_dev *visp_mdev)
 {
 	int i = 0;
@@ -390,6 +468,11 @@ static int visp_video_probe(struct platform_device *pdev)
 		dev_err(dev, "register media device error\n");
 		goto err_unregister_subdev;
 	}
+
+	/* Discover and list pipeline subdevices generically */
+	visp_video_discover_pipeline_subdevs(visp_mdev);
+	visp_video_list_pipeline_connections(visp_mdev);
+
 	dev_info(&pdev->dev, "visp video driver probe success\n");
 	return 0;
 
