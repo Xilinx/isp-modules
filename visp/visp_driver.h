@@ -323,5 +323,9 @@ struct visp_dev {
 	DECLARE_KFIFO(display_fifo, struct mbox_post_msg *, VISP_KFIFO_SIZE);
 };
 
+/* Pipeline management function declarations */
+int visp_get_pipeline_subdev_count(struct visp_dev *isp_dev, int port);
+struct v4l2_subdev *visp_get_pipeline_subdev(struct visp_dev *isp_dev, int port, int index);
+
 //
 #endif

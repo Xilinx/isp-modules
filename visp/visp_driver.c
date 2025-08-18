@@ -919,6 +919,132 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev,
 	return subdev; /* Return the first valid input sub-device found */
 }
 
+/**
+ * visp_discover_pipeline_subdevs - Discover all subdevices in the pipeline
+ * @isp_dev: ISP device
+ * @port: ISP port number
+ * @subdevs: Array to store discovered subdevices
+ * @max_subdevs: Maximum number of subdevices to discover
+ *
+ * Traverses the media graph to find all subdevices connected to the ISP pipeline.
+ * Returns the number of subdevices found.
+ */
+static int visp_discover_pipeline_subdevs(struct visp_dev *isp_dev, int port,
+					  struct v4l2_subdev **subdevs, int max_subdevs)
+{
+	struct media_device *mdev = isp_dev->sd.entity.graph_obj.mdev;
+	struct media_entity *entity;
+	struct media_link *link;
+	struct v4l2_subdev *sd;
+	int count = 0;
+	int i;
+
+	if (!mdev || !subdevs || max_subdevs <= 0)
+		return 0;
+
+	dev_info(isp_dev->dev, "=== Discovering pipeline subdevices for port %d ===\n", port);
+
+	/* Walk through all entities in the media device */
+	media_device_for_each_entity(entity, mdev) {
+		/* Only interested in V4L2 subdevices */
+		if (!is_media_entity_v4l2_subdev(entity))
+			continue;
+
+		sd = media_entity_to_v4l2_subdev(entity);
+		if (!sd || sd == &isp_dev->sd) /* Skip ISP itself */
+			continue;
+
+		/* Check if this subdevice is connected to our ISP */
+		list_for_each_entry(link, &entity->links, list) {
+			struct media_entity *remote_entity = NULL;
+
+			if (link->source->entity == entity &&
+			    (link->flags & MEDIA_LNK_FL_ENABLED)) {
+				remote_entity = link->sink->entity;
+			} else if (link->sink->entity == entity &&
+				   (link->flags & MEDIA_LNK_FL_ENABLED)) {
+				remote_entity = link->source->entity;
+			}
+
+			/* Check if connected to our ISP entity */
+			if (remote_entity == &isp_dev->sd.entity) {
+				/* Avoid duplicates */
+				for (i = 0; i < count; i++) {
+					if (subdevs[i] == sd)
+						break;
+				}
+
+				if (i == count && count < max_subdevs) {
+					subdevs[count] = sd;
+					dev_info(isp_dev->dev, "  Found subdev[%d]: %s (function: 0x%x)\n",
+						 count, sd->name, sd->entity.function);
+					count++;
+				}
+				break;
+			}
+		}
+	}
+
+	dev_info(isp_dev->dev, "=== Pipeline discovery complete: found %d subdevices ===\n", count);
+	return count;
+}
+
+/**
+ * visp_get_pipeline_subdev_count - Get number of subdevices in pipeline for a port
+ * @isp_dev: ISP device structure
+ * @port: Port number
+ *
+ * Return: Number of subdevices in the pipeline for the specified port
+ */
+int visp_get_pipeline_subdev_count(struct visp_dev *isp_dev, int port)
+{
+	struct v4l2_subdev *subdevs[16]; /* Support up to 16 subdevices */
+	int count;
+
+	if (!isp_dev || port < 0 || port >= VISP_PORT_NR) {
+		return 0;
+	}
+
+	/* Use discovery function to count subdevices */
+	count = visp_discover_pipeline_subdevs(isp_dev, port, subdevs, ARRAY_SIZE(subdevs));
+
+	dev_info(isp_dev->dev, "Pipeline discovery for port %d found %d subdevices\n", port, count);
+
+	return count;
+}
+
+/**
+ * visp_get_pipeline_subdev - Get a specific subdevice from pipeline
+ * @isp_dev: ISP device structure
+ * @port: Port number
+ * @index: Subdevice index in the pipeline
+ *
+ * Return: Pointer to v4l2_subdev if found, NULL otherwise
+ */
+struct v4l2_subdev *visp_get_pipeline_subdev(struct visp_dev *isp_dev, int port, int index)
+{
+	struct v4l2_subdev *subdevs[16]; /* Support up to 16 subdevices */
+	int count;
+
+	if (!isp_dev || port < 0 || port >= VISP_PORT_NR || index < 0) {
+		return NULL;
+	}
+
+	/* Use discovery function to get subdevices */
+	count = visp_discover_pipeline_subdevs(isp_dev, port, subdevs, ARRAY_SIZE(subdevs));
+
+	if (index >= count) {
+		dev_dbg(isp_dev->dev, "Request for subdev index %d >= count %d for port %d\n",
+			index, count, port);
+		return NULL;
+	}
+
+	dev_dbg(isp_dev->dev, "Returning subdev[%d] = %s for port %d\n",
+		index, subdevs[index] ? subdevs[index]->name : "NULL", port);
+
+	return subdevs[index];
+}
+
 static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 {
 	struct visp_pad_stream_status *pad_stream =
