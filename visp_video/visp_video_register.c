@@ -1461,27 +1461,42 @@ static int visp_video_try_create_pipeline(struct visp_video_dev *visp_vdev)
 	    .pads = &pad_cfg,
 	};
 
-	if (visp_vdev->pipeline)
+	if (visp_vdev->pipeline) {
+		dev_err(visp_vdev->visp_mdev->dev, "try_create_pipeline: pipeline already exists\n");
 		return 0;
+	}
+
 	subdev = visp_video_remote_subdev(visp_vdev);
-	if (!subdev)
+	if (!subdev) {
+		dev_err(visp_vdev->visp_mdev->dev, "try_create_pipeline: no remote subdev found\n");
 		return -EINVAL;
+	}
+
 #if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
 	pad = media_pad_remote_pad_first(&visp_vdev->pad);
 #else
 	pad = media_entity_remote_pad(&visp_vdev->pad);
 #endif
 
+	if (!pad) {
+		dev_err(visp_vdev->visp_mdev->dev, "try_create_pipeline: no remote pad found\n");
+		return -EINVAL;
+	}
+
 	sd_fmt.pad = pad->index;
 	sd_fmt.which = V4L2_SUBDEV_FORMAT_TRY;
 
 	ret = v4l2_subdev_call(subdev, pad, get_fmt, &sd_state, &sd_fmt);
-	if (ret)
+	if (ret) {
+		dev_err(visp_vdev->visp_mdev->dev, "try_create_pipeline: get_fmt failed: %d\n", ret);
 		return ret;
+	}
 
 	ret = visp_video_mfmt_to_vfmt(&sd_fmt, &visp_vdev->format);
-	if (ret)
+	if (ret) {
+		dev_err(visp_vdev->visp_mdev->dev, "try_create_pipeline: mfmt_to_vfmt failed: %d\n", ret);
 		return ret;
+	}
 
 	visp_vdev->pipeline = 1;
 	return 0;
@@ -1522,28 +1537,35 @@ static int visp_videoc_enum_fmt_vid_cap(struct file *file, void *priv,
 	int ret = -EINVAL;
 
 	ret = visp_video_try_create_pipeline(visp_vdev);
-	if (ret)
+	if (ret) {
+		dev_err(visp_vdev->visp_mdev->dev, "enum_fmt: visp_video_try_create_pipeline failed: %d\n", ret);
 		return ret;
+	}
+
 	subdev = visp_video_remote_subdev(visp_vdev);
 	if (subdev) {
 #if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
-		{ pad = media_pad_remote_pad_first(&visp_vdev->pad); }
+		pad = media_pad_remote_pad_first(&visp_vdev->pad);
 #else
-		{
-			pad = media_entity_remote_pad(&visp_vdev->pad);
-		}
+		pad = media_entity_remote_pad(&visp_vdev->pad);
 #endif
+		if (!pad) {
+			dev_err(visp_vdev->visp_mdev->dev, "enum_fmt: no remote pad found\n");
+			return -EINVAL;
+		}
+
 		memset(&mbus_code, 0, sizeof(mbus_code));
 		mbus_code.pad = pad->index;
 		mbus_code.index = f->index;
 		ret = v4l2_subdev_call(subdev, pad, enum_mbus_code, &sd_state,
 				       &mbus_code);
-		if (ret)
+		if (ret) {
+			dev_err(visp_vdev->visp_mdev->dev, "enum_fmt: enum_mbus_code failed: %d\n", ret);
 			return ret;
+		}
 
-		ret =
-		    visp_video_mbus_to_fourcc(mbus_code.code, &f->pixelformat,
-					      (uint32_t)mbus_code.reserved[0]);
+		ret = visp_video_mbus_to_fourcc(mbus_code.code, &f->pixelformat,
+						(uint32_t)mbus_code.reserved[0]);
 
 		if (ret)
 			return ret;

@@ -65,8 +65,8 @@ struct visp_subdev_dma_buf {
 	int size;
 };
 
-static bool visp_video_event_subscribed(struct isp_mimo *visp_vdev,
-					uint32_t type, uint32_t id)
+static bool __maybe_unused visp_video_event_subscribed(struct isp_mimo *visp_vdev,
+							uint32_t type, uint32_t id)
 {
 	struct v4l2_fh *fh;
 	unsigned long flags;
