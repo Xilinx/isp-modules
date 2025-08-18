@@ -70,6 +70,7 @@
 #include <media/v4l2-mc.h>
 #include <media/v4l2-mediabus.h>
 #include <media/videobuf2-dma-contig.h>
+#include <linux/version.h>
 
 #include "visp_ctrl.h"
 #include "visp_driver.h"
@@ -678,6 +679,32 @@ struct visp_format visp_raw_fmts[] = {
 		.code = MEDIA_BUS_FMT_SRGGB24_1X24,
 	},
 };
+
+/**
+ * visp_mbus_to_fourcc - Find the first fourcc code for a given mbus format
+ * @mbus_code: Media bus format code to search for
+ *
+ * Returns the first matching fourcc code for the given mbus format,
+ * or 0 if no match is found.
+ */
+static uint32_t visp_mbus_to_fourcc(uint32_t mbus_code)
+{
+	int i;
+
+	/* Search in main port formats */
+	for (i = 0; i < ARRAY_SIZE(visp_mp_fmts); i++) {
+		if (visp_mp_fmts[i].code == mbus_code)
+			return visp_mp_fmts[i].fourcc;
+	}
+
+	/* Search in source port formats */
+	for (i = 0; i < ARRAY_SIZE(visp_sp_fmts); i++) {
+		if (visp_sp_fmts[i].code == mbus_code)
+			return visp_sp_fmts[i].fourcc;
+	}
+
+	return 0; /* No match found */
+}
 
 static int visp_querycap(struct v4l2_subdev *sd, void *arg)
 {
@@ -1746,25 +1773,46 @@ int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
 					 uint32_t fourcc_code);
 static void set_default_pad_config(struct visp_dev *isp_dev)
 {
-	int i = 0;
-	struct visp_pad_data *source_pad;
+	int pad;
+	struct visp_pad_data *pad_data;
 
-	source_pad = &isp_dev->pad_data[0];
-	source_pad->format.field = V4L2_FIELD_NONE;
-	source_pad->format.code = MEDIA_BUS_FMT_SRGGB12_1X12;
-	source_pad->format.quantization = V4L2_QUANTIZATION_DEFAULT;
-	source_pad->format.colorspace = V4L2_COLORSPACE_SRGB;
-	source_pad->format.width = 1920;
-	source_pad->format.height = 1080;
+	/* Initialize default formats for all pads */
+	for (pad = 0; pad < VISP_PAD_NR; pad++) {
+		pad_data = &isp_dev->pad_data[pad];
 
-	for (i = 1; i < VISP_PORT_PAD_NR; i++) {
-		source_pad = &isp_dev->pad_data[i];
-		source_pad->format.field = V4L2_FIELD_NONE;
-		source_pad->format.code = MEDIA_BUS_FMT_RBG888_1X24;
-		source_pad->format.quantization = V4L2_QUANTIZATION_DEFAULT;
-		source_pad->format.colorspace = V4L2_COLORSPACE_SRGB;
-		source_pad->format.width = 1920;
-		source_pad->format.height = 1080;
+		/* Common format properties */
+		pad_data->format.field = V4L2_FIELD_NONE;
+		pad_data->format.quantization = V4L2_QUANTIZATION_DEFAULT;
+		pad_data->format.width = 1920;
+		pad_data->format.height = 1080;
+
+		switch (pad % VISP_PORT_PAD_NR) {
+		case VISP_PORT_PAD_SINK:
+			/* Sink pads use raw sensor format */
+			pad_data->format.code = MEDIA_BUS_FMT_SRGGB12_1X12;
+			pad_data->format.colorspace = V4L2_COLORSPACE_RAW;
+			dev_dbg(isp_dev->dev, "Init pad %d (sink): %ux%u code=0x%x\n",
+				pad, pad_data->format.width, pad_data->format.height,
+				pad_data->format.code);
+			break;
+		case VISP_PORT_PAD_SOURCE_MP:
+		case VISP_PORT_PAD_SOURCE_SP1:
+		case VISP_PORT_PAD_SOURCE_SP2:
+			/* Source pads use processed RGB format */
+			pad_data->format.code = MEDIA_BUS_FMT_RGB888_1X24;
+			pad_data->format.colorspace = V4L2_COLORSPACE_SRGB;
+			break;
+		case VISP_PORT_PAD_SOURCE_RAW:
+			/* Raw output pads preserve sensor format */
+			pad_data->format.code = MEDIA_BUS_FMT_SRGGB12_1X12;
+			pad_data->format.colorspace = V4L2_COLORSPACE_RAW;
+			break;
+		default:
+			/* Default to RGB format */
+			pad_data->format.code = MEDIA_BUS_FMT_RGB888_1X24;
+			pad_data->format.colorspace = V4L2_COLORSPACE_SRGB;
+			break;
+		}
 	}
 }
 
@@ -1777,47 +1825,34 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	uint32_t sink_pad_index;
 	struct visp_pad_data *cur_pad = &isp_dev->pad_data[format->pad];
 	struct visp_pad_data *sink_pad;
-	struct visp_pad_data *source_pad;
 	int i;
-	int ret;
+	int ret = 0;
 	media_fmt Format_media;
 	struct v4l2_mbus_framefmt *MBusFormat;
 	struct media_pad *mediapad_t;
 	uint32_t fourcc_code = 0;
 
+	/* Try to create ISP device if not already created */
+	{
+		int port = format->pad / VISP_PORT_PAD_NR;
+		int ret_val = 0;
+
+		if (!isp_dev->isp_ports[port].cam_device_handle) {
+			ret_val = isp_device_create(isp_dev, port);
+			if (ret_val) {
+				dev_err(isp_dev->dev,
+					"set_fmt: device creation failed with %d\n",
+					ret_val);
+			}
+		}
+	}
+
 	sink_pad_index = format->pad - (format->pad % VISP_PORT_PAD_NR);
 	sink_pad = &isp_dev->pad_data[sink_pad_index];
 
-	if (sink_pad == cur_pad) {
-		cur_pad->sink_detected = 1;
-		cur_pad->format = format->format;
-		for (i = 1; i < VISP_PORT_PAD_NR; i++) {
-			source_pad = &isp_dev->pad_data[sink_pad_index + i];
-			source_pad->sink_detected = 1;
-
-			switch (i) {
-			case VISP_PORT_PAD_SOURCE_MP:
-			case VISP_PORT_PAD_SOURCE_SP1:
-			case VISP_PORT_PAD_SOURCE_SP2:
-			case VISP_PORT_PAD_SOURCE_RAW:
-				source_pad->format = format->format;
-				source_pad->format.code =
-				    source_pad->fmts[0].code;
-				memcpy(source_pad->format.reserved,
-				       &source_pad->fmts[0].fourcc,
-				       sizeof(uint32_t));
-				source_pad->format.field = V4L2_FIELD_NONE;
-				source_pad->format.quantization =
-				    V4L2_QUANTIZATION_DEFAULT;
-				source_pad->format.colorspace =
-				    V4L2_COLORSPACE_DEFAULT;
-				break;
-			default:
-				break;
-			}
-		}
-		return 0;
-	}
+	/* Apply format to the current pad being set */
+	cur_pad->sink_detected = 1;
+	cur_pad->format = format->format;
 
 	w = ALIGN(format->format.width, VISP_WIDTH_ALIGN);
 	h = ALIGN(format->format.height, VISP_HEIGHT_ALIGN);
@@ -1840,9 +1875,6 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 		       sizeof(uint32_t));
 	}
 
-	if (ret)
-		return ret;
-
 	memset(&Format_media, 0, sizeof(Format_media));
 
 	MBusFormat = (struct v4l2_mbus_framefmt *)&format->format;
@@ -1863,7 +1895,7 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	    &MBusFormat->code, &Format_media.pixel_format, fourcc_code);
 
 	mediapad_t = &isp_dev->pads[format->pad];
-	media_isp_set_format(isp_dev, mediapad_t->index, Format_media);
+	ret = media_isp_set_format(isp_dev, mediapad_t->index, Format_media);
 	if (ret)
 		return ret;
 
@@ -1978,57 +2010,14 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_data *pad_data = &isp_dev->pad_data[format->pad];
-	int index = isp_dev->pads[format->pad].index;
-	int port = index / MEDIA_ISP_PORT_PAD_COUNT;
-	int ret_val;
+	uint32_t fourcc;
 
-	/*Create Instance*/
-	mutex_lock(&isp_dev->rpu->rpu_lock);
-
-	// camdevice_create;
-	if (!isp_dev->isp_ports[port].ref_count) {
-		media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
-
-		if (isp_port->cam_device_handle) {
-			/*Exit port Level Critical Section */
-			mutex_unlock(&isp_dev->rpu->rpu_lock);
-			return VSI_SUCCESS;
-		}
-
-		if (!isp_dev->isp_ports[port].ref_count) {
-			if (isp_dev->num_streams == 1 /*NMCM*/) {
-				ret_val = isp_device_create(isp_dev, port);
-				if (ret_val != VSI_SUCCESS) {
-					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					dev_err(
-					    isp_dev->dev,
-					    "CamDevice Creat Isp , ret is %d",
-					    ret_val);
-					return ret_val;
-				}
-			} else if (isp_dev->num_streams > 1 /*MCM*/) {
-				ret_val = isp_device_create(isp_dev, port);
-				if (ret_val != VSI_SUCCESS) {
-					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					dev_err(
-					    isp_dev->dev,
-					    "CamDevice Creat Isp , ret is %d",
-					    ret_val);
-					return ret_val;
-				}
-			} else {
-				dev_info(
-				    isp_dev->dev,
-				    "Check the mode %d (1:Non-MCM 2:MCM)\n",
-				    isp_dev->num_streams);
-			}
-		}
-	}
-	isp_dev->isp_ports[port].ref_count++;
-
-	/*Exit port Level Critical Section */
-	mutex_unlock(&isp_dev->rpu->rpu_lock);
 	format->format = pad_data->format;
+
+	/* Find the corresponding fourcc for this mbus format */
+	fourcc = visp_mbus_to_fourcc(pad_data->format.code);
+
+	memcpy(format->format.reserved, &fourcc, sizeof(fourcc));
 
 	return 0;
 }
@@ -2039,6 +2028,19 @@ static int visp_enum_mbus_code(struct v4l2_subdev *sd,
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_data *pad_data = &isp_dev->pad_data[code->pad];
+	int port = code->pad / VISP_PORT_PAD_NR;
+	int ret_val = 0;
+
+	/* Try to create ISP device if not already created */
+	if (!isp_dev->isp_ports[port].cam_device_handle) {
+		ret_val = isp_device_create(isp_dev, port);
+		if (ret_val) {
+			/* If device creation fails, continue with basic enumeration */
+			dev_err(isp_dev->dev,
+				"enum_mbus_code: device creation failed with %d\n",
+				ret_val);
+		}
+	}
 
 	if (code->index >= pad_data->num_formats)
 		return -EINVAL;
@@ -2365,10 +2367,12 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 		default:
 			break;
 		}
-		set_default_pad_config(isp_dev);
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad].queue);
 		spin_lock_init(&isp_dev->pad_data[pad].qlock);
 	}
+
+	/* Initialize default formats for all pads */
+	set_default_pad_config(isp_dev);
 
 	return 0;
 }
@@ -2651,7 +2655,7 @@ static int visp_probe(struct platform_device *pdev)
 	isp_dev->sd.owner = THIS_MODULE;
 	isp_dev->sd.internal_ops = &visp_internal_ops;
 	isp_dev->sd.entity.ops = &visp_entity_ops;
-	isp_dev->sd.entity.function = MEDIA_ENT_F_IO_V4L;
+	isp_dev->sd.entity.function = MEDIA_ENT_F_PROC_VIDEO_ISP;
 	isp_dev->sd.entity.obj_type = MEDIA_ENTITY_TYPE_V4L2_SUBDEV;
 	isp_dev->sd.entity.name = isp_dev->sd.name;
 	v4l2_set_subdevdata(&isp_dev->sd, isp_dev);
@@ -2670,9 +2674,20 @@ static int visp_probe(struct platform_device *pdev)
 
 	ret = v4l2_async_register_subdev(&isp_dev->sd);
 	if (ret) {
-		dev_err(dev, "register subdev error\n");
-		goto error_regiter_subdev;
+		dev_err(dev, "Failed to register V4L2 async subdev: %d\n", ret);
+		goto err_async_register_subdev;
 	}
+
+	dev_info(dev, "ISP subdev registered successfully with name: %s\n", isp_dev->sd.name);
+	dev_info(dev, "ISP entity function: 0x%x, obj_type: %d\n",
+		 isp_dev->sd.entity.function, isp_dev->sd.entity.obj_type);
+	dev_info(dev, "ISP subdev flags: 0x%x\n", isp_dev->sd.flags);
+
+	dev_info(dev, "ISP: Subdevice registered: %s (entity: %s)\n",
+		 isp_dev->sd.name, isp_dev->sd.entity.name);
+	dev_info(dev, "ISP: Entity function: 0x%x, pads: %u\n",
+		 isp_dev->sd.entity.function, isp_dev->sd.entity.num_pads);
+
 	/* Assign the XML path to sensor_info[0].xml */
 	ret = visp_procfs_register(isp_dev, &isp_dev->pde);
 	if (ret) {
@@ -2716,7 +2731,7 @@ static int visp_probe(struct platform_device *pdev)
 err_register_procfs:
 	v4l2_async_unregister_subdev(&isp_dev->sd);
 
-error_regiter_subdev:
+err_async_register_subdev:
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 	v4l2_async_nf_unregister(&isp_dev->notifier);
 	v4l2_async_nf_cleanup(&isp_dev->notifier);
