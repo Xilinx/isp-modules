@@ -1045,6 +1045,91 @@ struct v4l2_subdev *visp_get_pipeline_subdev(struct visp_dev *isp_dev, int port,
 	return subdevs[index];
 }
 
+/**
+ * visp_stream_pipeline_subdevs - Stream on/off all subdevices in a pipeline
+ * @isp_dev: ISP device structure
+ * @port: Port number
+ * @enable: 1 to enable streaming, 0 to disable
+ *
+ * This function calls s_stream on all subdevices in the pipeline for the specified port.
+ * It streams in reverse order for stream-on (from sensor to ISP) and forward order for stream-off.
+ */
+static int visp_stream_pipeline_subdevs(struct visp_dev *isp_dev, int port, int enable)
+{
+	int i, ret = 0;
+	int count = visp_get_pipeline_subdev_count(isp_dev, port);
+
+	dev_info(isp_dev->dev, "=== Pipeline Streaming %s for port %d ===\n",
+		 enable ? "ON" : "OFF", port);
+
+	if (count == 0) {
+		dev_warn(isp_dev->dev, "No pipeline subdevices found for port %d\n", port);
+		return 0;
+	}
+
+	dev_info(isp_dev->dev, "Found %d pipeline subdevices for port %d\n", count, port);
+
+	if (enable) {
+		/* Stream on: Start from the furthest upstream (sensor) to downstream (ISP) */
+		dev_info(isp_dev->dev, "Starting streaming from sensor to ISP (reverse order):\n");
+		for (i = count - 1; i >= 0; i--) {
+			struct v4l2_subdev *subdev = visp_get_pipeline_subdev(isp_dev, port, i);
+			dev_info(isp_dev->dev, "  [%d] Attempting to stream ON: %s\n",
+				 i, subdev ? subdev->name : "NULL");
+
+			if (subdev && subdev->ops && subdev->ops->video && subdev->ops->video->s_stream) {
+				dev_info(isp_dev->dev, "  [%d] Calling s_stream(1) on %s\n", i, subdev->name);
+				ret = subdev->ops->video->s_stream(subdev, 1);
+				if (ret) {
+					dev_err(isp_dev->dev, "Failed to start streaming on '%s': %d\n",
+						subdev->name, ret);
+					/* Stream off the devices we already started */
+					{
+						int j;
+						for (j = i + 1; j < count; j++) {
+							struct v4l2_subdev *prev_subdev = visp_get_pipeline_subdev(isp_dev, port, j);
+							if (prev_subdev && prev_subdev->ops && prev_subdev->ops->video &&
+							    prev_subdev->ops->video->s_stream) {
+								prev_subdev->ops->video->s_stream(prev_subdev, 0);
+							}
+						}
+					}
+					return ret;
+				}
+				dev_info(isp_dev->dev, "  [%d] Successfully started streaming on '%s'\n", i, subdev->name);
+			} else {
+				dev_warn(isp_dev->dev, "  [%d] Subdev %s has no s_stream operation\n",
+					 i, subdev ? subdev->name : "NULL");
+			}
+		}
+	} else {
+		/* Stream off: Start from downstream (ISP) to upstream (sensor) */
+		dev_info(isp_dev->dev, "Stopping streaming from ISP to sensor (forward order):\n");
+		for (i = 0; i < count; i++) {
+			struct v4l2_subdev *subdev = visp_get_pipeline_subdev(isp_dev, port, i);
+			dev_info(isp_dev->dev, "  [%d] Attempting to stream OFF: %s\n",
+				 i, subdev ? subdev->name : "NULL");
+
+			if (subdev && subdev->ops && subdev->ops->video && subdev->ops->video->s_stream) {
+				dev_info(isp_dev->dev, "  [%d] Calling s_stream(0) on %s\n", i, subdev->name);
+				ret = subdev->ops->video->s_stream(subdev, 0);
+				if (ret) {
+					dev_warn(isp_dev->dev, "Failed to stop streaming on '%s': %d\n",
+						 subdev->name, ret);
+					/* Continue trying to stop other devices */
+				} else {
+					dev_info(isp_dev->dev, "  [%d] Successfully stopped streaming on '%s'\n", i, subdev->name);
+				}
+			} else {
+				dev_warn(isp_dev->dev, "  [%d] Subdev %s has no s_stream operation\n",
+					 i, subdev ? subdev->name : "NULL");
+			}
+		}
+	}
+
+	return 0;
+}
+
 static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 {
 	struct visp_pad_stream_status *pad_stream =
@@ -1099,12 +1184,12 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				goto ERR_TO_CAMERA_DISCONNECT;
 				return ret;
 			}
-			subdev = visp_get_input_subdev(isp_dev, port);
-			if (!subdev) {
-				 dev_err(isp_dev->dev, "No valid input sub-device found!\n");
-			} else {
-				/* call s_stream */
-				v4l2_subdev_call(subdev, video, s_stream, 1);
+			/* Stream on all pipeline subdevices */
+			ret = visp_stream_pipeline_subdevs(isp_dev, port, 1);
+			if (ret) {
+				dev_err(isp_dev->dev, "Failed to start pipeline streaming on port %d: %d\n",
+					port, ret);
+				goto ERR_TO_CAMERA_DISCONNECT;
 			}
 
 #endif
@@ -1141,13 +1226,11 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		media_isp_stream_off(isp_dev, port, chn);
 
 		if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
-			subdev = visp_get_input_subdev(isp_dev, port);
-			if (!subdev) {
-				dev_err(isp_dev->dev,
-					"No valid input sub-device found!\n");
-			} else {
-				/* call s_stream */
-				v4l2_subdev_call(subdev, video, s_stream, 0);
+			/* Stream off all pipeline subdevices */
+			ret = visp_stream_pipeline_subdevs(isp_dev, port, 0);
+			if (ret) {
+				dev_warn(isp_dev->dev, "Failed to stop pipeline streaming on port %d: %d\n",
+					 port, ret);
 			}
 		}
 		isp_dev->streamon[pad_stream->pad] = 0;
