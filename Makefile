@@ -14,6 +14,7 @@ obj-m += visp_lilo/
 obj-m += visp_video/
 obj-m += visp_mimo/
 obj-m += visp_mimo_video/
+obj-m += dummy_sensor/
 
 all:
 	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules
