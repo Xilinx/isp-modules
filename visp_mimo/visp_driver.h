@@ -225,6 +225,8 @@ struct visp_dev {
 	int mi_irq;
 	struct device *dev;
 	struct mutex mlock;
+	/* isp_dev level calib lock */
+	struct mutex calib_lock;
 	uint32_t refcnt;
 	struct v4l2_subdev sd;
 	struct media_pad pads[VISP_PAD_NR];

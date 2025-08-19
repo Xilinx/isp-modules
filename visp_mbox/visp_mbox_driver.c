@@ -276,7 +276,6 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 		kfree(user_packet);
 		return -EIO;
 	}
-	mutex_unlock(&rpu->write_lock);
 	kfree(packet);
 	kfree(user_packet);
 	return lbuf; // Return the number of bytes written
@@ -330,6 +329,7 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 	}
 ERROR:
 	mutex_unlock(&rpu->ack_lock);
+	mutex_unlock(&rpu->write_lock);
 	return bytes_copied; // Return the size of data copied on success
 }
 
@@ -411,7 +411,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	rpu->rpu_id = rpu_id;
 	rpu->core_id = rpu_id - VISP_MBOX_RPU6;
 	/* Initialize mutexes, cdev, and reference count */
-	mutex_init(&rpu->lock);
+
 	mutex_init(&rpu->rpu_lock);
 	mutex_init(&rpu->ack_lock);
 	mutex_init(&rpu->read_lock);

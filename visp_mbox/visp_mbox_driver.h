@@ -115,7 +115,6 @@ struct rpu_dev {
 	int core_id;
 	dev_t devno;
 	struct cdev cdev;
-	struct mutex lock;
 	struct mutex ack_lock;
 	struct mutex read_lock;
 	struct mutex rpu_lock;
