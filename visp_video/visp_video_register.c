@@ -1461,10 +1461,8 @@ static int visp_video_try_create_pipeline(struct visp_video_dev *visp_vdev)
 	    .pads = &pad_cfg,
 	};
 
-	if (visp_vdev->pipeline) {
-		dev_err(visp_vdev->visp_mdev->dev, "try_create_pipeline: pipeline already exists\n");
+	if (visp_vdev->pipeline)
 		return 0;
-	}
 
 	subdev = visp_video_remote_subdev(visp_vdev);
 	if (!subdev) {
