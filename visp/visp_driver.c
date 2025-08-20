@@ -901,6 +901,7 @@ error_free_buf:
  * Return: Pointer to the v4l2_subdev structure if found, NULL otherwise.
  */
 
+#if 0  // Disable unused function
 static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev,
 						  int port)
 {
@@ -942,6 +943,7 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev,
 
 	return subdev; /* Return the first valid input sub-device found */
 }
+#endif
 
 /**
  * visp_discover_pipeline_subdevs - Discover all subdevices in the pipeline
@@ -1162,12 +1164,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	int ret = 0;
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
-	struct v4l2_subdev *subdev;
-	/*
-	 * dev_info(isp_dev->dev ,"ISPDRV %s %d pad=%d Status=%d port=%d chn=%d\n",
-	 *	    __func__, __LINE__, pad_stream->pad, pad_stream->status,
-	 *	    port, chn);
-	 */
+
 	isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 
 	if (pad_stream->status == 0)
@@ -2130,8 +2127,10 @@ static const struct media_entity_operations visp_entity_ops = {
 };
 
 /* Forward declaration */
+#if 0  // Disable unused function
 static struct media_entity *visp_find_entity_by_fwnode(struct visp_dev *isp_dev,
 							struct fwnode_handle *fwnode);
+#endif
 
 /**
  * visp_find_entity_by_fwnode - Find media entity by its fwnode
@@ -2140,6 +2139,7 @@ static struct media_entity *visp_find_entity_by_fwnode(struct visp_dev *isp_dev,
  *
  * Returns: Pointer to media entity if found, NULL otherwise
  */
+#if 0  // Disable unused function
 static struct media_entity *visp_find_entity_by_fwnode(struct visp_dev *isp_dev,
 						       struct fwnode_handle *fwnode)
 {
@@ -2162,6 +2162,7 @@ static struct media_entity *visp_find_entity_by_fwnode(struct visp_dev *isp_dev,
 
 	return NULL;
 }
+#endif
 
 static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
 			       struct v4l2_subdev *sd,
