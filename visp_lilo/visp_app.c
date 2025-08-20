@@ -1017,9 +1017,11 @@ int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
 
 	switch (*code) {
 	case MEDIA_BUS_FMT_YUYV8_2X8:
+	case MEDIA_BUS_FMT_UYVY8_1X16:
 		*pixel_format = MEDIA_PIX_FMT_NV16;
 		break;
 	case MEDIA_BUS_FMT_YUYV8_1_5X8:
+	case MEDIA_BUS_FMT_VYYUYY8_1X24:
 		*pixel_format = MEDIA_PIX_FMT_NV12;
 		break;
 	case MEDIA_BUS_FMT_YUYV8_1X16:
@@ -1048,6 +1050,7 @@ int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
 	case MEDIA_BUS_FMT_YUYV12_2X12:
 	case MEDIA_BUS_FMT_YUV8_1X24:
 	case MEDIA_BUS_FMT_RGB888_1X24:
+	case MEDIA_BUS_FMT_RBG888_1X24:  //RBG
 	case MEDIA_BUS_FMT_SBGGR10_1X10:
 	case MEDIA_BUS_FMT_SGBRG10_1X10:
 	case MEDIA_BUS_FMT_SGRBG10_1X10:
@@ -1360,8 +1363,6 @@ int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 	IspFormat.out_height =
 	    isp_dev->pad_data[port * MEDIA_ISP_PORT_PAD_COUNT + chn + 1]
 		.format.height;
-	IspFormat.out_format = 14;
-	IspFormat.data_bits = 8;
 	IspFormat.alpha = 0;
 	IspFormat.yuv_order = 0;
 
@@ -1376,7 +1377,10 @@ int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 		ret_val = VSI_ERR_TIMEOUT;
 		goto ERR_TO_CAMERA_DISCONNECT;
 	}
-
+	if (strcmp(isp_dev->ss_mode_i0, "lilo") == 0) {
+		//send oba;
+		oba_init_send_command(isp_dev, isp_port->cam_device_handle, chn);
+	}
 	return ret_val;
 ERR_TO_CAMERA_DISCONNECT:
 	return ret_val;
@@ -2188,8 +2192,6 @@ CHANGE_SENSOR_MODE:
 	iba_init_send_command(isp_dev, isp_port->cam_device_handle);
 
 	isp_send_atm_prop_to_rpu(isp_dev, isp_port->cam_device_handle);
-	if (strcmp(isp_dev->ss_mode_i0, "lilo") == 0)
-		oba_init_send_command(isp_dev, isp_port->cam_device_handle);
 
 	return ret_val;
 

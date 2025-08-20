@@ -85,31 +85,27 @@ oba_inst_t oba_config_table[XPAR_ISP_INSTANCE][MAX_OBA_PER_ISP] = {
 
 };
 
-oba_inst_t *oba_LookupConfig(oba_isp_instance_t isp_no, oba_id_t oba_no)
+oba_inst_t *oba_lookup_config(oba_isp_instance_t isp_no, oba_id_t oba_no)
 {
+	oba_inst_t *config_ptr = NULL;
 
-	oba_inst_t *ConfigPtr = NULL;
-
-	ConfigPtr = &oba_config_table[isp_no][oba_no];
-	return ConfigPtr;
+	config_ptr = &oba_config_table[isp_no][oba_no];
+	return config_ptr;
 }
 
-int oba_cfg_initialize(oba_inst_t *instance_ptr, const oba_inst_t *ConfigPtr)
+int oba_cfg_initialize(oba_inst_t *instance_ptr, const oba_inst_t *config_ptr)
 {
-	// Xil_AssertNonvoid(instance_ptr != NULL);
-	// Xil_AssertNonvoid(ConfigPtr != NULL);
-	*instance_ptr = *ConfigPtr; // Copy structure content
+	*instance_ptr = *config_ptr; // Copy structure content
 	return 0;			// XST_SUCCESS
 }
 
 RESULT oba_init_send_command(struct visp_dev *isp_dev,
-				 cam_device_handle_t h_cam_device)
+				 cam_device_handle_t h_cam_device, u8 path)
 {
 	RESULT result = RET_SUCCESS;
-	cam_device_buf_chain_id_t path = 0;
 	oba_map_t oba_map;
 	int oba_no = 0;
-	uint8_t *p_data; // = packet->payload;
+	u8 *p_data; // = packet->payload;
 
 	memset(&oba_map, 0, sizeof(oba_map));
 
@@ -122,113 +118,91 @@ RESULT oba_init_send_command(struct visp_dev *isp_dev,
 	cam_device_context_t *p_cam_dev_ctx =
 		(cam_device_context_t *)h_cam_device;
 
-	for (path = CAMDEV_BUFCHAIN_MP; path <= CAMDEV_BUFCHAIN_SP1; path++) {
-		oba_no = path;
+	oba_no = path;
 
-		int isp_no = isp_dev->id;
+	int isp_no = isp_dev->id;
 
-		// l_o_g_i("AMD-Debug search for isp no. in tile %d,oba %d, path
-		// %d \n",isp_no%2,oba_no,path );
+	oba_inst_t *config_ptr = oba_lookup_config(isp_no % 2, oba_no);
 
-		oba_inst_t *ConfigPtr = oba_LookupConfig(isp_no % 2, oba_no);
+	if (config_ptr->oba_is_enabled == OBA_DISABLED)
+		config_ptr->oba_is_enabled = OBA_ENABLED;
 
-		if (ConfigPtr->oba_is_enabled == OBA_DISABLED) {
-			ConfigPtr->oba_is_enabled = OBA_ENABLED;
-			ConfigPtr->isp_instance = isp_no;
-			ConfigPtr->path_info = oba_no;
-			ConfigPtr->tile_id = isp_no / 2;
-			ConfigPtr->hcamdev_instanceid =
-				p_cam_dev_ctx->instance_id;
+	config_ptr->isp_instance = isp_no;
+	config_ptr->path_info = oba_no;
+	config_ptr->tile_id = isp_no / 2;
+	config_ptr->hcamdev_instanceid =
+		p_cam_dev_ctx->instance_id;
 
-			if (strcmp(isp_dev->oba[path].data_format, "RGB888") ==
-				0) {
-				ConfigPtr->data_format = RGB888_FORMAT;
-				ConfigPtr->data_type = RGB888;
-			} else if (strcmp(isp_dev->oba[path].data_format,
-					  "YUV422") == 0) {
-				ConfigPtr->data_format = YUV422_SP_FORMAT;
-				if (isp_dev->oba[MEDIA_ISP_PORT_PAD_SOURCE_MP]
-					.bpp == 8)
-					ConfigPtr->data_type = YUV_422_8_BIT;
+	/* path value counts only output pads, corresponding pad in media-graph
+	 * can be realized by incrementing path by 1.
+	 */
+	u8 pad_no = path + 1;
 
-				if (isp_dev->oba[MEDIA_ISP_PORT_PAD_SOURCE_MP]
-					.bpp == 10)
-					ConfigPtr->data_type = YUV_422_10_BIT;
-			} else if (strcmp(isp_dev->oba[path].data_format,
-					  "YUV420") == 0) {
-				ConfigPtr->data_format = YUV420_SP_FORMAT;
-				if (isp_dev->oba[MEDIA_ISP_PORT_PAD_SOURCE_MP]
-					.bpp == 8)
-					ConfigPtr->data_type = YUV_420_8_BIT;
-
-				if (isp_dev->oba[MEDIA_ISP_PORT_PAD_SOURCE_MP]
-					.bpp == 10)
-					ConfigPtr->data_type = YUV_420_10_BIT;
-			} else if (strcmp(isp_dev->oba[path].data_format,
-					  "YUV400") == 0) {
-				ConfigPtr->data_format = Y_FORMAT;
-				if (isp_dev->oba[MEDIA_ISP_PORT_PAD_SOURCE_MP]
-					.bpp == 8)
-					ConfigPtr->data_type = YUV_400_8_BIT;
-
-				if (isp_dev->oba[MEDIA_ISP_PORT_PAD_SOURCE_MP]
-					.bpp == 10)
-					ConfigPtr->data_type = YUV_400_10_BIT;
-			} else {
-				dev_err(
-					isp_dev->dev,
-					"Unsupported format configured to OBA.\n");
-				return -1;
-			}
-			ConfigPtr->data_format = RGB888_FORMAT;
-			ConfigPtr->data_type = RGB888;
-		}
-
-		// oba_cfg_initialize(&instance_ptr->oba_inst[isp_no/2][isp_no][oba_no],
-		// ConfigPtr); dev_info("%s %d  devieId:%d base_address:%x
-		// tile_no:%d isp_no:%d   oba_no:%d path_info:%d isp_inst:%d
-		// instance_id:%d\n",
-		//		__func__,__LINE__,ConfigPtr->device_id,
-		//		ConfigPtr->base_address[0],isp_no/2, isp_no%2,
-		//oba_no, ConfigPtr->path_info, ConfigPtr->isp_instance,
-		//ConfigPtr->hcamdev_instanceid);
-
-		payload_packet * packet;
-
-		packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
-		if (!packet) {
-			dev_err(isp_dev->dev,
-				"%s: Failed to allocate memory for packet\n",
-				__func__);
-			return -ENOMEM;
-		}
-		p_data = packet->payload;
-		packet->cookie = 0x11;
-		packet->type = CMD;
-		packet->payload_size = 0;
-
-		memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
-		p_data += sizeof(uint32_t);
-		packet->payload_size += sizeof(uint32_t);
-
-		memcpy(p_data, ConfigPtr, sizeof(oba_inst_t));
-		packet->payload_size += sizeof(oba_inst_t);
-		// xil_printf("packet.payload_size %d\n",packet.payload_size);
-
-		if (packet->payload_size > MAX_ITEM) {
-			dev_err(isp_dev->dev,
-				"%s: Payload size (%d) exceeds maximum allowed "
-				"(%d)\n",
-				__func__, packet->payload_size, MAX_ITEM);
-			kfree(packet);
-			return RET_OUTOFRANGE;
-		}
-
-		xlnx_send_mbox_acked_cmd(
-			isp_dev, APU_2_RPU_MB_CMD_OBA_INIT, packet,
-			packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
-			MBOX_CORE_APU);
-		kfree(packet);
+	switch (isp_dev->pad_data[pad_no].format.code) {
+	case MEDIA_BUS_FMT_RBG888_1X24:
+		dev_info(isp_dev->dev,
+			 "Configure OBA for path:%d of ISP :%d format:RGB888\n",
+			 path, isp_dev->id);
+		config_ptr->data_format = RGB888_FORMAT;
+		config_ptr->data_type = RGB888;
+		break;
+	case MEDIA_BUS_FMT_UYVY8_1X16:
+		dev_info(isp_dev->dev,
+			 "Configure OBA for path:%d of ISP :%d format:YUV_422 bits:%d\n",
+			 path, isp_dev->id, isp_dev->oba[pad_no].bpp);
+		config_ptr->data_format = YUV422_SP_FORMAT;
+		if (isp_dev->oba[pad_no].bpp == 8)
+			config_ptr->data_type = YUV_422_8_BIT;
+		if (isp_dev->oba[pad_no].bpp == 10)
+			config_ptr->data_type = YUV_422_10_BIT;
+		break;
+	case MEDIA_BUS_FMT_VYYUYY8_1X24:
+		dev_info(isp_dev->dev,
+			 "Configure OBA for path:%d of ISP :%d format:YUV_420 bits:%d\n",
+			 path, isp_dev->id, isp_dev->oba[pad_no].bpp);
+		config_ptr->data_format = YUV420_SP_FORMAT;
+		if (isp_dev->oba[pad_no].bpp == 8)
+			config_ptr->data_type = YUV_420_8_BIT;
+		if (isp_dev->oba[pad_no].bpp == 10)
+			config_ptr->data_type = YUV_420_10_BIT;
+		break;
+	default:
+		dev_err(isp_dev->dev,
+			"Unsupported format to Configure OBA for path:%d of ISP :%d\n",
+			path, isp_dev->id);
+		return -1;
 	}
+
+	payload_packet * packet;
+
+	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+	if (!packet)
+		return -ENOMEM;
+
+	p_data = packet->payload;
+	packet->cookie = 0x11;
+	packet->type = CMD;
+	packet->payload_size = 0;
+
+	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	packet->payload_size += sizeof(uint32_t);
+
+	memcpy(p_data, config_ptr, sizeof(oba_inst_t));
+	packet->payload_size += sizeof(oba_inst_t);
+	// xil_printf("packet.payload_size %d\n",packet.payload_size);
+
+	if (packet->payload_size > MAX_ITEM) {
+		dev_err(isp_dev->dev,
+			"%s: Payload size (%d) exceeds maximum allowed (%d)\n",
+			__func__, packet->payload_size, MAX_ITEM);
+		kfree(packet);
+		return RET_OUTOFRANGE;
+	}
+
+	xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_OBA_INIT, packet,
+				 packet->payload_size + payload_extra_size,
+				 isp_dev->isp_rpu, MBOX_CORE_APU);
+	kfree(packet);
 	return result;
 }

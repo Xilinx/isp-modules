@@ -97,11 +97,11 @@ static uint32_t sensor_dev_id[VISP_PORT_NR] = {2, 6, 5, 10}; // Sesnor
 struct visp_format visp_mp_fmts[] = {
 	{
 	.fourcc = V4L2_PIX_FMT_NV16,
-	.code = MEDIA_BUS_FMT_YUYV8_2X8,
+	.code = MEDIA_BUS_FMT_UYVY8_1X16,
 	},
 	{
 	.fourcc = V4L2_PIX_FMT_NV12,
-	.code = MEDIA_BUS_FMT_YUYV8_1_5X8,
+	.code = MEDIA_BUS_FMT_VYYUYY8_1X24,
 	},
 	{
 	.fourcc = V4L2_PIX_FMT_YUYV,
@@ -229,7 +229,7 @@ struct visp_format visp_mp_fmts[] = {
 	},
 	{
 	.fourcc = V4L2_PIX_FMT_RGB24,
-	.code = MEDIA_BUS_FMT_RGB888_1X24,
+	.code = MEDIA_BUS_FMT_RBG888_1X24,   //RBG
 	},
 	{
 	.fourcc = V4L2_PIX_FMT_RGB24DWA,
@@ -1523,30 +1523,6 @@ static struct v4l2_subdev_video_ops visp_video_ops = {
 int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
 					uint32_t fourcc_code);
 
-static void set_default_pad_config(struct visp_dev *isp_dev)
-{
-	int i = 0;
-	struct visp_pad_data *source_pad;
-
-	source_pad = &isp_dev->pad_data[0];
-	source_pad->format.field = V4L2_FIELD_NONE;
-	source_pad->format.code = MEDIA_BUS_FMT_SRGGB12_1X12;
-	source_pad->format.quantization = V4L2_QUANTIZATION_DEFAULT;
-	source_pad->format.colorspace = V4L2_COLORSPACE_SRGB;
-	source_pad->format.width = 1920;
-	source_pad->format.height = 1080;
-
-	for (i = 1; i < VISP_PORT_PAD_NR; i++) {
-		source_pad = &isp_dev->pad_data[i];
-		source_pad->format.field = V4L2_FIELD_NONE;
-		source_pad->format.code = MEDIA_BUS_FMT_RBG888_1X24;
-		source_pad->format.quantization = V4L2_QUANTIZATION_DEFAULT;
-		source_pad->format.colorspace = V4L2_COLORSPACE_SRGB;
-		source_pad->format.width = 1920;
-		source_pad->format.height = 1080;
-	}
-}
-
 static int visp_set_fmt(struct v4l2_subdev *sd,
 			struct v4l2_subdev_state *sd_state,
 			struct v4l2_subdev_format *format)
@@ -1559,8 +1535,8 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	struct visp_pad_data *source_pad;
 	int i;
 	int ret;
-	media_fmt Format_media;
-	struct v4l2_mbus_framefmt *MBusFormat;
+	media_fmt format_media;
+	struct v4l2_mbus_framefmt *mbus_format;
 	struct media_pad *mediapad_t;
 	uint32_t fourcc_code = 0;
 
@@ -1608,41 +1584,60 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 
 	memcpy(&fourcc_code, format->format.reserved, sizeof(uint32_t));
 	for (i = 0; i < cur_pad->num_formats; i++) {
-		if (format->format.code == cur_pad->fmts[i].code &&
-			fourcc_code == cur_pad->fmts[i].fourcc)
+		if (format->format.code == cur_pad->fmts[i].code ||
+		    fourcc_code == cur_pad->fmts[i].fourcc) {
+			if (format->format.code == cur_pad->fmts[i].code) {
+				dev_err(isp_dev->dev,
+					"%s %d MATCH CODE index:%d num_fmts : %d code:%x:%x\n",
+					__func__, __LINE__, i, cur_pad->num_formats,
+					cur_pad->fmts[i].code, fourcc_code);
+			}
+			if (fourcc_code == cur_pad->fmts[i].fourcc) {
+				dev_err(isp_dev->dev,
+					"%s %d MATCH FOURCE index:%d fourcc : %x\n",
+					__func__, __LINE__, i, cur_pad->fmts[i].fourcc);
+			}
 			break;
+		}
 	}
 
 	if (i >= cur_pad->num_formats) {
+		dev_info(isp_dev->dev, "Format not found rolling to 1st avaialble FMT\n");
 		format->format.code = cur_pad->fmts[0].code;
 		memcpy(format->format.reserved, &cur_pad->fmts[0].fourcc,
-			   sizeof(uint32_t));
+		       sizeof(uint32_t));
+	} else {
+		format->format.code = cur_pad->fmts[i].code;
+		memcpy(format->format.reserved, &cur_pad->fmts[i].fourcc,
+		       sizeof(uint32_t));
 	}
 
 	if (ret)
 		return ret;
 
-	memset(&Format_media, 0, sizeof(Format_media));
+	memset(&format_media, 0, sizeof(format_media));
 
-	MBusFormat = (struct v4l2_mbus_framefmt *)&format->format;
-	Format_media.width = MBusFormat->width;
-	Format_media.height = MBusFormat->height;
-	Format_media.color_space = MBusFormat->colorspace;
-	Format_media.quantization = MBusFormat->quantization;
+	mbus_format = (struct v4l2_mbus_framefmt *)&format->format;
+	format_media.width = mbus_format->width;
+	format_media.height = mbus_format->height;
+	format_media.color_space = mbus_format->colorspace;
+	format_media.quantization = mbus_format->quantization;
 	fourcc_code = 0;
+	dev_info(isp_dev->dev, "%s %d width:%d height :%d\n",
+		 __func__, __LINE__, mbus_format->width, mbus_format->height);
 
-	if (sizeof(MBusFormat->reserved) == (sizeof(uint16_t) * 10)) {
-		memcpy(&fourcc_code, &MBusFormat->reserved,
-			   sizeof(fourcc_code));
+	if (sizeof(mbus_format->reserved) == (sizeof(uint16_t) * 10)) {
+		memcpy(&fourcc_code, &mbus_format->reserved,
+		       sizeof(fourcc_code));
 	} else {
-		memcpy(&fourcc_code, &MBusFormat->reserved[1],
-			   sizeof(fourcc_code));
+		memcpy(&fourcc_code, &mbus_format->reserved[1],
+		       sizeof(fourcc_code));
 	}
 	media_isp_hal_mbus_fmt_to_media_fmt(
-		&MBusFormat->code, &Format_media.pixel_format, fourcc_code);
+		&mbus_format->code, &format_media.pixel_format, fourcc_code);
 
 	mediapad_t = &isp_dev->pads[format->pad];
-	media_isp_set_format(isp_dev, mediapad_t->index, Format_media);
+	media_isp_set_format(isp_dev, mediapad_t->index, format_media);
 	if (ret)
 		return ret;
 
@@ -1661,8 +1656,8 @@ int visp_set_fmt_public(struct visp_dev *isp_dev,
 	struct visp_pad_data *source_pad;
 	int i;
 	int ret;
-	media_fmt Format_media;
-	struct v4l2_mbus_framefmt *MBusFormat;
+	media_fmt format_media;
+	struct v4l2_mbus_framefmt *mbus_format;
 	struct media_pad *mediapad_t;
 	uint32_t fourcc_code = 0;
 
@@ -1724,27 +1719,27 @@ int visp_set_fmt_public(struct visp_dev *isp_dev,
 	if (ret)
 		return ret;
 
-	memset(&Format_media, 0, sizeof(Format_media));
+	memset(&format_media, 0, sizeof(format_media));
 
-	MBusFormat = (struct v4l2_mbus_framefmt *)&format->format;
-	Format_media.width = MBusFormat->width;
-	Format_media.height = MBusFormat->height;
-	Format_media.color_space = MBusFormat->colorspace;
-	Format_media.quantization = MBusFormat->quantization;
+	mbus_format = (struct v4l2_mbus_framefmt *)&format->format;
+	format_media.width = mbus_format->width;
+	format_media.height = mbus_format->height;
+	format_media.color_space = mbus_format->colorspace;
+	format_media.quantization = mbus_format->quantization;
 	fourcc_code = 0;
 
-	if (sizeof(MBusFormat->reserved) == (sizeof(uint16_t) * 10)) {
-		memcpy(&fourcc_code, &MBusFormat->reserved,
-			   sizeof(fourcc_code));
+	if (sizeof(mbus_format->reserved) == (sizeof(uint16_t) * 10)) {
+		memcpy(&fourcc_code, &mbus_format->reserved,
+		       sizeof(fourcc_code));
 	} else {
-		memcpy(&fourcc_code, &MBusFormat->reserved[1],
-			   sizeof(fourcc_code));
+		memcpy(&fourcc_code, &mbus_format->reserved[1],
+		       sizeof(fourcc_code));
 	}
 	media_isp_hal_mbus_fmt_to_media_fmt(
-		&MBusFormat->code, &Format_media.pixel_format, fourcc_code);
+		&mbus_format->code, &format_media.pixel_format, fourcc_code);
 
 	mediapad_t = &isp_dev->pads[format->pad];
-	media_isp_set_format(isp_dev, mediapad_t->index, Format_media);
+	media_isp_set_format(isp_dev, mediapad_t->index, format_media);
 
 	cur_pad->format = format->format;
 
@@ -1808,8 +1803,9 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 
 	/*Exit port Level Critical Section */
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
-	set_default_pad_config(isp_dev);
 	format->format = pad_data->format;
+	dev_info(isp_dev->dev, "%s %d GET_FMT pad=:%d format->format.code=:%x\n",
+		 __func__, __LINE__, format->pad, format->format.code);
 
 	return 0;
 }
@@ -2523,7 +2519,6 @@ static int visp_probe(struct platform_device *pdev)
 	isp_dev->ports_mask = isp_dev->num_streams;
 	/* Register Callback function*/
 	isp_dev->frameout_cb = handle_frameout_buffer;
-	set_default_pad_config(isp_dev);
 
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
 

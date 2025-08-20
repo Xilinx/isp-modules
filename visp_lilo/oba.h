@@ -173,6 +173,15 @@ typedef struct oba_map {
 	(ISP5_BASE_ADDR + 0x41000) // TILE_5 ISP_1 OBA base address
 
 RESULT oba_init_send_command(struct visp_dev *isp_dev,
-			     cam_device_handle_t h_cam_device);
+			     cam_device_handle_t h_cam_device, uint8_t path);
+
+/* Function declarations */
+oba_inst_t *oba_lookup_config(oba_isp_instance_t isp_no, oba_id_t oba_no);
+int oba_cfg_initialize(oba_inst_t *instance_ptr, const oba_inst_t *config_ptr);
+int oba_set_resolution(oba_inst_t *instance_ptr, u32 v_res, u32 h_res);
+int oba_set_fps(oba_inst_t *instance_ptr, int fps);
+int oba_set_virtual_channel(oba_inst_t *instance_ptr, int virtual_channel);
+int oba_set_fifo_write_mode(oba_inst_t *instance_ptr, int fifomode);
+int oba_init(oba_map_t *instance_ptr);
 
 #endif
