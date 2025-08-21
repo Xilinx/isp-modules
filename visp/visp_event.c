@@ -57,7 +57,6 @@
 #include <linux/delay.h>
 #include "visp_event.h"
 #include "visp_driver.h"
-#include "visp_app.h"
 
 static bool visp_event_subscribed(struct v4l2_subdev *sd, uint32_t type,
 				  uint32_t id)
@@ -240,16 +239,11 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
-	/* Try to create ISP device if not already created */
-	if (!isp_dev->isp_ports[port].cam_device_handle) {
-		int ret_val = isp_device_create(isp_dev, port);
-
-		if (ret_val) {
-			/* If device creation fails, continue with basic enumeration */
-			dev_err(isp_dev->dev,
-				"enum_mbus_code: device creation failed with %d\n",
-				ret_val);
-		}
+	if (isp_dev->streamon[pad] == 0) {
+		dev_err(isp_dev->dev,
+			"%s %d Should not use v4l2-ctrl for this node, Device is not streamed on ispid : %d, port %d Chn:%d\n",
+			 __func__, __LINE__, isp_dev->id, port, chn);
+		return -1;
 	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
@@ -257,6 +251,10 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	memcpy(pdata, &port, sizeof(uint32_t));
 	pdata += sizeof(uint32_t);
 	event_pkg->head.data_size += sizeof(uint32_t);
+
+	cam_device_context_t *p_cam_dev_ctx =
+	    (cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
+	p_cam_dev_ctx->cookie++;
 
 	memcpy(pdata, isp_dev->isp_ports[port].cam_device_handle,
 	       sizeof(cam_device_context_t));
@@ -294,19 +292,19 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
-	/* Try to create ISP device if not already created */
-	if (!isp_dev->isp_ports[port].cam_device_handle) {
-		int ret_val = isp_device_create(isp_dev, port);
-
-		if (ret_val) {
-			/* If device creation fails, continue with basic enumeration */
-			dev_err(isp_dev->dev,
-				"enum_mbus_code: device creation failed with %d\n",
-				ret_val);
-		}
+	if (isp_dev->streamon[pad] == 0) {
+		dev_err(isp_dev->dev,
+			"%s %d Should not use v4l2-ctrl for this node, Device is not streamed on ispid : %d, port %d Chn:%d\n",
+			 __func__, __LINE__, isp_dev->id, port, chn);
+		return -1;
 	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
+
+	cam_device_context_t *p_cam_dev_ctx =
+	    (cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
+
+	p_cam_dev_ctx->cookie++;
 
 	memcpy(pdata, &port, sizeof(uint32_t));
 	pdata += sizeof(uint32_t);

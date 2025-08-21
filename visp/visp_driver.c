@@ -1180,8 +1180,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 #ifdef LOAD_CALIB_ENABLE
 			ret = visp_l_calib_event(isp_dev, pad_stream->pad);
 			if (ret != 0) {
-				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n",
-					__func__, __LINE__);
+				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+					__func__, __LINE__, isp_dev->id, port);
 				ret = -ENOMEM;
 				goto ERR_TO_CALIB_LOCK;
 			}
@@ -1200,8 +1200,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 #ifdef LOAD_CALIB_ENABLE
 			ret = visp_l_json_event(isp_dev, pad_stream->pad);
 			if (ret != 0) {
-				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n",
-					__func__, __LINE__);
+				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+					__func__, __LINE__, isp_dev->id, port);
 				ret = -ENOMEM;
 				goto ERR_TO_CALIB_LOCK;
 			}
@@ -1225,24 +1225,24 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				&isp_dev->isp_ports[port].sensor_info.frame_rate);
 		if (ret != VSI_SUCCESS) {
 			dev_err(isp_dev->dev,
-				"port %d chn %d Set frame_rate failed, ret is %d",
-				port, chn, ret);
+				"%s isp:%d port %d chn %d Set frame_rate failed, ret is %d",
+				__func__, isp_dev->id, port, chn, ret);
 			ret = -EINVAL;
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 
 		ret = media_isp_device_set_format(isp_dev, port, chn);
 		if (ret != 0) {
-			dev_err(isp_dev->dev, "%s %d FAILED SetFormat\n",
-				__func__, __LINE__);
+			dev_err(isp_dev->dev, "%s isp_id : %d FAILED SetFormat\n",
+				__func__, isp_dev->id);
 			ret = -EINVAL;
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 
 		ret = media_isp_device_stream_on(isp_dev, port, chn);
 		if (ret != 0) {
-			dev_err(isp_dev->dev, "%s %d FAILED to stream on\n",
-				__func__, __LINE__);
+			dev_err(isp_dev->dev, "%s isp: %d port : %d  FAILED to stream on\n",
+				__func__, isp_dev->id, port);
 			ret = -EINVAL;
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
@@ -1253,8 +1253,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			/* Stream off all pipeline subdevices */
 			ret = visp_stream_pipeline_subdevs(isp_dev, port, 0);
 			if (ret) {
-				dev_warn(isp_dev->dev, "Failed to stop pipeline streaming on port %d: %d\n",
-					 port, ret);
+				dev_warn(isp_dev->dev, "Failed to stop pipeline streaming on isp: %d port: %d ret: %d\n",
+					 isp_dev->id, port, ret);
 			}
 		}
 		isp_dev->streamon[pad_stream->pad] = 0;
