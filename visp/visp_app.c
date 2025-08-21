@@ -412,9 +412,12 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 			    (isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr) & (0xFFFFFFFF);
 
 			dev_dbg(isp_dev->dev,
-				" %s %d idx:%d Add : %x size 0x%x \n", __func__,
-				__LINE__, p_media_buffer->index,
-				p_media_buffer->base_address, buf_size);
+				"%s %d ISP:%d, Port:%d, Chn:%d, buf_idx:%x RPU Add:0x%x Actual:0x%llx size:0x%x\n",
+				__func__, __LINE__, isp_dev->id, port, chn,
+				p_media_buffer->index,
+				p_media_buffer->base_address,
+				isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr,
+				buf_size);
 
 			uint32_t high_mem = (isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr) >> 32;
 			if(high_mem)

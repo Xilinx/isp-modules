@@ -57,6 +57,7 @@
 #include <linux/delay.h>
 #include "visp_event.h"
 #include "visp_driver.h"
+#include "visp_app.h"
 
 static bool visp_event_subscribed(struct v4l2_subdev *sd, uint32_t type,
 				  uint32_t id)
@@ -235,10 +236,34 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret;
 	struct visp_ctrl *isp_ctrl;
+	u8 *pdata = event_pkg->data;
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+	/* Try to create ISP device if not already created */
+	if (!isp_dev->isp_ports[port].cam_device_handle) {
+		int ret_val = isp_device_create(isp_dev, port);
+
+		if (ret_val) {
+			/* If device creation fails, continue with basic enumeration */
+			dev_err(isp_dev->dev,
+				"enum_mbus_code: device creation failed with %d\n",
+				ret_val);
+		}
+	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 
-	isp_ctrl = (struct visp_ctrl *)event_pkg->data;
+	memcpy(pdata, &port, sizeof(uint32_t));
+	pdata += sizeof(uint32_t);
+	event_pkg->head.data_size += sizeof(uint32_t);
+
+	memcpy(pdata, isp_dev->isp_ports[port].cam_device_handle,
+	       sizeof(cam_device_context_t));
+	pdata += sizeof(cam_device_context_t);
+	event_pkg->head.data_size += sizeof(cam_device_context_t);
+
+	isp_ctrl = (struct visp_ctrl *)pdata/*event_pkg->data*/;
 	isp_ctrl->cid = ctrl->id;
 	isp_ctrl->size = ctrl->elem_size * ctrl->elems;
 	memcpy(isp_ctrl->data, ctrl->p_new.p_u8, isp_ctrl->size);
@@ -248,7 +273,7 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.eid = VISP_EVENT_S_CTRL;
 	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
-	event_pkg->head.data_size = sizeof(isp_ctrl) + isp_ctrl->size;
+	event_pkg->head.data_size += (sizeof(isp_ctrl) + isp_ctrl->size);
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
@@ -265,10 +290,34 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret = 0;
 	struct visp_ctrl *isp_ctrl;
+	u8 *pdata = event_pkg->data;
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+	/* Try to create ISP device if not already created */
+	if (!isp_dev->isp_ports[port].cam_device_handle) {
+		int ret_val = isp_device_create(isp_dev, port);
+
+		if (ret_val) {
+			/* If device creation fails, continue with basic enumeration */
+			dev_err(isp_dev->dev,
+				"enum_mbus_code: device creation failed with %d\n",
+				ret_val);
+		}
+	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 
-	isp_ctrl = (struct visp_ctrl *)event_pkg->data;
+	memcpy(pdata, &port, sizeof(uint32_t));
+	pdata += sizeof(uint32_t);
+	event_pkg->head.data_size += sizeof(uint32_t);
+
+	memcpy(pdata, isp_dev->isp_ports[port].cam_device_handle,
+	       sizeof(cam_device_context_t));
+	pdata += sizeof(cam_device_context_t);
+	event_pkg->head.data_size += sizeof(cam_device_context_t);
+
+	isp_ctrl = (struct visp_ctrl *)pdata;//(event_pkg->data);
 	isp_ctrl->cid = ctrl->id;
 	isp_ctrl->size = ctrl->elem_size * ctrl->elems;
 
@@ -277,14 +326,14 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.eid = VISP_EVENT_G_CTRL;
 	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
-	event_pkg->head.data_size = sizeof(isp_ctrl) + isp_ctrl->size;
+	event_pkg->head.data_size += (sizeof(isp_ctrl) + isp_ctrl->size);
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
 	ret = visp_post_event(&isp_dev->sd, event_pkg);
 
 	if (ret == 0) {
-		memcpy(ctrl->p_new.p_u8, event_pkg->data + sizeof(isp_ctrl),
+		memcpy(ctrl->p_new.p_u8, /*event_pkg->data*/pdata + sizeof(isp_ctrl),
 		       isp_ctrl->size);
 	}
 
