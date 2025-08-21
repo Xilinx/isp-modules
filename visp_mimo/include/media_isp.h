@@ -65,7 +65,7 @@
 
 #define MEDIA_ISP_BUF_FRAME_MAX 32
 #define MEDIA_ISP_CHAR_LENGTH_MAX 64
-#define MEDIA_ISP_PATH_LENGTH_MAX 128
+#define MEDIA_ISP_PATH_LENGTH_MAX 256
 
 enum media_isp_port_pad_e {
 	MEDIA_ISP_PORT_PAD_SINK = 0,
@@ -108,7 +108,7 @@ typedef struct media_isp_mcm_s {
 typedef struct media_isp_sensor_info_s {
 	uint8_t mode;
 	char name[MEDIA_ISP_CHAR_LENGTH_MAX];
-	char calib_xml[MEDIA_ISP_CHAR_LENGTH_MAX];
+	char calib_xml[MEDIA_ISP_PATH_LENGTH_MAX];
 	char manu_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char auto_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char one_json[MEDIA_ISP_PATH_LENGTH_MAX];
