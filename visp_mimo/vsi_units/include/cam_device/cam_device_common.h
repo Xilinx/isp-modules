@@ -70,7 +70,7 @@
 
 #define CAMDEV_VIRTUAL_ID_MAX												  \
 	16 /**< Platform supported multiple input devices number of one ISP*/
-#define CAMDEV_HARDWARE_ID_MAX 3 /**< Platform supported ISP hardware number*/
+#define CAMDEV_HARDWARE_ID_MAX 6 /**< Platform supported ISP hardware number*/
 
 #define CAMDEV_INPUT_DEV_NAME_LEN 20  /**< Input device name length */
 #define CAM_DEVICE_ROI_WINDOWS_MAX 25 /**< Maximum ROI windows */
@@ -78,29 +78,7 @@
 #define CAMDEV_HIST_BINS_NUM_MAX 256 /**< Maximum histogram  bins */
 #define CAMDEV_BETCH_MODE_NUM_MAX											  \
 	32 /**< Maximum betch mode support frame number */
-#if 0
-#define MODULE_VERSION(major, minor, patch)									\
-	(((major) << 16U) | ((minor) << 8U) |								  \
-	 (patch))				   /**< Submoudles version define */
-#define MODULE_V1 MODULE_VERSION(1U, 0U, 0U)   /**< Submoudle V1 */
-#define MODULE_V1_1 MODULE_VERSION(1U, 1U, 0U) /**< Submoudle V1.1 */
-#define MODULE_V1_2 MODULE_VERSION(1U, 2U, 0U) /**< Submoudle V1.2 */
-#define MODULE_V1_3 MODULE_VERSION(1U, 3U, 0U) /**< Submoudle V1.3 */
-#define MODULE_V2 MODULE_VERSION(2U, 0U, 0U)   /**< Submoudle V2 */
-#define MODULE_V2_1 MODULE_VERSION(2U, 1U, 0U) /**< Submoudle V2.1 */
-#define MODULE_V2_2 MODULE_VERSION(2U, 2U, 0U) /**< Submoudle V2.2 */
-#define MODULE_V2_4 MODULE_VERSION(2U, 4U, 0U) /**< Submoudle V2.4 */
-#define MODULE_V2_LITE MODULE_VERSION(2U, 0U, 1U) /**< Submoudle V2 lite */
-#define MODULE_V3 MODULE_VERSION(3U, 0U, 0U)	  /**< Submoudle V3 */
-#define MODULE_V3_1 MODULE_VERSION(3U, 1U, 0U)	  /**< Submoudle V3.1 */
-#define MODULE_V3_2 MODULE_VERSION(3U, 2U, 0U)	  /**< Submoudle V3.2 */
-#define MODULE_V4 MODULE_VERSION(4U, 0U, 0U)	  /**< Submoudle V4 */
-#define MODULE_V5 MODULE_VERSION(5U, 0U, 0U)	  /**< Submoudle V5 */
-#define MODULE_V5_1 MODULE_VERSION(5U, 1U, 0U)	  /**< Submoudle V5.1 */
-#define MODULE_V5_2 MODULE_VERSION(5U, 2U, 0U)	  /**< Submoudle V5.2 */
-#define MODULE_V5_3 MODULE_VERSION(5U, 3U, 0U)	  /**< Submoudle V5.3 */
-#define MODULE_V6 MODULE_VERSION(6U, 0U, 0U)	  /**< Submoudle V6.0 */
-#endif
+
 
 #ifndef REFSET
 #define REFSET(_DST_REF_, _VAL_) memset(&_DST_REF_, _VAL_, sizeof(_DST_REF_))
@@ -132,9 +110,9 @@ typedef enum cam_device_config_mode_e {
 	CAMDEV_CFG_MODE_MANUAL, /**< Manual mode */
 	CAMDEV_CFG_MODE_AUTO,	/**< Auto mode */
 	CAMDEV_CFG_MODE_MAX,
-	DUMMY_CAMDEV_0005 = 0xdeadfeed
+	CAMDEV_DUMMY_008 = 0xdeadfeed
 } cam_device_config_mode_t;
-
+typedef enum cam_device_config_mode_e CamDeviceConfigMode_t;
 /*****************************************************************************/
 /**
  * @brief   Cam Device snapshot image type.
@@ -146,7 +124,7 @@ typedef enum cam_device_snapshot_type_s {
 	CAMDEV_SNAPSHOT_RAW12,	 /**< RAW12 */
 				 //  CAMDEV_SNAPSHOT_JPEG,
 	CAMDEV_SNAPSHOT_RAW10,	 /**< RAW10 */
-	DUMMY_CAMDEV_0006 = 0xdeadfeed
+	CAMDEV_DUMMY_009 = 0xdeadfeed
 } cam_device_snapshot_type_t;
 
 /*****************************************************************************/
@@ -161,7 +139,7 @@ typedef enum cam_device_lock_type_e {
 	CAMDEV_LOCK_AEC = 0x02U, /**< Auto-exposure-control lock */
 	CAMDEV_LOCK_AWB = 0x04U, /**< Auto-white-balance lock */
 	CAMDEV_LOCK_ALL = 0x07U, /**< AF&AWB&AE lock 0x00| 0x01 | 0x02 | 0x04*/
-	DUMMY_CAMDEV_0007 = 0xdeadfeed
+	CAMDEV_DUMMY_010 = 0xdeadfeed
 } cam_device_lock_type_t;
 
 /*****************************************************************************/
@@ -175,11 +153,8 @@ typedef enum cam_device_work_mode_e {
 					pipeline directly*/
 	CAMDEV_WORK_MODE_MCM,	 /**< MCM mode: input device connects MCM. */
 	CAMDEV_WORK_MODE_RDMA,	 /**< RDMA mode: input from DMA buffer */
-	CAMDEV_WORK_MODE_BATCH,	 /**< Batch mode: process a group of continuous
-					frame data at one time, suitable for high
-					frame rate scenes. */
 	CAMDEV_WORK_MODE_MAX,	 /**< Maximum work mode*/
-	DUMMY_CAMDEV_0008 = 0xdeadfeed
+	CAMDEV_DUMMY_011 = 0xdeadfeed
 } cam_device_work_mode_t;
 
 /*****************************************************************************/
@@ -193,7 +168,7 @@ typedef enum cam_device_input_type_e {
 	CAMDEV_INPUT_TYPE_IMAGE,	   /**< Image buffer input */
 	CAMDEV_INPUT_TYPE_TPG,		   /**< ISP TPG buffer input */
 	CAMDEV_INPUT_TYPE_MAX,		   /**< Maximum input type. */
-	DUMMY_CAMDEV_0009 = 0xdeadfeed
+	CAMDEV_DUMMY_012 = 0xdeadfeed
 } cam_device_input_type_t;
 
 /*****************************************************************************/
@@ -210,7 +185,7 @@ typedef enum cam_device_output_type_e {
 	CAMDEV_OUTPUT_TYPE_BOTH, /**< ISP hardware bpth output image into memory
 					and next process module. */
 	CAMDEV_OUTPUT_TYPE_MAX,	 /**< Maximum output type. */
-	DUMMY_CAMDEV_0010 = 0xdeadfeed
+	CAMDEV_DUMMY_013 = 0xdeadfeed
 } cam_device_output_type_t;
 
 /*****************************************************************************/
@@ -227,7 +202,7 @@ typedef enum cam_device_mi_swap_type_e {
 	CAMDEV_MI_SWAP_DOUBLE_WORDS = 4, /**< Double-word swapping. */
 	CAMDEV_MI_SWAP_FOUR_WORDS = 8,	 /**< Four-word swapping. */
 	CAMDEV_MI_SWAP_MAX, /**< (For internal evaluation only) Upper border */
-	DUMMY_CAMDEV_0011 = 0xdeadfeed
+	CAMDEV_DUMMY_014 = 0xdeadfeed
 } cam_device_mi_swap_type_t;
 
 /*****************************************************************************/
@@ -259,7 +234,7 @@ typedef enum cam_device_mi_yuv_order_e {
 	CAM_DEVICE_MI_PIC_CHANNEL_ORDER_UVY = 4, /** 4: UVY or GBR */
 	CAM_DEVICE_MI_PIC_CHANNEL_ORDER_VUY = 5, /** 5: VUY or BGR */
 	CAM_DEVICE_MI_PIC_CHANNEL_ORDER_MAX = 6,
-	DUMMY_CAMDEV_0012 = 0xdeadfeed
+	DUMMY_CAMDEV_0015 = 0xdeadfeed
 } cam_device_mi_yuv_order_t;
 
 /*****************************************************************************/
@@ -273,7 +248,7 @@ typedef enum cam_device_tile_operation_e {
 	CAMDEV_TILE_OP_HW,	/**< HW split image operation(need HW mp_ctrl
 				   support).*/
 	CAMDEV_TILE_OP_MAX,	/**< Maximum tile operation mode.*/
-	DUMMY_CAMDEV_0013 = 0xdeadfeed
+	CAMDEV_DUMMY_016 = 0xdeadfeed
 } cam_device_tile_operation_t;
 
 /*****************************************************************************/
@@ -287,7 +262,7 @@ typedef enum cam_device_tile_joint_e {
 	CAMDEV_TILE_JOINT_4X3,		   /**< Tile number 4X3.*/
 	CAMDEV_TILE_JOINT_USER, /**< User defined joint in x axis and y axis*/
 	CAMDEV_TILE_JOINT_MAX,	/**< Maximum tile number.*/
-	DUMMY_CAMDEV_0014 = 0xdeadfeed
+	CAMDEV_DUMMY_017 = 0xdeadfeed
 } cam_device_tile_joint_t;
 
 /*****************************************************************************/
@@ -302,7 +277,7 @@ typedef enum cam_device_tile_x_axis_e {
 	CAMDEV_TILE_X_AXIS_2,	   /**< Tile x axis 2.*/
 	CAMDEV_TILE_X_AXIS_3,	   /**< Tile x axis 3.*/
 	CAMDEV_TILE_X_AXIS_4,	   /**< Tile x axis 4.*/
-	DUMMY_CAMDEV_0015 = 0xdeadfeed
+	CAMDEV_DUMMY_018 = 0xdeadfeed
 } cam_device_tile_x_axis_t;
 
 /*****************************************************************************/
@@ -316,7 +291,7 @@ typedef enum cam_device_tile_y_axis_e {
 	CAMDEV_TILE_Y_AXIS_1,	   /**< Tile y axis 1.*/
 	CAMDEV_TILE_Y_AXIS_2,	   /**< Tile y axis 2.*/
 	CAMDEV_TILE_Y_AXIS_3,	   /**< Tile y axis 3.*/
-	DUMMY_CAMDEV_0016 = 0xdeadfeed
+	CAMDEV_DUMMY_019 = 0xdeadfeed
 } cam_device_tile_y_axis_t;
 
 /*****************************************************************************/
@@ -353,7 +328,7 @@ typedef enum cam_device_mcm_port_id_e {
 	CAMDEV_VI200_ADAPT_PORT_14,  /**< VI200 adapter port index 14.*/
 	CAMDEV_VI200_ADAPT_PORT_15,  /**< VI200 adapter port index 15.*/
 	CAMDEV_VI200_ADAPT_PORT_MAX, /**< VI200 adapter max port index.*/
-	DUMMY_CAMDEV_0017 = 0xdeadfeed
+	CAMDEV_DUMMY_020 = 0xdeadfeed
 } cam_device_mcm_port_id_t;
 
 /*****************************************************************************/
@@ -373,7 +348,7 @@ typedef enum cam_device_mcm_operation_e {
 	CAMDEV_MCM_OP_SW,	   /**< Software MCM operation mode.*/
 	CAMDEV_MCM_OP_HW,	   /**< Hardware MCM operation mode.*/
 	CAMDEV_MCM_OP_MAX,	   /**< Maximum MCM operation mode.*/
-	DUMMY_CAMDEV_0018 = 0xdeadfeed
+	CAMDEV_DUMMY_021 = 0xdeadfeed
 } cam_device_mcm_operation_t;
 
 /*****************************************************************************/
@@ -386,7 +361,7 @@ typedef enum cam_device_mcm_selection_e {
 	CAMDEV_MCM_SEL_RDMA,		 /**< MCM RDMA.*/
 	CAMDEV_MCM_SEL_RDCD,		 /**< MCM RDCD.*/
 	CAMDEV_MCM_SEL_MAX,		 /**< Maximum MCM selection.*/
-	DUMMY_CAMDEV_0019 = 0xdeadfeed
+	CAMDEV_DUMMY_022 = 0xdeadfeed
 } cam_device_mcm_selection_t;
 
 /*****************************************************************************/
@@ -395,16 +370,11 @@ typedef enum cam_device_mcm_selection_e {
  *
  *****************************************************************************/
 typedef enum cam_device_switch_seq_mode_e {
-	CAMDEV_SEQ_MODE_INVALID = 0, /**< Sequence invalid mode.*/
-	CAMDEV_SEQ_MODE_PRIORITY,	/**< Sequence priority mode. The switch
-					control layer will schedule	each camera
-					device according to the sequence
-					priority.*/
-	CAMDEV_SEQ_MODE_BATCH, /**< Sequence batch mode. The switch control
-				  layer will schedule each camera device
-				  according to the batch sequence.*/
-	CAMDEV_SEQ_MODE_MAX,   /**< Sequence max mode.*/
-	DUMMY_CAMDEV_0020 = 0xdeadfeed
+    CAMDEV_SEQ_MODE_INVALID = 0,    /**< Sequence invalid mode.*/
+    CAMDEV_SEQ_MODE_PRIORITY,       /**< Sequence priority mode. The switch control layer will schedule
+                                         each camera device according to the sequence priority.*/
+    CAMDEV_SEQ_MODE_MAX,             /**< Sequence max mode.*/
+    CAMDEV_DUMMY_023 = 0xDEADFEED
 } cam_device_switch_seq_mode_t;
 
 /*****************************************************************************/
@@ -431,7 +401,7 @@ typedef enum cam_device_switch_seq_priority_e {
 	CAMDEV_SEQ_PRI_14,  /**< Sequence priority 14.*/
 	CAMDEV_SEQ_PRI_15,  /**< Sequence priority 15. Lowest priority.*/
 	CAMDEV_SEQ_PRI_MAX, /**< Sequence priority max.*/
-	DUMMY_CAMDEV_0021 = 0xdeadfeed
+	CAMDEV_DUMMY_024 = 0xdeadfeed
 } cam_device_switch_seq_priority_t;
 
 /*****************************************************************************/
@@ -450,7 +420,7 @@ typedef enum cam_device_pipe_out_path_type_e {
 	CAMDEV_PIPE_OUTPATH_HDR_RAW =
 		4U,			 /**< Retiming HDR path for RAW image output */
 	CAMDEV_PIPE_OUTPATH_MAX, /**< Total number of output paths */
-	DUMMY_CAMDEV_0022 = 0xdeadfeed
+	CAMDEV_DUMMY_025 = 0xdeadfeed
 } cam_device_pipe_out_path_type_t;
 
 /*****************************************************************************/
@@ -475,7 +445,7 @@ typedef enum cam_device_pipe_in_path_type_e {
 	CAMDEV_PIPE_INPATH_RETIMING = 1, /**< ISP input HDR retiming path */
 	CAMDEV_PIPE_INPATH_TPG = 2,	 /**< ISP input TPG path */
 	CAMDEV_PIPE_INPATH_MAX,		 /**< Total number of input paths */
-	DUMMY_CAMDEV_0023 = 0xdeadfeed
+	CAMDEV_DUMMY_026 = 0xdeadfeed
 } cam_device_pipe_in_path_type_t;
 
 /*****************************************************************************/
@@ -488,7 +458,7 @@ typedef enum cam_device_bit_depth_e {
 	CAMDEV_BIT_DEPTH_10BIT = 1, /**< 10-bit */
 	CAMDEV_BIT_DEPTH_12BIT = 2, /**< 12-bit */
 	CAMDEV_BIT_DEPTH_BIT_MAX,   /**< The maximum input bit depth */
-	DUMMY_CAMDEV_0024 = 0xdeadfeed
+	CAMDEV_DUMMY_027 = 0xdeadfeed
 } cam_device_bit_depth_t;
 
 /*****************************************************************************/
@@ -543,7 +513,7 @@ typedef enum cam_device_pipe_pix_out_fmt_e {
 	CAMDEV_PIX_FMT_RAW16, /**< ISP output format: Raw 16-bit */
 	CAMDEV_PIX_FMT_RAW24, /**< ISP output format: Raw 24-bit */
 	CAMDEV_PIX_FMT_MAX,   /**< Total number of output formats */
-	DUMMY_CAMDEV_0025 = 0xdeadfeed
+	CAMDEV_DUMMY_028 = 0xdeadfeed
 } cam_device_pipe_pix_out_fmt_t;
 
 /*****************************************************************************/
@@ -572,7 +542,7 @@ typedef enum cam_device_input_raw_fmt_e {
 	CAMDEV_INPUT_FMT_3DOL = 15, /**< HDR 3DOL image raw12 */
 	CAMDEV_INPUT_FMT_4DOL = 16, /**< HDR 4DOL image raw12 */
 	CAMDEV_INPUT_FMT_MAX,
-	DUMMY_CAMDEV_0026 = 0xdeadfeed
+	CAMDEV_DUMMY_029 = 0xdeadfeed
 } cam_device_input_raw_fmt_t;
 
 /*****************************************************************************/
@@ -594,7 +564,7 @@ typedef enum cam_device_stitching_mode_e {
 	CAMDEV_STITCHING_L_AND_S = 6, /**< L+S 2x12-bit RAW */
 	CAMDEV_STITCHING_4DOL = 7,	/**< DOL4 frame 3x12-bit */
 	CAMDEV_STITCHING_MAX,
-	DUMMY_CAMDEV_0027 = 0xdeadfeed
+	CAMDEV_DUMMY_030 = 0xdeadfeed
 } cam_device_stitching_mode_t;
 
 /*****************************************************************************/
@@ -608,7 +578,7 @@ typedef enum cam_device_stitching_path_e {
 	CAMDEV_STITCHING_PATH_VS = 2, /**< HDR stitch path VS */
 	CAMDEV_STITCHING_PATH_XS = 3, /**< HDR stitch path XS */
 	CAMDEV_STITCHING_PATH_MAX,
-	DUMMY_CAMDEV_0028 = 0xdeadfeed
+	CAMDEV_DUMMY_031 = 0xdeadfeed
 } cam_device_stitching_path_t;
 
 /*****************************************************************************/
@@ -642,7 +612,7 @@ typedef enum cam_device_raw_pattern_e {
 	CAMDEV_RAW_RGBIR_PAT_RCCB,	/**< RCCB */
 	CAMDEV_RAW_RGBIR_PAT_RYYCY,	/**< RYYCY */
 	CAMDEV_RAW_PAT_MAX,		/**< Maximum RGBIR pattern */
-	DUMMY_CAMDEV_0029 = 0xdeadfeed
+	CAMDEV_DUMMY_032 = 0xdeadfeed
 } cam_device_raw_pattern_t;
 
 /*****************************************************************************/
@@ -656,7 +626,7 @@ typedef enum cam_device_raw_color_ch_e {
 	CAMDEV_RAW_CHANNEL_GREENB = 2, /**< GreenB channel */
 	CAMDEV_RAW_CHANNEL_BLUE = 3,   /**< Blue channel */
 	CAMDEV_RAW_CHANNEL_NUM,
-	DUMMY_CAMDEV_0030 = 0xdeadfeed
+	CAMDEV_DUMMY_033 = 0xdeadfeed
 } cam_device_raw_color_ch_t;
 
 /*****************************************************************************/
@@ -670,7 +640,7 @@ typedef enum cam_device_rgbir_color_ch_e {
 	CAMDEV_RGBIR_CHANNEL_B = 2,  /**< Blue channel */
 	CAMDEV_RGBIR_CHANNEL_IR = 3, /**< IR channel */
 	CAMDEV_RGBIR_CHANNEL_NUM,
-	DUMMY_CAMDEV_0031 = 0xdeadfeed
+	CAMDEV_DUMMY_034 = 0xdeadfeed
 } cam_device_rgbir_color_ch_t;
 
 /*****************************************************************************/
@@ -680,16 +650,14 @@ typedef enum cam_device_rgbir_color_ch_e {
  *****************************************************************************/
 typedef enum cam_device_exposure_frame_index_e {
 
-	CAMDEV_EXPOSURE_LINEAR_FRAME = 0,  /**< Linear frame exposure */
-	CAMDEV_EXPOSURE_LONG_FRAME = 0,	   /**< Long frame exposure */
-	CAMDEV_EXPOSURE_SHORT_FRAME,	   /**< Short frame exposure */
-	CAMDEV_EXPOSURE_VERY_SHORT_FRAME,  /**< Very short frame exposure */
-	CAMDEV_EXPOSURE_EXTRA_SHORT_FRAME, /**< Extremely short frame exposure
-						*/
-	CAMDEV_EXPOSURE_FIFTH_SHORT_FRAME, /**< Fifth short frame exposure */
-	CAMDEV_EXPOSURE_COMBINED_FRAME,	   /**< Combined frame exposure */
-	CAMDEV_EXPOSURE_FRAME_MAX,
-	DUMMY_CAMDEV_0032 = 0xdeadfeed
+    CAMDEV_EXPOSURE_LINEAR_FRAME       = 0U,    /**< Linear frame exposure */
+    CAMDEV_EXPOSURE_COMBINED_FRAME     = 0U,    /**< Combined frame exposure */
+    CAMDEV_EXPOSURE_LONG_FRAME         = 0U,    /**< Long frame exposure */
+    CAMDEV_EXPOSURE_SHORT_FRAME        = 1U,    /**< Short frame exposure */
+    CAMDEV_EXPOSURE_VERY_SHORT_FRAME   = 2U,    /**< Very short frame exposure */
+    CAMDEV_EXPOSURE_EXTRA_SHORT_FRAME  = 3U,    /**< Extremely short frame exposure */
+    CAMDEV_EXPOSURE_FRAME_MAX          = 4U,
+    CAMDEV_DUMMY_035 = 0xDEADFEED
 } cam_device_exposure_frame_index_t;
 
 /******************************************************************************/
@@ -698,10 +666,10 @@ typedef enum cam_device_exposure_frame_index_e {
  *
  *****************************************************************************/
 typedef enum cam_device_ae_work_mode_e {
-	CAMDEV_AE_WORK_MODE_VSI_CTRL = 0, /**< Choose VSI interal ae control*/
-	CAMDEV_AE_WORK_MODE_METADATA_CTRL = 1, /**< Choose metadata ae control*/
+	CAMDEV_AE_WORK_MODE_VSI_CTRL      = 0,   /**< Choose VSI interal ae control*/
+    CAMDEV_AE_WORK_MODE_METADATA_CTRL = 1,   /**< Choose metadata ae control*/
 	CAMDEV_AE_WORK_MODE_MAX,
-	DUMMY_CAMDEV_0033 = 0xdeadfeed
+    CAMDEV_DUMMY_036 = 0xDEADFEED
 } cam_device_ae_work_mode_t;
 
 /******************************************************************************/
@@ -714,7 +682,7 @@ typedef enum cam_device_awb_work_mode_e {
 	CAMDEV_AWB_WORK_MODE_METADATA_CTRL =
 		1, /**< Choose metadata awb control*/
 	CAMDEV_AWB_WORK_MODE_MAX,
-	DUMMY_CAMDEV_0034 = 0xdeadfeed
+	CAMDEV_DUMMY_037 = 0xdeadfeed
 } cam_device_awb_work_mode_t;
 
 /*****************************************************************************/
@@ -783,6 +751,19 @@ typedef struct cam_device_integer_range_s {
 	uint32_t step; /**< Step value */
 } cam_device_integration_time_range_t;
 
+/*****************************************************************************/
+/**
+ * @brief   CamDevice float range information.
+ *
+ *****************************************************************************/
+typedef struct CamDeviceFloatRange_s {
+    float32_t  max;         /**< Maximum value*/
+    float32_t  min;         /**< Minimum value*/
+    float32_t  step;        /**< Step value */
+} CamDeviceFloatRange_t;
+
+
+typedef void* CamDeviceHandle_t;
 typedef void *cam_device_handle_t;
 
 /* @} cam_device_common */

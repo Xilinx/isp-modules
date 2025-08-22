@@ -386,6 +386,8 @@ int media_isp_device_create_buf_pool(struct visp_dev *isp_dev, uint8_t port,
 
 		for (i = 0; i < num_bufs; i++) {
 			BufPoolCfg.p_base_addr_list[i] = isp_dev->op_a[i];
+				dev_info(isp_dev->dev,"%s: isp:%d o/p buff:%d address : %llx ",
+				__func__, isp_dev->id, i, isp_dev->op_a[i]);
 			BufPoolCfg.p_ipl_addr_list[i] = VSI_NULL;
 		}
 	} else if (chn == CAMDEV_BUFCHAIN_RDMA) {
@@ -422,8 +424,8 @@ int media_isp_device_create_buf_pool(struct visp_dev *isp_dev, uint8_t port,
 					isp_dev->ip_a[i];
 				BufPoolCfg.p_ipl_addr_list[i] =
 					(void *)pIpl_addr;
-				dev_info(isp_dev->dev,"%s: buff address : %llx ",
-				__func__, isp_dev->ip_a[i]);
+				dev_info(isp_dev->dev,"%s: ISP:%d input buff:%d  address : %llx ",
+				__func__, isp_dev->id, i, isp_dev->ip_a[i]);
 
 			}
 			uint32_t high_mem = isp_dev->ip_a[i]>>32U;

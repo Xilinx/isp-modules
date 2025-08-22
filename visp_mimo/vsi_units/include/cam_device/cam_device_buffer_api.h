@@ -58,9 +58,11 @@
 // #include "media_buffer_pool.h"
 
 #include <common/buf_defs.h>
+#include <common/return_codes.h>
 #include <ebase/types.h>
 #include <common/return_codes.h>
 #include "cam_device_api.h"
+////*#include "visp_app.h"*/
 
 /**
  * @defgroup cam_device_buffer Cam Device Buffer Definitions
@@ -81,20 +83,16 @@ extern "C" {
  *
  *****************************************************************************/
 typedef enum cam_device_buf_chain_id_e {
-	CAMDEV_BUFCHAIN_MP = 0,	 /**< ISP output main path buffer chain index*/
-	CAMDEV_BUFCHAIN_SP1 = 1, /**< ISP output self1 path buffer chain index*/
-	CAMDEV_BUFCHAIN_SP2 = 2, /**< ISP output self2 path buffer chain index*/
-	CAMDEV_BUFCHAIN_RAW = 3, /**< ISP output RAW path buffer chain index*/
-	CAMDEV_BUFCHAIN_HDR_RAW =
-	    4, /**< ISP output Retiming HDR RAW path buffer chain index*/
-	CAMDEV_BUFCHAIN_METADATA = 5, /**< Vi200 metadata buffer chain index*/
-	CAMDEV_BUFCHAIN_RDMA =
-	    6, /**< ISP input read DMA path buffer chain index*/
-	CAMDEV_BUFCHAIN_RETIMING =
-	    7, /**< ISP input retiming DMA path buffer chain index*/
-	CAMDEV_BUFCHAIN_MAX,
-	DUMMY_CAMDEV_BUFCHAIN =
-	    0xDEADFEED /**< Maximum path buffer chain index */
+    CAMDEV_BUFCHAIN_MP        = 0,               /**< ISP output main path buffer chain index*/
+    CAMDEV_BUFCHAIN_SP1       = 1,               /**< ISP output self1 path buffer chain index*/
+    CAMDEV_BUFCHAIN_SP2       = 2,               /**< ISP output self2 path buffer chain index*/
+    CAMDEV_BUFCHAIN_RAW       = 3,               /**< ISP output RAW path buffer chain index*/
+    CAMDEV_BUFCHAIN_HDR_RAW   = 4,               /**< ISP output retiming HDR RAW path buffer chain index*/
+    CAMDEV_BUFCHAIN_METADATA  = 5,               /**< Warning: CAMDEV_BUFCHAIN_METADATA will be deleted in next release, don't use this index */
+    CAMDEV_BUFCHAIN_RDMA      = 6,               /**< ISP input read DMA path buffer chain index*/
+    CAMDEV_BUFCHAIN_RETIMING  = 7,               /**< ISP input retiming DMA path buffer chain index*/
+    CAMDEV_BUFCHAIN_MAX,                          /**< Maximum path buffer chain index */
+    CAMDEV_DUMMY_001 = 0xDEADFEED
 } cam_device_buf_chain_id_t;
 
 /******************************************************************************/
@@ -308,7 +306,7 @@ RESULT vsi_cam_device_get_buffer_size(struct visp_dev *isp_dev,
 				      cam_device_handle_t h_cam_device,
 				      cam_device_buf_chain_id_t buf_id,
 				      uint32_t *p_buf_size);
-
+#if 0
 /*****************************************************************************/
 /**
  * @brief   This function gets the buffer handle.
@@ -324,7 +322,7 @@ RESULT vsi_cam_device_get_buffer_size(struct visp_dev *isp_dev,
 RESULT vsi_cam_device_get_buf_mgmt(cam_device_handle_t h_cam_device,
 				   cam_device_buf_chain_id_t buf_id,
 				   buf_mgmt_handle_t *buf_handle);
-
+#endif
 /* @} cam_device_buffer */
 
 #ifdef __cplusplus

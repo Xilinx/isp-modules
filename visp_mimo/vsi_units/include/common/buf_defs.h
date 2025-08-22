@@ -57,9 +57,9 @@
 
 #include <ebase/types.h>
 
-#define UNIQUE_ENUM_NAME(u) assert_static__##u
-#define GET_ENUM_NAME(x) UNIQUE_ENUM_NAME(x)
-#define DCT_ASSERT_STATIC(e) _Static_assert((e), "Static assertion failed: " #e)
+#define UNIQUE_ENUM_NAME(u)     assert_static__ ## u
+#define GET_ENUM_NAME(x)        UNIQUE_ENUM_NAME(x)
+#define DCT_ASSERT_STATIC(e)    enum { GET_ENUM_NAME(__LINE__) = 1/(e) }
 
 #define BUFF_POOL_MAX_INPUT_BUF_NUMBER 8
 #define BUFF_POOL_MAX_OUTPUT_BUF_NUMBER 16
@@ -388,15 +388,14 @@ typedef enum pic_buf_layout_e {
  *****************************************************************************/
 
 typedef enum pic_buf_align_e {
-	PIC_BUF_DATA_ALIGN_MODE_INVALID = -1,
-	PIC_BUF_DATA_UNALIGN_MODE = 0,	    // pixel data not aligned.
-	PIC_BUF_DATA_ALIGN_128BIT_MODE = 1, // pixel data  aligned with 128 bit.
-	PIC_BUF_DATA_ALIGN_DOUBLE_WORD =
-	    1,			     // pixel data  aligned with double word.
-	PIC_BUF_DATA_ALIGN_WORD = 2, // pixel data  aligned with word.
-	PIC_BUF_DATA_ALIGN_16BIT_MODE = 2, // pixel data  aligned with 16 bit.
-	PIC_BUF_DATA_ALIGN_MODE_MAX,
-	DUMMY_PIC_BUF_DATA_ALIGN_MODE = 0xDEADFEED,
+    PIC_BUF_DATA_ALIGN_MODE_INVALID          = -1,
+    PIC_BUF_DATA_UNALIGN_MODE                = 0,  // pixel data not aligned.
+    PIC_BUF_DATA_ALIGN_128BIT_MODE           = 1,  // pixel data  aligned with 128 bit.
+	PIC_BUF_DATA_ALIGN_16BIT_MODE            = 2,  // pixel data  aligned with double word.
+	PIC_BUF_DATA_ALIGN_DOUBLE_WORD           = 3,  // pixel data  aligned with word.
+    PIC_BUF_DATA_ALIGN_WORD                  = 4,  // pixel data  aligned with 16 bit.
+    PIC_BUF_DATA_ALIGN_MODE_MAX,
+    DUMMY_PIC_BUF_DATA_ALIGN = 0xdeadfeed
 } pic_buf_align_t;
 
 typedef enum pic_buf_yuvbit_e {
@@ -483,11 +482,72 @@ typedef struct pic_buf_plane_s {
 	uint8_t bit_width;
 } pic_buf_plane_t;
 
-#define PIC_EXP_NUM_MAX 4 /**< Maximum exposure number of image*/
+#define PIC_EXP_NUM_MAX 4U /**< Maximum exposure number of image*/
+
+typedef enum MetadatExposureFrameIndex_e {
+
+    META_EXPOSURE_LINEAR_FRAME       = 0,
+    META_EXPOSURE_LONG_FRAME         = 0,
+    META_EXPOSURE_SHORT_FRAME,
+    META_EXPOSURE_VERY_SHORT_FRAME,
+    META_EXPOSURE_EXTRA_SHORT_FRAME,
+    META_EXPOSURE_FIFTH_SHORT_FRAME,
+    META_EXPOSURE_COMBINED_FRAME,
+    META_EXPOSURE_FRAME_MAX,
+    DUMMY_META_EXPOSURE = 0xdeadfeed
+}MetadatExposureFrameIndex_t;
+
+typedef enum MetadataLuxIndexSensorMode_e {
+    META_SENSOR_MODE_LINEAR = 0,   /**<  linear mode */
+    META_SENSOR_MODE_NATIVE_2DOL,
+    META_SENSOR_MODE_NATIVE_3DOL,
+    META_SENSOR_MODE_NATIVE_4DOL,
+    META_SENSOR_MODE_STITCHING_2DOL,
+    META_SENSOR_MODE_STITCHING_3DOL,
+    META_SENSOR_MODE_STITCHING_4DOL,
+    META_SENSOR_MODE_MAX,
+    DUMMY_META_SENSOR_MODE = 0xdeadfeed
+} MetadataLuxIndexSensorMode_t;
+
+typedef struct MetadataRawChannelFloat_s {
+	float redChannel;
+	float grChannel;
+	float gbChannel;
+	float blueChannel;
+}MetadataRawChannelFloat_t;
 
 /*****************************************************************************/
 /**
- *          pic_buf_metadata_info_t
+ * @brief   Cam Engine integer range information structure.
+ *
+ *****************************************************************************/
+typedef struct MetadataIntegerRange_s {
+    uint32_t  max;         /**< Maximum value*/
+    uint32_t  min;         /**< Minimum value*/
+    uint32_t  step;        /**< Step value */
+} MetadataIntegerRange_t;
+
+typedef struct MetadataFloatRange_s {
+    float  max;         /**< Maximum value*/
+    float  min;         /**< Minimum value*/
+    float  step;        /**< Step value */
+} MetadataFloatRange_t;
+
+#define META_CCM_MATRIX_NUM 9U
+#define META_CCM_OFFSET_NUM 3U
+
+/******************************************************************************/
+/**
+ * @brief   Cam Engine ccm manual configuration structure.
+ *
+ *****************************************************************************/
+typedef struct MetadataCcmConfig_s {
+    float ccmMatrix[META_CCM_MATRIX_NUM];   /**< Color correction matrix coefficient*/
+    float ccmOffset[META_CCM_OFFSET_NUM];   /**< Color offset coefficient*/
+} MetadataCcmConfig_t;
+/*****************************************************************************/
+/**
+ *          PicBufMetadataInfo_t
  *
  * @brief  image all metadata info.
  *
@@ -509,6 +569,27 @@ typedef struct pic_buf_metadata_info_s {
 	 integration time\n expo_info[1]: S image integration time\n
 	 expo_info[2]: VS image integration time\n
 	 expo_info[3]: ES image integration time */
+    MetadataCcmConfig_t ccmConfig;
+    MetadataRawChannelFloat_t sensorWbgain[META_EXPOSURE_FRAME_MAX];
+    MetadataRawChannelFloat_t ispWbGain;
+    MetadataRawChannelFloat_t ispDgain;
+    uint32_t integrationTime[META_EXPOSURE_FRAME_MAX];
+    MetadataIntegerRange_t integrationTimeRange[META_EXPOSURE_FRAME_MAX];
+    float analogGain[META_EXPOSURE_FRAME_MAX];    /**< Analog gain */
+    MetadataFloatRange_t analogGainRange[META_EXPOSURE_FRAME_MAX];
+    float digitalGain[META_EXPOSURE_FRAME_MAX];    /**< Digital gain */
+    MetadataFloatRange_t digitalGainRange[META_EXPOSURE_FRAME_MAX];
+
+    uint8_t exposureNum;    /**< The number of exposures */
+    uint32_t bitWidth;
+    uint32_t width;
+    uint32_t height;
+    uint8_t bayerPattern;
+    MetadataLuxIndexSensorMode_t sensorMode;
+    float hdrRatio;
+    float totalGain;
+    float luxIndex;
+    float edrValue;
 } pic_buf_metadata_info_t;
 
 #define METADATA_MAX_NUM 3
@@ -570,6 +651,7 @@ typedef struct pic_buf_meta_data_s {
 	//  buf_identity             buf_id;
 	pic_buf_cmp_info_t
 	    compress_info; /**< comperss information for decompress*/
+    uint32_t               crcValue;
 	pic_buf_metadata_info_t meta_info;
 	pic_buf_yuv_order_t yuv_order;
 	pic_buf_mi_swap_t swap; // MI output data swap
@@ -655,10 +737,6 @@ typedef struct media_buffer_s {
 	buff_mode buf_mode;	/**< The memory type of this media buffer */
 	uint32_t p_ipl_address; /**< The virtual address of this buffer in ISP
 				   platform.*/
-#ifdef WITH_FLEXA
-	int fd;
-	uint32_t mobj;
-#endif
 	scmi_buffer buf; /**< Common SCMI buffer type. not use.TODO delete */
 
 } media_buffer_t;

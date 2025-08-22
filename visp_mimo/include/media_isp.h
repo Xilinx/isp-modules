@@ -112,7 +112,8 @@ typedef struct media_isp_sensor_info_s {
 	char manu_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char auto_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char one_json[MEDIA_ISP_PATH_LENGTH_MAX];
-	struct cam_device_sensor_mode_info_s mode_info;
+	//struct cam_device_sensor_mode_info_s mode_info;
+	cam_device_sensor_mode_info_t mode_info;
 	uint32_t frame_rate;
 	uint8_t vc_id;
 	uint32_t sensor_id;
@@ -131,7 +132,7 @@ typedef struct media_isp_port_s {
 	uint32_t camera_connect_ref_cnt;
 	media_isp_mcm_attr mcm_attr;
 	bool_t one_json_mode;
-	bool_t sensor_drv_registered;
+	//bool_t sensor_drv_registered;
 	struct mutex main_lock;
 	char bufmode[BUF_MODE_SIZE];
 	bool_t hw_mcm;

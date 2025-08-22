@@ -60,7 +60,7 @@
 #include "sensor_cmd.h"
 #include "visp_driver.h"
 #include "visp_mbox_driver.h"
-#include "visp_app.h"
+/*#include "visp_app.h"*/
 extern uint32_t cookie;
 
 #include <linux/kernel.h>
@@ -448,7 +448,6 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 	       sizeof(pic_buf_meta_data_t));
 	packet->payload_size += sizeof(pic_buf_meta_data_t);
 	p_data += sizeof(pic_buf_meta_data_t);
-
 	memcpy(p_data, &((*p_media_buf)->base_address), sizeof(uint32_t));
 	packet->payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);

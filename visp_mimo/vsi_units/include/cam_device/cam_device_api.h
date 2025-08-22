@@ -59,6 +59,7 @@
 #include "cam_device_calibration.h"
 // #include "visp_driver.h"
 // #include <ebase/offline_trace.h>
+#include <cam_device_ccm_api.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -110,12 +111,7 @@ typedef struct cam_device_stream_mode_config_s {
  *  * @brief   Structure to configure betch mode parameters.
  *   *
  *	*****************************************************************************/
-typedef struct cam_device_batch_mode_config_s {
-	cam_device_stream_port_id_t
-		port_id; /**< port index of MCM which indicates the sensor hardware
-			connect position*/
-	uint8_t batch_number; /**< Buffer number of one batch*/
-} cam_device_batch_mode_config_t;
+
 
 /*****************************************************************************/
 /**
@@ -142,8 +138,6 @@ typedef union cam_device_mode_config_s {
 			//	CamDeviceRdmaModeConfig_t   rdma;	 /**< Reseverd */
 	cam_device_mcm_mode_config_t
 		mcm; /**< MCM mode configuration parameters */
-	cam_device_batch_mode_config_t
-		batch; /**< Batch mode configuration parameters */
 } cam_device_mode_config_t;
 
 /*****************************************************************************/
@@ -195,7 +189,7 @@ typedef struct cam_device_config_s {
 		output_cfg; /**< ISP output configuration parameters */
 	cam_device_switch_seq_priority_t
 		priority;	 /**< Input device priority in switch control */
-	void *h_cascade; /**< Cascade ctx handle */
+	uint32_t hCascade; /**< Cascade ctx handle */
 	struct visp_dev *isp_dev;
 } cam_device_config_t;
 #endif
@@ -350,6 +344,12 @@ typedef struct cam_device_metadata_mean_luma_s {
 	uint32_t total_mean[CAM_DEVICE_ROI_WINDOWS_MAX];
 
 } cam_device_metadata_mean_luma_t;
+typedef struct CamDeviceRawChannelFloat_s {
+	float32_t redChannel;
+	float32_t grChannel;
+	float32_t gbChannel;
+	float32_t blueChannel;
+}CamDeviceRawChannelFloat_t;
 
 /*****************************************************************************/
 /**
@@ -359,6 +359,8 @@ typedef struct cam_device_metadata_mean_luma_s {
 typedef struct cam_device_metadata_info_s {
 	uint32_t chip_id;
 	uint64_t frame_count;
+    uint32_t apertureSize;  /**< Aperture size */
+    uint32_t isoStrength;   /**< ISO strength */
 
 	float32_t junction_temperature;
 	uint32_t black_level_pedestal;
@@ -371,10 +373,18 @@ typedef struct cam_device_metadata_info_s {
 		[CAMDEV_EXPOSURE_FRAME_MAX]; /**< Exposure time(unit: us) */
 
 	float32_t analog_gain[CAMDEV_EXPOSURE_FRAME_MAX];
+CamDeviceFloatRange_t analogGainRange[CAMDEV_EXPOSURE_FRAME_MAX];
 	float32_t digital_gain[CAMDEV_EXPOSURE_FRAME_MAX];
-	float32_t wb_gain[CAMDEV_EXPOSURE_FRAME_MAX][CAMDEV_RAW_CHANNEL_NUM];
-	float32_t dual_conv_gain[CAMDEV_EXPOSURE_FRAME_MAX];
+  CamDeviceFloatRange_t digitalGainRange[CAMDEV_EXPOSURE_FRAME_MAX];
+    CamDeviceRawChannelFloat_t wbGain[CAMDEV_EXPOSURE_FRAME_MAX]; /**< White balance gain */
 
+	float32_t dual_conv_gain[CAMDEV_EXPOSURE_FRAME_MAX];
+    CamDeviceRawChannelFloat_t ispDgain;
+    CamDeviceRawChannelFloat_t ispWbGain;
+
+    float32_t luxIndex;
+    float32_t totalGain;
+    CamDeviceCcmStatus_t ccmConfig;
 	cam_device_metadata_hist_t
 		hist_bins[CAMDEV_EXPOSURE_FRAME_MAX]; // reserved
 	cam_device_metadata_mean_luma_t

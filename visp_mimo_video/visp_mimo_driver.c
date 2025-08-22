@@ -2155,6 +2155,11 @@ int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
 		pr_err("Failed to queue into kfifo\n");
 		return -ENOMEM;
 	}
+	 if (!msg) {
+                dev_err(isp_dev->dev, "%s: invalid msg or payload\n", __func__);
+                ret_val = -EINVAL;
+                goto error_free_buf;
+        }
 
 	size = msg->size;
 	packet_from_rpu = kzalloc(size, GFP_KERNEL);
@@ -2275,6 +2280,8 @@ int isp_mimo_probe(struct platform_device *pdev)
 	mutex_init(&device->isp_dev->mlock);
 	mutex_init(&device->isp_dev->ctrl_lock);
 	device->isp_dev->dev = &pdev->dev;
+
+	INIT_KFIFO(device->isp_dev->display_fifo);
 
 	ret = visp_parse_params(device->isp_dev, pdev);
 	if (ret) {
