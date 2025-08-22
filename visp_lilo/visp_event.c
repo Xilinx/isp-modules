@@ -235,10 +235,35 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret;
 	struct visp_ctrl *isp_ctrl;
+	u8 *pdata = event_pkg->data;
+
+	pad = 1;//vipp sends pad as 0 always, temporarily hardcoding this to 0
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+	if (isp_dev->streamon[pad] == 0) {
+		dev_err(isp_dev->dev,
+			"%s %d Should not use v4l2-ctrl for this node, Device is not streamed on ispid : %d, port %d Chn:%d\n",
+			 __func__, __LINE__, isp_dev->id, port, chn);
+		return -1;
+	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 
-	isp_ctrl = (struct visp_ctrl *)event_pkg->data;
+	memcpy(pdata, &port, sizeof(uint32_t));
+	pdata += sizeof(uint32_t);
+	event_pkg->head.data_size += sizeof(uint32_t);
+
+	cam_device_context_t *p_cam_dev_ctx =
+	    (cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
+	p_cam_dev_ctx->cookie++;
+
+	memcpy(pdata, isp_dev->isp_ports[port].cam_device_handle,
+	       sizeof(cam_device_context_t));
+	pdata += sizeof(cam_device_context_t);
+	event_pkg->head.data_size += sizeof(cam_device_context_t);
+
+	isp_ctrl = (struct visp_ctrl *)pdata/*event_pkg->data*/;
 	isp_ctrl->cid = ctrl->id;
 	isp_ctrl->size = ctrl->elem_size * ctrl->elems;
 	memcpy(isp_ctrl->data, ctrl->p_new.p_u8, isp_ctrl->size);
@@ -248,7 +273,7 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.eid = VISP_EVENT_S_CTRL;
 	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
-	event_pkg->head.data_size = sizeof(isp_ctrl) + isp_ctrl->size;
+	event_pkg->head.data_size += (sizeof(isp_ctrl) + isp_ctrl->size);
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
@@ -265,10 +290,36 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret = 0;
 	struct visp_ctrl *isp_ctrl;
+	u8 *pdata = event_pkg->data;
+
+	pad = 1;//vipp sends pad as 0 always, temporarily hardcoding this to 0
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+	if (isp_dev->streamon[pad] == 0) {
+		dev_err(isp_dev->dev,
+			"%s %d Should not use v4l2-ctrl for this node, Device is not streamed on ispid : %d, port %d Chn:%d\n",
+			 __func__, __LINE__, isp_dev->id, port, chn);
+		return -1;
+	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 
-	isp_ctrl = (struct visp_ctrl *)event_pkg->data;
+	cam_device_context_t *p_cam_dev_ctx =
+	    (cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
+
+	p_cam_dev_ctx->cookie++;
+
+	memcpy(pdata, &port, sizeof(uint32_t));
+	pdata += sizeof(uint32_t);
+	event_pkg->head.data_size += sizeof(uint32_t);
+
+	memcpy(pdata, isp_dev->isp_ports[port].cam_device_handle,
+	       sizeof(cam_device_context_t));
+	pdata += sizeof(cam_device_context_t);
+	event_pkg->head.data_size += sizeof(cam_device_context_t);
+
+	isp_ctrl = (struct visp_ctrl *)pdata;//(event_pkg->data);
 	isp_ctrl->cid = ctrl->id;
 	isp_ctrl->size = ctrl->elem_size * ctrl->elems;
 
@@ -277,14 +328,14 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.eid = VISP_EVENT_G_CTRL;
 	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
-	event_pkg->head.data_size = sizeof(isp_ctrl) + isp_ctrl->size;
+	event_pkg->head.data_size += (sizeof(isp_ctrl) + isp_ctrl->size);
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
 	ret = visp_post_event(&isp_dev->sd, event_pkg);
 
 	if (ret == 0) {
-		memcpy(ctrl->p_new.p_u8, event_pkg->data + sizeof(isp_ctrl),
+		memcpy(ctrl->p_new.p_u8, /*event_pkg->data*/pdata + sizeof(isp_ctrl),
 		       isp_ctrl->size);
 	}
 

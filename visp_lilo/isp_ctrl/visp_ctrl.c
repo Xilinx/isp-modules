@@ -453,7 +453,6 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 #if defined(ISP_LUT3D_V1)
 	visp_lut3d_ctrl_create(isp_dev);
 #endif
-
 	visp_sensor_ctrl_create(isp_dev);
 
 	isp_dev->sd.ctrl_handler = &isp_dev->ctrl_handler;

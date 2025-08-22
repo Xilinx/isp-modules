@@ -933,8 +933,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 #ifdef LOAD_CALIB_ENABLE
 			ret = visp_l_calib_event(isp_dev, pad_stream->pad);
 			if (ret != 0) {
-				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n",
-					__func__, __LINE__);
+				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+					__func__, __LINE__, isp_dev->id, port);
 				mutex_unlock(&isp_dev->rpu->rpu_lock);
 				return ret;
 			}
@@ -953,8 +953,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 #ifdef LOAD_CALIB_ENABLE
 			ret = visp_l_json_event(isp_dev, pad_stream->pad);
 			if (ret != 0) {
-				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n",
-					__func__, __LINE__);
+				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+					__func__, __LINE__, isp_dev->id, port);
 				mutex_unlock(&isp_dev->rpu->rpu_lock);
 				return ret;
 			}
@@ -969,17 +969,16 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			isp_dev, port,
 			&isp_dev->isp_ports[port].sensor_info.frame_rate);
 		if (ret != VSI_SUCCESS) {
-			dev_err(
-				isp_dev->dev,
-				"port %d chn %d Set frame_rate failed, ret is %d",
-				port, chn, ret);
+			dev_err(isp_dev->dev,
+				"%s isp:%d port %d chn %d Set frame_rate failed, ret is %d",
+				__func__, isp_dev->id, port, chn, ret);
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 
 		ret = media_isp_device_set_format(isp_dev, port, chn);
 		if (ret != 0) {
-			dev_err(isp_dev->dev, "%s %d FAILED SetFormat\n",
-				__func__, __LINE__);
+			dev_err(isp_dev->dev, "%s isp_id : %d FAILED SetFormat\n",
+				__func__, isp_dev->id);
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 		subdev = visp_get_input_subdev(isp_dev, port);
