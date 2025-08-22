@@ -1989,7 +1989,8 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 		    port + 1; //"1:CAMDEV_MCM_PORT_0, 2:CAMDEV_MCM_PORT_1, ..."
 		CamConfig.work_cfg.mode_cfg.mcm.mcm_op =
 			isp_dev->isp_ports[port].hw_mcm ? CAMDEV_MCM_OP_HW : CAMDEV_MCM_OP_SW;; //"1:CAMDEV_MCM_OP_SW, 2:CAMDEV_MCM_OP_HW"
-		dev_info(isp_dev->dev, "isp : %d Port :%d MCM Mode %s", isp_dev->id, port, CamConfig.work_cfg.mode_cfg.mcm.mcm_op ? "hw_mcm" : "sw_mcm");
+		dev_info(isp_dev->dev, "isp : %d Port :%d MCM Mode %d",
+				isp_dev->id, port, CamConfig.work_cfg.mode_cfg.mcm.mcm_op);
 	} else {
 		CamConfig.work_cfg.work_mode = CAMDEV_WORK_MODE_STREAM;
 		CamConfig.work_cfg.mode_cfg.stream.port_id =
