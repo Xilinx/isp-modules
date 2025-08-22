@@ -2041,7 +2041,7 @@ static int visp_enum_mbus_code(struct v4l2_subdev *sd,
 	}
 
 	if (code->index >= pad_data->num_formats)
-		return -EINVAL;
+		return 0;
 
 	code->code = pad_data->fmts[code->index].code;
 	code->reserved[0] = pad_data->fmts[code->index].fourcc;
