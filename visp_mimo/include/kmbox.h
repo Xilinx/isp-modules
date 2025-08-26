@@ -57,7 +57,7 @@
 
 uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data);
 uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev);
-int send_command(mb_cmd_id_e cmd, void *data, uint32_t size, uint8_t dest_cpu,
+//int send_command(mb_cmd_id_e cmd, void *data, uint32_t size, uint8_t dest_cpu,
 		 uint8_t src_cpu);
 /*
  *  * @brief Enum structure of Mbox core id

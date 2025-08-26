@@ -105,8 +105,8 @@ void visp_mbox_mailbox_init(u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
 uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 		       mbox_core_id receiver_id, mbox_core_id core_id);
 
-int send_command(mb_cmd_id_e cmd, void *data, uint32_t size, uint8_t dest_cpu,
-		 uint8_t src_cpu);
+int visp_mbox_send_command(mb_cmd_id_e cmd, void *data, uint32_t size,
+			   uint8_t dest_cpu, uint8_t src_cpu);
 
 struct response_user_packet {
 	/*Define your data fields*/
@@ -115,7 +115,7 @@ struct response_user_packet {
 	payload_packet res_payload_pkt;
 };
 
-int apu_mailbox_read(struct rpu_dev *rpu);
+int visp_mbox_apu_read(struct rpu_dev *rpu);
 uint32_t parse_command(mb_cmd_id_e cmd, void *data, uint32_t size, mbox_core_id id,
 		       mbox_core_id id1);
 void apu_postmsg(mbox_core_id receiver_id);

@@ -103,12 +103,13 @@ int iba_init_send_command(struct visp_dev *isp_dev,
 
 	mutex_lock(&isp_dev->mlock);
 
-	result = send_command(APU_2_RPU_MB_CMD_IBA_INIT, packet,
-			      packet->payload_size + payload_extra_size,
-			      isp_dev->isp_rpu, MBOX_CORE_APU);
+	result = visp_mbox_send_command(APU_2_RPU_MB_CMD_IBA_INIT, packet,
+					packet->payload_size +
+					payload_extra_size,
+					isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != 0) {
 		dev_err(isp_dev->dev,
-			"%s: send_command failed with error code %d\n",
+			"%s: send command failed with error code %d\n",
 			__func__, result);
 		mutex_unlock(&isp_dev->mlock);
 		kfree(packet);

@@ -60,7 +60,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include "visp_driver.h"
-#include "visp_mbox_driver.h"
+#include "mbox_cmd.h"
 
 #define SENSOR_NAME_LEN 20
 
@@ -401,7 +401,8 @@ RESULT vsi_cam_device_sensor_query(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 	mutex_lock(&isp_dev->mlock);
-	result = send_command(APU_2_RPU_MB_CMD_SENSOR_QUERY, packet,
+	result = visp_mbox_send_command(APU_2_RPU_MB_CMD_SENSOR_QUERY,
+					packet,
 			      packet->payload_size + payload_extra_size,
 			      isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != 0) {
@@ -466,9 +467,10 @@ RESULT vsi_cam_device_sensor_set_test_pattern(
 		return RET_OUTOFRANGE;
 	}
 	mutex_lock(&isp_dev->mlock);
-	result = send_command(APU_2_RPU_MB_CMD_SENSOR_SET_TP, packet,
-			      packet->payload_size + payload_extra_size,
-			      isp_dev->isp_rpu, MBOX_CORE_APU);
+	result = visp_mbox_send_command(APU_2_RPU_MB_CMD_SENSOR_SET_TP,
+					packet,
+					packet->payload_size + payload_extra_size,
+					isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != 0) {
 		mutex_unlock(&isp_dev->mlock);
 		kfree(packet);
@@ -526,9 +528,10 @@ RESULT vsi_cam_device_sensor_set_frame_rate(struct visp_dev *isp_dev,
 		return RET_OUTOFRANGE;
 	}
 	mutex_lock(&isp_dev->mlock);
-	result = send_command(APU_2_RPU_MB_CMD_SENSOR_SET_FRAMERATE, packet,
-			      packet->payload_size + payload_extra_size,
-			      isp_dev->isp_rpu, MBOX_CORE_APU);
+	result = visp_mbox_send_command(APU_2_RPU_MB_CMD_SENSOR_SET_FRAMERATE,
+					packet,
+					packet->payload_size + payload_extra_size,
+					isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != 0) {
 		kfree(packet);
 		return result;
@@ -552,6 +555,7 @@ RESULT vsi_cam_device_sensor_get_connect_port_info(
 	RESULT result = RET_SUCCESS;
 	uint8_t *p_data = NULL;
 	payload_packet *packet = NULL;
+	int cmd;
 
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
@@ -593,9 +597,11 @@ RESULT vsi_cam_device_sensor_get_connect_port_info(
 	}
 
 	mutex_lock(&isp_dev->mlock);
-	result = send_command(APU_2_RPU_MB_CMD_SENSOR_GET_ConnectPortInfo,
-			      packet, packet->payload_size + payload_extra_size,
-			      isp_dev->isp_rpu, MBOX_CORE_APU);
+	cmd = APU_2_RPU_MB_CMD_SENSOR_GET_CONNECT_PORT_INFO;
+	result = visp_mbox_send_command(cmd, packet,
+					packet->payload_size +
+					payload_extra_size,
+					isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != 0) {
 		kfree(packet);
 		return result;

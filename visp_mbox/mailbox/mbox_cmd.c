@@ -147,7 +147,7 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 }
 EXPORT_SYMBOL_GPL(write_mboxcmd);
 
-int apu_mailbox_read(struct rpu_dev *rpu)
+int visp_mbox_apu_read(struct rpu_dev *rpu)
 {
 	struct visp_dev *isp_dev;
 	uint32_t cmd, isp_id;
@@ -245,7 +245,7 @@ DONE:
 DISP_DONE:
 	return ret;
 }
-EXPORT_SYMBOL_GPL(apu_mailbox_read);
+EXPORT_SYMBOL_GPL(visp_mbox_apu_read);
 
 void visp_mbox_mailbox_init(u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
 			    uint64_t mbox_fifo_start_addr_phy)
@@ -293,15 +293,15 @@ void mailbox_close(void)
 	kfree(apu_fifo_ctrl);
 }
 
-int send_command(mb_cmd_id_e cmd, void *data, uint32_t size, uint8_t dest_cpu,
-		 uint8_t src_cpu)
+int visp_mbox_send_command(mb_cmd_id_e cmd, void *data, uint32_t size,
+			   uint8_t dest_cpu, uint8_t src_cpu)
 {
 	int ret = 0;
 
 	ret = write_mboxcmd(cmd, data, size, dest_cpu, src_cpu);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(send_command);
+EXPORT_SYMBOL_GPL(visp_mbox_send_command);
 
 volatile void *enque_buff_g;
 volatile int dq_buf_available;

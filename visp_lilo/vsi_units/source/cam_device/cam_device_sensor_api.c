@@ -554,7 +554,7 @@ RESULT vsi_cam_device_sensor_get_connect_port_info(
 	}
 
 	xlnx_send_mbox_data_cmd(
-	    isp_dev, APU_2_RPU_MB_CMD_SENSOR_GET_ConnectPortInfo, packet,
+	    isp_dev, APU_2_RPU_MB_CMD_SENSOR_GET_CONNECT_PORT_INFO, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
 

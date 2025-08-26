@@ -78,7 +78,7 @@ static void visp_mbox_event_notified(struct work_struct *work)
 	}
 
 	/* Read command from mailbox */
-	ret = apu_mailbox_read(rpu);
+	ret = visp_mbox_apu_read(rpu);
 	if (ret != 0) {
 		dev_err(rpu->dev, "%s:Failed to read mailbox command:%d\n",
 			__func__, rpu->rpu_id);
@@ -258,8 +258,9 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 
 	mutex_lock(&rpu->write_lock); // Replaced spinlock with mutex
 	/* Send command and message */
-	ret = send_command(user_packet->cmd_id, packet, sizeof(payload_packet),
-			   rpu->core_id, MBOX_CORE_APU);
+	ret = visp_mbox_send_command(user_packet->cmd_id, packet,
+				     sizeof(payload_packet), rpu->core_id,
+				     MBOX_CORE_APU);
 
 	if (ret < 0) {
 		pr_err("%s: send_command failed with error: %d\n", __func__,
@@ -657,8 +658,8 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = send_command(cmd, data, size, rpu->core_id,
-			      src_cpu);
+	result = visp_mbox_send_command(cmd, data, size, rpu->core_id,
+					src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
 			"%s: Mailbox Send message failed at line %d\n",
@@ -708,8 +709,8 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		return -EINVAL;
 	}
 	rpu = isp_dev->rpu;
-	result = send_command(cmd, data, size, rpu->core_id,
-			      src_cpu);
+	result = visp_mbox_send_command(cmd, data, size, rpu->core_id,
+					src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
 			"%s: Mailbox Send message failed at line %d\n",
@@ -745,8 +746,8 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = send_command(cmd, data, size, rpu->core_id,
-			      src_cpu);
+	result = visp_mbox_send_command(cmd, data, size, rpu->core_id,
+					src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
 			"%s: Mailbox Send message failed at line %d\n",
