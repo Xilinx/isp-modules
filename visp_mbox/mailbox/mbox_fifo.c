@@ -63,7 +63,7 @@
 #include <sensor_cmd.h>
 #include <asm-generic/barrier.h>
 
-void fifo_info(fifo_control *fifo)
+void visp_mbox_fifo_info(fifo_control *fifo)
 {
 	pr_err("%s-%d\n", __func__, __LINE__);
 	pr_err("\tbuffer_phy       (%p) %p\n", (void *)&fifo->buffer_phy,
@@ -83,9 +83,9 @@ void fifo_info(fifo_control *fifo)
 	pr_err("\twrite_offset     (%p) %u\n", (void *)&fifo->write_offset,
 	       fifo->write_offset);
 }
-EXPORT_SYMBOL_GPL(fifo_info);
+EXPORT_SYMBOL_GPL(visp_mbox_fifo_info);
 
-int fifo_init(fifo_control *fifo, fifo_init_data *init_fifo)
+int visp_mbox_fifo_init(fifo_control *fifo, fifo_init_data *init_fifo)
 {
 	if (fifo == NULL || init_fifo == NULL)
 		return VPI_ERR_INVALID;
@@ -102,12 +102,12 @@ int fifo_init(fifo_control *fifo, fifo_init_data *init_fifo)
 	fifo->item_stored = 0;
 	fifo->read_offset = 0;
 	fifo->write_offset = 0;
-	// fifo_info(fifo);
+	// visp_mbox_fifo_info(fifo);
 	return VPI_SUCCESS;
 }
-EXPORT_SYMBOL_GPL(fifo_init);
+EXPORT_SYMBOL_GPL(visp_mbox_fifo_init);
 
-int fifo_write(mbox_post_msg *msg, fifo_control *fifo)
+int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 {
 	// pr_err("[MBOX-FIFO] ");
 
@@ -120,7 +120,7 @@ int fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 
 	// memcpy((((uint64_t)fifo->buffer_virt) + fifo->write_offset), msg,
 	// ALIGN(sizeof(mbox_post_msg) - sizeof(payload_packet) + msg->size,
-	// 8)); fifo_info(fifo);
+	// 8)); visp_mbox_fifo_info(fifo);
 	memcpy(((uint8_t *)fifo->buffer_virt + fifo->write_offset), msg,
 	       ALIGN(sizeof(mbox_post_msg) - sizeof(payload_packet) + msg->size,
 		     8));
@@ -133,9 +133,9 @@ int fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 
 	return VPI_SUCCESS;
 }
-EXPORT_SYMBOL_GPL(fifo_write);
+EXPORT_SYMBOL_GPL(visp_mbox_fifo_write);
 
-int fifo_read(mbox_post_msg *msg, fifo_control *fifo)
+int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 {
 	mbox_post_msg *fifo_msg; // =(mbox_post_msg *) (((char
 				 // *)fifo->buffer_virt + fifo->read_offset));
@@ -159,9 +159,9 @@ int fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 	//  fifo_info(fifo);
 	return VPI_SUCCESS;
 }
-EXPORT_SYMBOL_GPL(fifo_read);
+EXPORT_SYMBOL_GPL(visp_mbox_fifo_read);
 
-int fifo_reset(fifo_control *fifo)
+int visp_mbox_fifo_reset(fifo_control *fifo)
 {
 	if (fifo == NULL)
 		return VPI_ERR_INVALID;
@@ -172,23 +172,23 @@ int fifo_reset(fifo_control *fifo)
 
 	return VPI_SUCCESS;
 }
-EXPORT_SYMBOL_GPL(fifo_reset);
+EXPORT_SYMBOL_GPL(visp_mbox_fifo_reset);
 
-uint32_t fifo_get_stored(fifo_control *fifo)
+uint32_t visp_mbox_fifo_get_stored(fifo_control *fifo)
 {
 	if (fifo == NULL)
 		return VPI_ERR_INVALID;
 	return fifo->item_stored;
 }
-EXPORT_SYMBOL_GPL(fifo_get_stored);
+EXPORT_SYMBOL_GPL(visp_mbox_fifo_get_stored);
 
-bool fifo_is_full(fifo_control *fifo)
+bool visp_mbox_fifo_is_full(fifo_control *fifo)
 {
 	return fifo->item_stored >= fifo->item_total ? true : false;
 }
-EXPORT_SYMBOL_GPL(fifo_is_full);
+EXPORT_SYMBOL_GPL(visp_mbox_fifo_is_full);
 
-bool fifo_is_empty(fifo_control *fifo)
+bool visp_mbox_fifo_is_empty(fifo_control *fifo)
 {
 	//	xil_printf("fifo ctrl addresses %x,%x,%x,%x,->item stroed
 	//%x,read offset-> %x
@@ -196,9 +196,9 @@ bool fifo_is_empty(fifo_control *fifo)
 	//			&fifo->buffer_size,&fifo->item_stored,&fifo->read_offset);
 	return fifo->item_stored == 0 ? true : false;
 }
-EXPORT_SYMBOL_GPL(fifo_is_empty);
+EXPORT_SYMBOL_GPL(visp_mbox_fifo_is_empty);
 
-int fifo_buffer_free(fifo_control *fifo)
+int visp_mbox_fifo_buffer_free(fifo_control *fifo)
 {
 	if (fifo == NULL)
 		return VPI_ERR_INVALID;
@@ -206,6 +206,6 @@ int fifo_buffer_free(fifo_control *fifo)
 	kfree(fifo->buffer_virt);
 	return VPI_SUCCESS;
 }
-EXPORT_SYMBOL_GPL(fifo_buffer_free);
+EXPORT_SYMBOL_GPL(visp_mbox_fifo_buffer_free);
 
 MODULE_LICENSE("GPL");

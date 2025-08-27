@@ -70,7 +70,7 @@ typedef struct fifo_control {
 	uint32_t write_offset;
 } fifo_control;
 
-void fifo_info(fifo_control *);
+void visp_mbox_fifo_info(fifo_control *fifo);
 /**
  * @brief Structure of init fifo data
  */
@@ -111,7 +111,7 @@ typedef enum mbox_int_id {
  * @return Return result
  * @retval MBOX_SUCCESS for succeed, others for failure
  */
-int fifo_init(fifo_control *fifo, fifo_init_data *fifodata);
+int visp_mbox_fifo_init(fifo_control *fifo, fifo_init_data *fifodata);
 
 /**
  * @brief Write a given meg to the fifo
@@ -120,7 +120,7 @@ int fifo_init(fifo_control *fifo, fifo_init_data *fifodata);
  * @return Return result
  * @retval MBOX_SUCCESS for succeed, others for failure
  */
-int fifo_write(mbox_post_msg *msg, fifo_control *fifo /*,int fd*/);
+int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Read a given meg from the fifo
@@ -129,7 +129,7 @@ int fifo_write(mbox_post_msg *msg, fifo_control *fifo /*,int fd*/);
  * @return Return result
  * @retval MBOX_SUCCESS for succeed, others for failure
  */
-int fifo_read(mbox_post_msg *msg, fifo_control *fifo /*,int fd*/);
+int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Reset the FIFO
@@ -137,7 +137,7 @@ int fifo_read(mbox_post_msg *msg, fifo_control *fifo /*,int fd*/);
  * @return Return result
  * @retval MBOX_SUCCESS for succeed, others for failure
  */
-int fifo_reset(fifo_control *fifo /*,int fd*/);
+int visp_mbox_fifo_reset(fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Check current FIFO stored number
@@ -145,7 +145,7 @@ int fifo_reset(fifo_control *fifo /*,int fd*/);
  * @return Return result
  * @retval stored numbers, others for failure
  */
-uint32_t fifo_get_stored(fifo_control *fifo /*,int fd*/);
+uint32_t visp_mbox_fifo_get_stored(fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Check current FIFO is full or not
@@ -153,7 +153,7 @@ uint32_t fifo_get_stored(fifo_control *fifo /*,int fd*/);
  * @return Return result
  * @retval true for full, false for failure
  */
-bool fifo_is_full(fifo_control *fifo /*,int fd*/);
+bool visp_mbox_fifo_is_full(fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Check current FIFO is empty or not
@@ -161,13 +161,13 @@ bool fifo_is_full(fifo_control *fifo /*,int fd*/);
  * @return Return result
  * @retval ture for empty, false for failure
  */
-bool fifo_is_empty(fifo_control *fifo /*,int fd*/);
+bool visp_mbox_fifo_is_empty(fifo_control *fifo /*,int fd*/);
 
 /**
  * @brief Free fifo_control buffer data, only used if the buffer is assigned by
  * @brief malloc() or similar function
  * @param fifo fifo_control info pointer
  */
-int fifo_buffer_free(fifo_control *fifo);
+int visp_mbox_fifo_buffer_free(fifo_control *fifo);
 
 #endif //_MBOX_FIFO_H_

@@ -164,8 +164,8 @@ int mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 				    (mbox_fifo + mlist)->buffer_address_virt;
 				init_fifo->buffer_addr_phy =
 				    (mbox_fifo + mlist)->buffer_address_phy;
-				ret = fifo_init((mbox_fifo + mlist)->fifo,
-						init_fifo);
+				ret = visp_mbox_fifo_init((mbox_fifo + mlist)->fifo,
+							  init_fifo);
 				// fifo_info((mbox_fifo + mlist)->fifo);
 				if (ret != VPI_SUCCESS)
 					return ret;
@@ -237,9 +237,8 @@ int vpi_mbox_post(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
 	    mbox_core_id_check(mbox_fifo, mbox_fifo->core_id, receiver_id))
 		return VPI_ERR_INVALID;
 
-	ret = fifo_write(
-	    msg,
-	    (mbox_fifo + g_mem_list[mbox_fifo->core_id][receiver_id])->fifo);
+	ret = visp_mbox_fifo_write(msg, (mbox_fifo + g_mem_list
+				   [mbox_fifo->core_id][receiver_id])->fifo);
 
 	if (ret != VPI_SUCCESS)
 		return ret;
@@ -283,8 +282,8 @@ int vpi_mbox_read(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
 	    mbox_core_id_check(mbox_fifo, sender_id, mbox_fifo->core_id))
 		return VPI_ERR_INVALID;
 
-	return fifo_read(
-	    msg, (mbox_fifo + g_mem_list[sender_id][mbox_fifo->core_id])->fifo);
+	return visp_mbox_fifo_read(msg, (mbox_fifo + g_mem_list[sender_id]
+				   [mbox_fifo->core_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_read);
 int vpi_mbox_reset(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
@@ -296,8 +295,8 @@ int vpi_mbox_reset(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
 	    mbox_core_id_check(mbox_fifo, sender_id, receiver_id))
 		return VPI_ERR_INVALID;
 
-	return fifo_reset(
-	    (mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
+	return visp_mbox_fifo_reset((mbox_fifo + g_mem_list[sender_id]
+				    [receiver_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_reset);
 
@@ -310,24 +309,24 @@ uint32_t vpi_mbox_get_stored(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
 	    mbox_core_id_check(mbox_fifo, sender_id, receiver_id))
 		return VPI_ERR_INVALID;
 
-	return fifo_get_stored(
-	    (mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
+	return visp_mbox_fifo_get_stored((mbox_fifo + g_mem_list[sender_id]
+					 [receiver_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_get_stored);
 
 bool vpi_mbox_is_full(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
 		      mbox_core_id receiver_id)
 {
-	return fifo_is_full(
-	    (mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
+	return visp_mbox_fifo_is_full((mbox_fifo + g_mem_list[sender_id]
+				      [receiver_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_is_full);
 
 bool vpi_mbox_is_empty(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
 		       mbox_core_id receiver_id)
 {
-	return fifo_is_empty(
-	    (mbox_fifo + g_mem_list[sender_id][receiver_id])->fifo);
+	return visp_mbox_fifo_is_empty((mbox_fifo + g_mem_list[sender_id]
+				       [receiver_id])->fifo);
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_is_empty);
 
