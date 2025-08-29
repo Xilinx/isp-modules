@@ -116,10 +116,8 @@ typedef void (*mbox_driver_cb)(mbox_core_id receiver_id /*,int fd*/);
  * @return Return result
  * @retval mbox_fifo_ctrl point for succeed, NULL for failure
  */
-mbox_fifo_ctrl *visp_mbox_init(mbox_core_id core_id, u64 shm_addr,
-			       u64 shm_addr_phy,
-			       u64 shm_block_size);
-
+mbox_fifo_ctrl *visp_mbox_init(u32 sender_id, mbox_core_id core_id, u64 shm_addr,
+			       u64 shm_addr_phy, u64 shm_block_size);
 /**
  * @brief Post meg to the designated receiver
  * @param mbox_fifo the mbox_fifo_ctrl pointer
@@ -210,7 +208,8 @@ void vpi_mbox_destory(mbox_fifo_ctrl *mbox_fifo);
 
 int mbox_core_id_check(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,
 		       mbox_core_id receiver_id);
-int mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
-		 uint64_t shm_start_addr, uint64_t shm_start_addr_phy,
-		 uint32_t shm_block_size);
+
+int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
+		      mbox_core_id sender_id, uint64_t shm_start_addr,
+		      uint64_t shm_start_addr_phy, uint32_t shm_block_size);
 #endif //_MBOX_API_H_

@@ -863,7 +863,7 @@ static int visp_mbox_mailbox_initialization(struct rpu_dev *rpu)
 	}
 
 	/* Initialize mailbox with reserved memory */
-	visp_mbox_mailbox_init(MBOX_CORE_APU,
+	visp_mbox_mailbox_init(rpu, MBOX_CORE_APU,
 			       (uintptr_t)reserved_memory.virt_addr,
 			       (uintptr_t)reserved_memory.phys_addr);
 

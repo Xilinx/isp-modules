@@ -100,7 +100,7 @@
 
 /*****************************************************************************/
 
-void visp_mbox_mailbox_init(u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
+void visp_mbox_mailbox_init(struct rpu_dev *rpu, u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
 			    uint64_t mbox_fifo_start_addr_phy);
 uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 		       mbox_core_id receiver_id, mbox_core_id core_id);
@@ -119,7 +119,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu);
 uint32_t parse_command(mb_cmd_id_e cmd, void *data, uint32_t size, mbox_core_id id,
 		       mbox_core_id id1);
 void apu_postmsg(mbox_core_id receiver_id);
-void mailbox_close(void);
+void mailbox_close(struct rpu_dev *rpu);
 int send_response(mb_cmd_id_e res, payload_packet *data, uint32_t size,
 		  uint8_t dest_cpu, uint8_t src_cpu);
 

@@ -67,12 +67,6 @@
 #include "visp_driver.h"
 #include "visp_mbox_driver.h"
 
-static mbox_fifo_ctrl *rpu0_fifo_ctrl;
-static mbox_fifo_ctrl *rpu1_fifo_ctrl;
-static mbox_fifo_ctrl *rpu2_fifo_ctrl;
-static mbox_fifo_ctrl *rpu3_fifo_ctrl;
-static mbox_fifo_ctrl *apu_fifo_ctrl;
-
 #define XPAR_PS_0_PSPMC_0_PSV_IPI_0_BIT_MASK 0x00000004U
 #define XPAR_PS_0_PSPMC_0_PSV_IPI_1_BIT_MASK 0x00000008U
 
@@ -113,6 +107,7 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 {
 	int ret;
 	mbox_post_msg *msg = NULL;
+	struct rpu_dev *rpu;
 
 	msg = (mbox_post_msg *)kzalloc(sizeof(mbox_post_msg), GFP_KERNEL);
 	if (msg == NULL) {
@@ -124,19 +119,19 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 		msg->msg_id = cmd_id;
 	} else {
 		msg->msg_id = cmd_id;
-		// msg->size = size;
-		//  memcpy(msg->payload, struct_msg, size);
 		msg->size = sizeof(payload_packet) - MAX_ITEM +
 			    ((payload_packet *)struct_msg)->payload_size;
 		memcpy(msg->payload, struct_msg, ALIGN(msg->size, 8));
 	}
 
-	if (core_id != 4)
-		core_id = 4;
-	if (core_id == MBOX_CORE_APU) {
-		ret =
-		    vpi_mbox_post(apu_fifo_ctrl, msg, receiver_id, apu_postmsg);
-	}
+	rpu = visp_mbox_get_rpu_dev(receiver_id + VISP_MBOX_RPU6);
+	if (!rpu)
+		return -EINVAL;
+
+	if (core_id != MBOX_CORE_APU)
+		core_id = MBOX_CORE_APU;
+
+	ret = vpi_mbox_post(rpu->apu_tx_ctrl, msg, receiver_id, apu_postmsg);
 
 	kfree(msg);
 
@@ -153,18 +148,17 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	uint32_t cmd, isp_id;
 	int ret = 0;
 
-	if (vpi_mbox_is_empty(apu_fifo_ctrl, rpu->core_id, MBOX_CORE_APU)) {
-		(void)mbox_send_message(rpu->rx_chan, NULL);
+	if (vpi_mbox_is_empty(rpu->apu_rx_ctrl, rpu->core_id, MBOX_CORE_APU)) {
 		if (mutex_is_locked(&rpu->write_lock)) {
 			mutex_unlock(&rpu->write_lock);
 		}
+		(void)mbox_send_message(rpu->rx_chan, NULL);
 		pr_err("No message in shared memory for rpu_id %d!\n", rpu->rpu_id);
 		return -ENOMSG;
 	}
 
 	mutex_lock(&rpu->read_lock);
-
-	vpi_mbox_read(apu_fifo_ctrl, rpu->msg, rpu->core_id);
+	vpi_mbox_read(rpu->apu_rx_ctrl, rpu->msg, rpu->core_id);
 
 	memcpy(&isp_id, ((payload_packet *)rpu->msg->payload)->payload, sizeof(uint32_t));
 
@@ -247,50 +241,26 @@ DISP_DONE:
 }
 EXPORT_SYMBOL_GPL(visp_mbox_apu_read);
 
-void visp_mbox_mailbox_init(u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
+void visp_mbox_mailbox_init(struct rpu_dev *rpu, u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
 			    uint64_t mbox_fifo_start_addr_phy)
 {
-	switch (cpu) {
-	case MBOX_CORE_APU:
-		apu_fifo_ctrl = visp_mbox_init(MBOX_CORE_APU,
-					       MBOX_FIFO_START_ADDR,
-					       mbox_fifo_start_addr_phy,
-					       MBOX_FIFO_BLOCK_SIZE);
-		break;
-	case MBOX_CORE_RPU0:
-		rpu0_fifo_ctrl = visp_mbox_init(MBOX_CORE_RPU0,
-						MBOX_FIFO_START_ADDR,
-						mbox_fifo_start_addr_phy,
-						MBOX_FIFO_BLOCK_SIZE);
-		break;
-	case MBOX_CORE_RPU1:
-		rpu1_fifo_ctrl = visp_mbox_init(MBOX_CORE_RPU1,
-						MBOX_FIFO_START_ADDR,
-						mbox_fifo_start_addr_phy,
-						MBOX_FIFO_BLOCK_SIZE);
-		break;
-	case MBOX_CORE_RPU2:
-		rpu2_fifo_ctrl = visp_mbox_init(MBOX_CORE_RPU2,
-						MBOX_FIFO_START_ADDR,
-						mbox_fifo_start_addr_phy,
-						MBOX_FIFO_BLOCK_SIZE);
-		break;
-	case MBOX_CORE_RPU3:
-		rpu3_fifo_ctrl = visp_mbox_init(MBOX_CORE_RPU3,
-						MBOX_FIFO_START_ADDR,
-						mbox_fifo_start_addr_phy,
-						MBOX_FIFO_BLOCK_SIZE);
-		break;
-	default:
-		pr_err("%s: Invalid CPU id: %u\n", __func__, cpu);
-		break;
-	}
+		rpu->apu_rx_ctrl = visp_mbox_init(rpu->core_id,
+						  MBOX_CORE_APU,
+						  MBOX_FIFO_START_ADDR,
+						  mbox_fifo_start_addr_phy,
+						  MBOX_FIFO_BLOCK_SIZE);
+
+		rpu->apu_tx_ctrl = visp_mbox_init(MBOX_CORE_APU, rpu->core_id,
+						  MBOX_FIFO_START_ADDR,
+						  mbox_fifo_start_addr_phy,
+						  MBOX_FIFO_BLOCK_SIZE);
 }
 EXPORT_SYMBOL_GPL(visp_mbox_mailbox_init);
 
-void mailbox_close(void)
+void mailbox_close(struct rpu_dev *rpu)
 {
-	kfree(apu_fifo_ctrl);
+	kfree(rpu->apu_tx_ctrl);
+	kfree(rpu->apu_tx_ctrl);
 }
 
 int visp_mbox_send_command(mb_cmd_id_e cmd, void *data, uint32_t size,

@@ -121,6 +121,8 @@ struct rpu_dev {
 	struct mutex write_lock;
 	struct mutex userapp_lock;
 	mbox_post_msg *msg;
+	mbox_fifo_ctrl *apu_rx_ctrl;
+	mbox_fifo_ctrl *apu_tx_ctrl;
 	struct response_user_packet *visp_mbox_intr_data;
 	struct response_user_packet *visp_mbox_app_data;
 	struct response_user_packet *visp_mbox_apu_data;

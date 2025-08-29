@@ -90,10 +90,10 @@ int visp_mbox_fifo_init(fifo_control *fifo, fifo_init_data *init_fifo)
 	if (fifo == NULL || init_fifo == NULL)
 		return VPI_ERR_INVALID;
 
-	fifo->buffer_phy =
-	    (uint64_t *)(init_fifo->buffer_addr_phy); // Physical Address
-	fifo->buffer_virt =
-	    (uint64_t *)(init_fifo->buffer_addr_virt); // virtual Address
+	/* Physical Address */
+	fifo->buffer_phy = (uint64_t *)(init_fifo->buffer_addr_phy);
+	/* virtual Address */
+	fifo->buffer_virt = (uint64_t *)(init_fifo->buffer_addr_virt);
 	fifo->item_size = init_fifo->item_size;
 	fifo->item_total = init_fifo->item_total;
 	fifo->buffer_size = init_fifo->buffer_size;
@@ -102,7 +102,7 @@ int visp_mbox_fifo_init(fifo_control *fifo, fifo_init_data *init_fifo)
 	fifo->item_stored = 0;
 	fifo->read_offset = 0;
 	fifo->write_offset = 0;
-	// visp_mbox_fifo_info(fifo);
+	//visp_mbox_fifo_info(fifo);
 	return VPI_SUCCESS;
 }
 EXPORT_SYMBOL_GPL(visp_mbox_fifo_init);
@@ -145,9 +145,6 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 		return VPI_ERR_EMPTY;
 	fifo_msg =
 	    (mbox_post_msg *)(((char *)fifo->buffer_virt + fifo->read_offset));
-	//    memcpy(msg,
-	//    fifo_msg,sizeof(mbox_post_msg)-sizeof(payload_packet)+((fifo_msg->size)+63)
-	//    & ~63 );
 
 	memcpy(msg, fifo_msg,
 	       sizeof(mbox_post_msg) - sizeof(payload_packet) +
@@ -156,7 +153,6 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 	if (fifo->read_offset >= fifo->buffer_size)
 		fifo->read_offset = 0;
 	fifo->item_stored--;
-	//  fifo_info(fifo);
 	return VPI_SUCCESS;
 }
 EXPORT_SYMBOL_GPL(visp_mbox_fifo_read);
@@ -190,11 +186,7 @@ EXPORT_SYMBOL_GPL(visp_mbox_fifo_is_full);
 
 bool visp_mbox_fifo_is_empty(fifo_control *fifo)
 {
-	//	xil_printf("fifo ctrl addresses %x,%x,%x,%x,->item stroed
-	//%x,read offset-> %x
-	//\n",&fifo->buffer,&fifo->item_size,&fifo->item_total,
-	//			&fifo->buffer_size,&fifo->item_stored,&fifo->read_offset);
-	return fifo->item_stored == 0 ? true : false;
+	return (fifo->item_stored == 0);
 }
 EXPORT_SYMBOL_GPL(visp_mbox_fifo_is_empty);
 
