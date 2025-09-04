@@ -584,12 +584,16 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 	if (packet.payload_size > MAX_ITEM)
 		return RET_OUTOFRANGE;
 
+	mutex_lock(&isp_dev->rpu->rpu_lock);
+
 	result = xlnx_send_mbox_acked_cmd(
 	    isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
 	    packet.payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
+
+	mutex_unlock(&isp_dev->rpu->rpu_lock);
 
 	return result;
 }

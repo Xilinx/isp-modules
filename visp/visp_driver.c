@@ -1172,7 +1172,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 	if (pad_stream->status == 1) {
 		/* ENTER PORT Level CRITICAL SECTION */
-		mutex_lock(&isp_dev->calib_lock);
+		mutex_lock(&isp_dev->rpu->rpu_lock);
 
 		if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
 			isp_dev->isp_ports[port].camera_connect_ref_cnt++;
@@ -1183,7 +1183,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 					__func__, __LINE__, isp_dev->id, port);
 				ret = -ENOMEM;
-				goto ERR_TO_CALIB_LOCK;
+				goto ERR_TO_RPU_LOCK;
 			}
 #endif
 
@@ -1194,7 +1194,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 					"%s %d FAiled camera connect\n",
 					__func__, __LINE__);
 				ret = -ENODEV;
-				goto ERR_TO_CALIB_LOCK;
+				goto ERR_TO_RPU_LOCK;
 			}
 
 #ifdef LOAD_CALIB_ENABLE
@@ -1203,21 +1203,20 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 					__func__, __LINE__, isp_dev->id, port);
 				ret = -ENOMEM;
-				goto ERR_TO_CALIB_LOCK;
+				goto ERR_TO_RPU_LOCK;
 			}
 			/* Stream on all pipeline subdevices */
 			ret = visp_stream_pipeline_subdevs(isp_dev, port, 1);
 			if (ret) {
 				dev_err(isp_dev->dev, "Failed to start pipeline streaming on port %d: %d\n",
 					port, ret);
-				goto ERR_TO_CALIB_LOCK;
+				goto ERR_TO_RPU_LOCK;
 			}
 
 #endif
 		} else {
 			isp_dev->isp_ports[port].camera_connect_ref_cnt++;
 		}
-		mutex_unlock(&isp_dev->calib_lock);
 
 		/* EXIT PORT Level CRITICAL SECTION */
 
@@ -1228,7 +1227,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				"%s isp:%d port %d chn %d Set frame_rate failed, ret is %d",
 				__func__, isp_dev->id, port, chn, ret);
 			ret = -EINVAL;
-			goto ERR_TO_CAMERA_DISCONNECT;
+			goto ERR_TO_RPU_LOCK;
 		}
 
 		ret = media_isp_device_set_format(isp_dev, port, chn);
@@ -1236,7 +1235,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			dev_err(isp_dev->dev, "%s isp_id : %d FAILED SetFormat\n",
 				__func__, isp_dev->id);
 			ret = -EINVAL;
-			goto ERR_TO_CAMERA_DISCONNECT;
+			goto ERR_TO_RPU_LOCK;
 		}
 
 		ret = media_isp_device_stream_on(isp_dev, port, chn);
@@ -1244,8 +1243,9 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			dev_err(isp_dev->dev, "%s isp: %d port : %d  FAILED to stream on\n",
 				__func__, isp_dev->id, port);
 			ret = -EINVAL;
-			goto ERR_TO_CAMERA_DISCONNECT;
+			goto ERR_TO_RPU_LOCK;
 		}
+		mutex_unlock(&isp_dev->rpu->rpu_lock);
 	} else {
 		media_isp_stream_off(isp_dev, port, chn);
 
@@ -1262,9 +1262,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 	return ret;
 
-ERR_TO_CALIB_LOCK:
-	mutex_unlock(&isp_dev->calib_lock);
-ERR_TO_CAMERA_DISCONNECT:
+ERR_TO_RPU_LOCK:
+	mutex_unlock(&isp_dev->rpu->rpu_lock);
 	media_isp_device_camera_dis_connect(isp_dev, port, chn);
 	isp_dev->streamon[pad_stream->pad] = 0;
 	return ret;
