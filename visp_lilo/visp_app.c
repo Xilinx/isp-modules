@@ -190,8 +190,8 @@ static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 	return ret_val;
 }
 
-static int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
-				       uint8_t chn)
+int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
+				uint8_t chn)
 {
 	int ret_val = VSI_SUCCESS;
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];

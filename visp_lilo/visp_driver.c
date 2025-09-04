@@ -388,11 +388,11 @@ struct visp_format visp_mp_fmts[] = {
 struct visp_format visp_sp_fmts[] = {
 	{
 	.fourcc = V4L2_PIX_FMT_NV16,
-	.code = MEDIA_BUS_FMT_YUYV8_2X8,
+	.code = MEDIA_BUS_FMT_UYVY8_1X16,
 	},
 	{
 	.fourcc = V4L2_PIX_FMT_NV12,
-	.code = MEDIA_BUS_FMT_YUYV8_1_5X8,
+	.code = MEDIA_BUS_FMT_VYYUYY8_1X24,
 	},
 	{
 	.fourcc = V4L2_PIX_FMT_YUYV,
@@ -468,7 +468,7 @@ struct visp_format visp_sp_fmts[] = {
 	},
 	{
 	.fourcc = V4L2_PIX_FMT_RGB24,
-	.code = MEDIA_BUS_FMT_RGB888_1X24,
+	.code = MEDIA_BUS_FMT_RBG888_1X24,   //RBG
 	},
 	{
 	.fourcc = V4L2_PIX_FMT_RGB24DWA,
@@ -901,7 +901,7 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev, int p
         dev_info(isp_dev->dev, "Found input sub-device: %s on pad %d\n", subdev->name, pad);
 
         return subdev; // Return the first valid input sub-device found
-    }
+}
 
     //dev_err(isp_dev->dev, "No input sub-device found!\n");
     return NULL;
@@ -975,12 +975,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
 
-		ret = media_isp_device_set_format(isp_dev, port, chn);
-		if (ret != 0) {
-			dev_err(isp_dev->dev, "%s isp_id : %d FAILED SetFormat\n",
-				__func__, isp_dev->id);
-			goto ERR_TO_CAMERA_DISCONNECT;
-		}
 		subdev = visp_get_input_subdev(isp_dev, port);
 		if (!subdev) {
 			//dev_err(isp_dev->dev, "No valid input sub-device found!\n");
@@ -989,22 +983,116 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			v4l2_subdev_call(subdev, video, s_stream, 1);
 		}
 
-		ret = media_isp_device_stream_on(isp_dev, port, chn);
-		if (ret != 0) {
-			dev_err(isp_dev->dev, "%s %d FAILED to stream  on\n",
-				__func__, __LINE__);
-			goto ERR_TO_CAMERA_DISCONNECT;
+		int pad = 0;
+		struct device *dev = isp_dev->dev;
+		struct fwnode_handle *ep = NULL;
+		struct fwnode_handle *ports, *port_p,  *remote;
+		int ret;
+
+		/* Get the "ports" block under visp node*/
+		ports = fwnode_get_named_child_node(dev_fwnode(dev), "ports");
+		if (!ports) {
+			dev_err(dev, "no 'ports' node\n");
+			return -ENODEV;
 		}
+
+		fwnode_for_each_available_child_node(ports, port_p) {
+			ret = fwnode_property_read_u32(port_p, "reg", &pad);
+			if (ret || pad == 0) {
+				dev_warn(dev, "port %s has no reg\n", fwnode_get_name(port_p));
+				continue;
+			}
+
+			/* Look at endpoints under this port */
+			fwnode_for_each_available_child_node(port_p, ep) {
+				remote = fwnode_graph_get_remote_endpoint(ep);
+				if (remote) {
+					dev_info(dev,
+						 "pad=%u (%s) has valid remote %s\n",
+						 pad,
+						 fwnode_get_name(port_p),
+						 fwnode_get_name(remote));
+
+					fwnode_handle_put(remote);
+
+					chn = pad - 1;
+					ret = media_isp_device_set_format(isp_dev, port, chn);
+					if (ret != 0) {
+						dev_err(isp_dev->dev,
+							"%s isp_id : %d FAILED SetFormat\n",
+							__func__, isp_dev->id);
+						goto ERR_TO_CAMERA_DISCONNECT;
+					}
+
+					ret = media_isp_device_stream_on(isp_dev, port, chn);
+					if (ret != 0) {
+						dev_err(isp_dev->dev,
+							"%s %d FAILED to stream  on\n",
+							__func__, __LINE__);
+						goto ERR_TO_CAMERA_DISCONNECT;
+					}
+				}
+			}
+		}
+
+		fwnode_handle_put(ports);
+
 		mutex_unlock(&isp_dev->rpu->rpu_lock);
 	}
 
-	else {// streamoff
-		media_isp_stream_off(isp_dev, port, chn);
+	else {
+		/* streamoff */
+		int pad = 0;
+		struct device *dev = isp_dev->dev;
+		struct fwnode_handle *ep = NULL;
+		struct fwnode_handle *ports, *port_p, *remote;
+		int ret;
+
+		/* Get the "ports" block under visp device */
+		ports = fwnode_get_named_child_node(dev_fwnode(dev), "ports");
+		if (!ports) {
+			dev_err(dev, "no 'ports' node\n");
+			return -ENODEV;
+		}
+
+		fwnode_for_each_available_child_node(ports, port_p) {
+			ret = fwnode_property_read_u32(port_p, "reg", &pad);
+			if (ret || pad == 0) {
+				dev_warn(dev, "port %s has no reg\n", fwnode_get_name(port_p));
+				continue;
+			}
+
+			/* Look at endpoints under this port */
+			fwnode_for_each_available_child_node(port_p, ep) {
+				remote = fwnode_graph_get_remote_endpoint(ep);
+				if (remote) {
+					dev_info(dev,
+					"pad=%u (%s) has valid remote %s\n",
+					pad,
+					fwnode_get_name(port_p),
+					fwnode_get_name(remote));
+
+					fwnode_handle_put(remote);
+					/* obtain chn by offsetting pad*/
+					chn = pad - 1;
+					/*stream off on chn*/
+					media_isp_device_stream_off(isp_dev, port, chn);
+				}
+			}
+		}
+		fwnode_handle_put(ports);
+
+		chn = 0;
+
+		media_isp_device_camera_dis_connect(isp_dev, port, chn);
+
+		isp_destroy_pipeline(isp_dev, port, chn);
+
 		subdev = visp_get_input_subdev(isp_dev, port);
 		if (!subdev) {
 			dev_err(isp_dev->dev, "No valid input sub-device found!\n");
-		}else{
-			// call s_stream
+		} else {
+			/* call s_stream */
 			v4l2_subdev_call(subdev, video, s_stream, 0);
 		}
 
@@ -1622,8 +1710,8 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	format_media.color_space = mbus_format->colorspace;
 	format_media.quantization = mbus_format->quantization;
 	fourcc_code = 0;
-	dev_info(isp_dev->dev, "%s %d width:%d height :%d\n",
-		 __func__, __LINE__, mbus_format->width, mbus_format->height);
+	dev_info(isp_dev->dev, "%s %d format->pad:%d width:%d height :%d\n",
+		 __func__, __LINE__, format->pad, mbus_format->width, mbus_format->height);
 
 	if (sizeof(mbus_format->reserved) == (sizeof(uint16_t) * 10)) {
 		memcpy(&fourcc_code, &mbus_format->reserved,
@@ -1844,7 +1932,6 @@ struct v4l2_subdev_ops visp_subdev_ops = {
 	.pad = &visp_pad_ops,
 };
 
-int sensor_pipeline_init(struct visp_dev *isp_dev);
 static int visp_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
@@ -2315,7 +2402,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		dev_err(&pdev->dev, "No device tree node found\n");
 		return -EINVAL;
 	}
-	if (isp_dev->id < 0 && isp_dev->id > 5) {
+	if (isp_dev->id < 0 || isp_dev->id > 5) {
 		dev_err(&pdev->dev, "Invalid ISP id %d\n", isp_dev->id);
 		return -EINVAL;
 	}
@@ -2538,65 +2625,6 @@ error_regiter_subdev:
 err_async_notifier:
 	media_entity_cleanup(&isp_dev->sd.entity);
 	return ret;
-}
-
-int sensor_pipeline_init(struct visp_dev *isp_dev)
-{
-	int port = 0;
-
-	int ret_val = VSI_SUCCESS;
-	//
-	/*Create Instance*/
-	mutex_lock(&isp_dev->rpu->rpu_lock);
-
-	// camdevice_create;
-	if (!isp_dev->isp_ports[port].ref_count) {
-		media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
-
-		if (isp_port->cam_device_handle) {
-			/*Exit port Level Critical Section */
-			mutex_unlock(&isp_dev->rpu->rpu_lock);
-			pr_err("%s %d\n", __func__, __LINE__);
-			return VSI_SUCCESS;
-		}
-
-		if (!isp_dev->isp_ports[port].ref_count) {
-			if (isp_dev->num_streams == 1 /*NMCM*/) {
-				dev_dbg(isp_dev->dev, "EXECUTING NON-MCM");
-				ret_val = isp_device_create(isp_dev, port);
-				if (ret_val != VSI_SUCCESS) {
-					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					dev_err(
-						isp_dev->dev,
-						"CamDevice Creat Isp , ret is %d",
-						ret_val);
-					return ret_val;
-				}
-			} else if (isp_dev->num_streams > 1 /*MCM*/) {
-				ret_val = isp_device_create(isp_dev, port);
-				if (ret_val != VSI_SUCCESS) {
-					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					dev_err(
-						isp_dev->dev,
-						"CamDevice Creat Isp , ret is %d",
-						ret_val);
-					return ret_val;
-				}
-
-			} else {
-				dev_info(
-					isp_dev->dev,
-					"Check the mode %d (1:Non-MCM 2:MCM)\n",
-					isp_dev->num_streams);
-			}
-		}
-	}
-	isp_dev->isp_ports[port].ref_count++;
-
-	/*Exit port Level Critical Section */
-	mutex_unlock(&isp_dev->rpu->rpu_lock);
-	return 0;
-	//
 }
 
 static void visp_remove(struct platform_device *pdev)

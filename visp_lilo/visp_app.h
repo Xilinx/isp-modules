@@ -81,6 +81,9 @@ typedef struct output_buffer_s {
 int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 					uint8_t chn);
 
+int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
+				uint8_t chn);
+
 #define LOAD_CALIB_ENABLE 1
 
 #endif
