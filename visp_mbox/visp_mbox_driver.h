@@ -129,15 +129,13 @@ struct rpu_dev {
 	int app_wait_flag;
 	struct list_head node;
 	struct kref refcount;
-	struct tasklet_struct tasklet;
 	struct visp_dev *isp_dev[MAX_NO_ISP];
 	struct class *rpu_class[4];
 	struct mbox_client tx_mc;
 	struct mbox_client rx_mc;
 	struct mbox_chan *tx_chan;
 	struct mbox_chan *rx_chan;
-	struct work_struct mbox_work;
-	struct workqueue_struct *visp_mbox_evt_wq;
+	struct tasklet_struct mbox_tasklet;
 	struct sk_buff_head tx_mc_skbs;
 	struct completion mailbox_completion;
 	DECLARE_KFIFO(app_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);

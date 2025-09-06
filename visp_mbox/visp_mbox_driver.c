@@ -65,17 +65,10 @@ static LIST_HEAD(rpu_devices);
 
 typedef int (*frameout_cb_t)(struct visp_dev *dev);
 
-static void visp_mbox_event_notified(struct work_struct *work)
+static void visp_mbox_event_notified(unsigned long data)
 {
-	struct rpu_dev *rpu;
+	struct rpu_dev *rpu = (struct rpu_dev *)data;
 	int ret;
-
-	/* Get the visp_dev structure from the work struct */
-	rpu = container_of(work, struct rpu_dev, mbox_work);
-	if (!rpu) {
-		dev_err(NULL, "Unable to find rpud_dev from mbox_work\n");
-		return;
-	}
 
 	/* Read command from mailbox */
 	ret = visp_mbox_apu_read(rpu);
@@ -94,18 +87,10 @@ static void visp_mbox_rx_cb(struct mbox_client *cl, void *msg)
 {
 	/* Get RPU id from the received message */
 	struct rpu_dev *rpu = dev_get_drvdata(cl->dev);
-	if (rpu != NULL) {
-		/* Schedule work to handle the received event */
-		// if ( queue_work_on(1, system_wq, &rpu->mbox_work) )
-		if (work_pending(&rpu->mbox_work))
-			pr_err("Work already pending for RPU id %d\n",
-			       rpu->rpu_id);
-		else
-			queue_work(rpu->visp_mbox_evt_wq, &rpu->mbox_work);
-	} else {
-		dev_err(rpu->dev, "%s:Failed to find rpu_dev for rpu_id:%d\n",
-			__func__, rpu->rpu_id);
-	}
+	if (rpu)
+		tasklet_schedule(&rpu->mbox_tasklet);
+	else
+		pr_info("%s: Invalid RPU Device structure\n", __func__);
 }
 
 static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
@@ -130,16 +115,8 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 	mclient->dev = rpu->dev;
 	mclient->rx_callback = visp_mbox_rx_cb; // Set the RX callback
 
-	/* Alloc Work_Queue */
-	rpu->visp_mbox_evt_wq = alloc_workqueue("visp_mbox_evt_wq",
-						WQ_UNBOUND, 0);
-	if (!rpu->visp_mbox_evt_wq) {
-		dev_err(rpu->dev, "Failed to create visp_mbox_evt_wq\n");
-		return -ENOMEM;
-	}
+	tasklet_init(&rpu->mbox_tasklet, visp_mbox_event_notified, (unsigned long)rpu);
 
-	/* Initialize work */
-	INIT_WORK(&rpu->mbox_work, visp_mbox_event_notified);
 	dev_dbg(rpu->dev, "Mailbox work handler initialized.\n");
 
 	/* Request TX channel */
@@ -952,6 +929,7 @@ static void visp_mbox_rpu_remove(void)
 			continue;
 		}
 
+		tasklet_kill(&rpu->mbox_tasklet);
 		/* Debug log the current RPU's reference count */
 		dev_dbg(rpu->dev, "RPU id %d - refcount = %d\n", rpu->rpu_id,
 			atomic_read(&rpu->refcount.refcount.refs));
