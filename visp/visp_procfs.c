@@ -126,8 +126,15 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 			seq_printf(
 			    sfile, "one_json    : %s\n",
 			    isp_dev->isp_ports[port].sensor_info.one_json);
+			int iba_index = 0;
+
+			if ((isp_dev->id % 2) == 0)
+				iba_index = port;
+			else if ((isp_dev->id % 2) == 1)
+				iba_index = (isp_dev->num_streams == 1) ? 4 : 4 - port;
+
 			seq_printf(sfile, "vc_id       : %u\n",
-				   isp_dev->isp_ports[port].sensor_info.vc_id);
+				   isp_dev->iba[iba_index].vcid);
 			seq_printf(
 			    sfile, "sensor_id   : %u\n",
 			    isp_dev->isp_ports[port].sensor_info.sensor_id);
@@ -274,8 +281,15 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 			} else if (strcmp(val, "vc_id") == 0) {
 				val = strsep(&kv_cur, kv_delim);
 				if (val && isdigit(*val)) {
-					isp_dev->isp_ports[port]
-					    .sensor_info.vc_id =
+					int iba_index = 0;
+
+					if ((isp_dev->id % 2) == 0)
+						iba_index = port;
+					else if ((isp_dev->id % 2) == 1)
+						iba_index =
+						(isp_dev->num_streams == 1) ? 4 : 4 - port;
+
+					isp_dev->iba[iba_index].vcid =
 					    (uint32_t)simple_strtoul(val, &end,
 								     0);
 				}
