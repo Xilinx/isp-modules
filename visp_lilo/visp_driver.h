@@ -217,6 +217,12 @@ struct visp_common {
 	void *isp_dev; // pointer to specific driver struct
 };
 
+struct visp_lilo_isp_dev_extended {
+	int id;
+	bool is_oba_yuv_420[VISP_PORT_PAD_NR];
+	int yuv_420_format_index[VISP_PORT_PAD_NR];
+};
+
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
 {
 	if (!mode_str)
@@ -322,6 +328,7 @@ struct visp_dev {
 	unsigned int cap_fmt;
 	unsigned int isp_dq_out_index;
 	DECLARE_KFIFO(display_fifo, struct mbox_post_msg *, VISP_DISPLAY_KFIFO_SIZE);
+	void *extended_struct;
 };
 
 // int handle_frameout_buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);

@@ -94,6 +94,9 @@
 
 static uint32_t sensor_dev_id[VISP_PORT_NR] = {2, 6, 5, 10}; // Sesnor
 
+#define ISP_DEV_EXTENDED(isp_dev) \
+((struct visp_lilo_isp_dev_extended *)((isp_dev)->extended_struct))
+
 struct visp_format visp_mp_fmts[] = {
 	{
 	.fourcc = V4L2_PIX_FMT_NV16,
@@ -1670,9 +1673,38 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	format->format.height = h;
 
 	memcpy(&fourcc_code, format->format.reserved, sizeof(uint32_t));
+
+	int yuv_420_index =
+		ISP_DEV_EXTENDED(isp_dev)->yuv_420_format_index
+		[CAMDEV_BUFCHAIN_MP];
+
 	for (i = 0; i < cur_pad->num_formats; i++) {
-		if (format->format.code == cur_pad->fmts[i].code ||
-		    fourcc_code == cur_pad->fmts[i].fourcc) {
+		if (ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[format->pad - 1]) {
+			if (yuv_420_index < 0) {
+				dev_err(isp_dev->dev,
+					"yuv420 format is not avaialable from driver\n");
+				i = 0;
+			} else if (format->format.code == cur_pad->fmts[yuv_420_index].code) {
+				dev_info(isp_dev->dev,
+					 "%s %d MATCH CODE index : %d code:%x:%x\n",
+					 __func__, __LINE__,
+					 yuv_420_index,
+					 cur_pad->fmts[yuv_420_index].code,
+					 cur_pad->fmts[yuv_420_index].fourcc);
+
+				i = yuv_420_index;
+
+			} else {
+				i = yuv_420_index;
+				dev_info(isp_dev->dev,
+					 "The received format is not supported on design, setting the supported format index : %d code:%x:%x\n",
+					 i,
+					 cur_pad->fmts[i].code,
+					 cur_pad->fmts[i].fourcc);
+			}
+			break;
+		} else if (format->format.code == cur_pad->fmts[i].code ||
+			fourcc_code == cur_pad->fmts[i].fourcc) {
 			if (format->format.code == cur_pad->fmts[i].code) {
 				dev_err(isp_dev->dev,
 					"%s %d MATCH CODE index:%d num_fmts : %d code:%x:%x\n",
@@ -1683,6 +1715,14 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 				dev_err(isp_dev->dev,
 					"%s %d MATCH FOURCE index:%d fourcc : %x\n",
 					__func__, __LINE__, i, cur_pad->fmts[i].fourcc);
+			}
+			if (i == yuv_420_index)	{
+				i = 0;
+				dev_info(isp_dev->dev,
+					 "The received format is not supported on design, setting the default supported format index : %d code:%x:%x\n",
+					 i,
+					 cur_pad->fmts[i].code,
+					 cur_pad->fmts[i].fourcc);
 			}
 			break;
 		}
@@ -2266,6 +2306,29 @@ static int parse_iba(struct visp_dev *isp_dev, struct device_node *np)
 
 	return 0;
 }
+
+static void get_yuv_420_format_index(struct visp_dev *isp_dev, int path)
+{
+	struct visp_pad_data *cur_pad = &isp_dev->pad_data[path + 1];
+	int i = 0;
+
+	for (i = 0; i < cur_pad->num_formats; i++) {
+		if (cur_pad->fmts[i].code == MEDIA_BUS_FMT_VYYUYY8_1X24) {
+			dev_info(isp_dev->dev, "%s %d MATCH CODE index:%d num_fmts : %d code:%x\n",
+				 __func__, __LINE__, i, cur_pad->num_formats,
+				 cur_pad->fmts[i].code);
+			break;
+		}
+	}
+
+	if (i >= cur_pad->num_formats) {
+		i = -1;
+		dev_err(isp_dev->dev, "The format in design is not supported isp:%d fmt:%x\n",
+			isp_dev->id, MEDIA_BUS_FMT_VYYUYY8_1X24);
+	} else {
+		ISP_DEV_EXTENDED(isp_dev)->yuv_420_format_index[path] = i;
+	}
+}
 static int parse_oba(struct visp_dev *isp_dev, struct device_node *np)
 {
 	int num_streams = isp_dev->num_streams;
@@ -2321,6 +2384,10 @@ static int parse_oba(struct visp_dev *isp_dev, struct device_node *np)
 				property_name);
 			return -EINVAL;
 		}
+		if (strcasecmp(isp_dev->oba[CAMDEV_BUFCHAIN_MP].data_format, "YUV420") == 0)
+			ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_MP] = true;
+		else
+			ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_MP] = false;
 
 		snprintf(property_name, sizeof(property_name),
 			 "xlnx,oba%d_sp_ppc", oba_index);
@@ -2351,6 +2418,10 @@ static int parse_oba(struct visp_dev *isp_dev, struct device_node *np)
 				property_name);
 			return -EINVAL;
 		}
+		if (strcasecmp(isp_dev->oba[CAMDEV_BUFCHAIN_SP1].data_format, "YUV420") == 0)
+			ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_SP1] = true;
+		else
+			ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_SP1] = false;
 
 		dev_dbg(
 			isp_dev->dev, "OBA%d: ppc=%d, bpp=%d, data_format=%s\n",
@@ -2526,6 +2597,11 @@ static int visp_probe(struct platform_device *pdev)
 	if (!isp_dev)
 		return -ENOMEM;
 
+	isp_dev->extended_struct =
+		devm_kzalloc(&pdev->dev, sizeof(struct visp_lilo_isp_dev_extended), GFP_KERNEL);
+	if (!isp_dev->extended_struct)
+		return -ENOMEM;
+
 	mutex_init(&isp_dev->mlock);
 	mutex_init(&isp_dev->ctrl_lock);
 	isp_dev->dev = &pdev->dev;
@@ -2605,6 +2681,9 @@ static int visp_probe(struct platform_device *pdev)
 	isp_dev->ports_mask = isp_dev->num_streams;
 	/* Register Callback function*/
 	isp_dev->frameout_cb = handle_frameout_buffer;
+
+	get_yuv_420_format_index(isp_dev, CAMDEV_BUFCHAIN_MP);
+	get_yuv_420_format_index(isp_dev, CAMDEV_BUFCHAIN_SP1);
 
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
 

@@ -323,6 +323,7 @@ struct visp_dev {
 	unsigned int cap_fmt;
 	unsigned int isp_dq_out_index;
 	DECLARE_KFIFO(display_fifo, struct mbox_post_msg *, VISP_KFIFO_SIZE);
+	void *extended_struct;
 };
 
 /* Pipeline management function declarations */
