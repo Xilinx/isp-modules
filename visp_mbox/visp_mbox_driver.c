@@ -972,6 +972,36 @@ static void visp_mbox_rpu_remove(void)
 	mutex_unlock(&rpu_list_lock);
 }
 
+static void visp_mbox_shutdown(struct platform_device *pdev)
+{
+	struct rpu_dev *rpu;
+
+	/* Retrieve the RPU device associated with this platform device */
+	rpu = platform_get_drvdata(pdev);
+	if (!rpu) {
+		dev_err(&pdev->dev,
+			"Failed to retrieve RPU device during shutdown.\n");
+		return;
+	}
+
+	if (rpu->tx_chan) {
+		mbox_free_channel(rpu->tx_chan);
+		rpu->tx_chan = NULL;
+	}
+
+	if (rpu->rx_chan) {
+		mbox_free_channel(rpu->rx_chan);
+		rpu->rx_chan = NULL;
+	}
+
+	/* Clean up reserved memory structure */
+	visp_mbox_reserved_memory_exit();
+	dev_dbg(&pdev->dev, "Reserved memory cleaned up.\n");
+
+	/* Call rpu_remove to handle RPU-specific cleanup */
+	visp_mbox_rpu_remove();
+}
+
 static void visp_mbox_remove(struct platform_device *pdev)
 {
 	struct rpu_dev *rpu;
@@ -1024,7 +1054,9 @@ static struct platform_driver visp_mbox_driver = {
 		.name = "visp_mbox_driver",
 		.owner = THIS_MODULE,
 		.of_match_table = visp_mbox_of_match,
-		}};
+		},
+	.shutdown = visp_mbox_shutdown
+};
 
 static int __init visp_mbox_init_module(void)
 {
