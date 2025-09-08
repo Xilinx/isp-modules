@@ -186,6 +186,11 @@ static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 			    isp_port->isp_chns[chn].cam_device_bufs[i];
 			kfree(p_media_buffer);
 		}
+		for (int i = 0; i < ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].num_bufs; i++) {
+			//free the allocated buffers;
+			kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i]);
+		}
+		kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer);
 	}
 	return ret_val;
 }
@@ -449,10 +454,16 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 		}
 		BufPoolCfg.buf_size = buf_size;
 
+		ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].num_bufs = num_bufs;
+		ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer =
+			kcalloc(num_bufs, sizeof(void *), GFP_KERNEL);
+		if (!ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer)
+			return -ENOMEM;
+
 		for (i = 0; i < num_bufs; i++) {
 			//-LILO
 			void *buf_addr = (void *)kzalloc(buf_size, GFP_KERNEL);
-
+			ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i] = buf_addr;
 			BufPoolCfg.p_base_addr_list[i] =
 			    (uint32_t)(uintptr_t)buf_addr;
 			BufPoolCfg.p_ipl_addr_list[i] = VSI_NULL;

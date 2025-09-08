@@ -217,10 +217,16 @@ struct visp_common {
 	void *isp_dev; // pointer to specific driver struct
 };
 
+struct buf_instance {
+	int num_bufs;       // how many buffers this instance has
+	void **buffer;    // array of buffer pointers
+};
+
 struct visp_lilo_isp_dev_extended {
 	int id;
 	bool is_oba_yuv_420[VISP_PORT_PAD_NR];
 	int yuv_420_format_index[VISP_PORT_PAD_NR];
+	struct buf_instance buf_list[VISP_PORT_PAD_NR];
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
@@ -331,5 +337,7 @@ struct visp_dev {
 	void *extended_struct;
 };
 
-// int handle_frameout_buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);
+#define ISP_DEV_EXTENDED(isp_dev) \
+((struct visp_lilo_isp_dev_extended *)((isp_dev)->extended_struct))
+
 #endif
