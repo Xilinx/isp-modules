@@ -246,6 +246,7 @@ static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
 
 #define VISP_DISPLAY_KFIFO_SIZE 16
 
+#define VISP_KFIFO_SIZE 16
 struct visp_dev {
 	phys_addr_t paddr;
 	struct rpu_dev *rpu;
@@ -263,12 +264,14 @@ struct visp_dev {
 	struct mutex calib_lock;
 	uint32_t refcnt;
 	struct v4l2_subdev sd;
-	struct media_pad pads[VISP_PAD_NR];
+	/* Dynamic pad allocation based on num_streams */
+	int num_pads;
+	struct media_pad *pads;
 	struct v4l2_async_notifier notifier;
 #ifdef VISP_PLATFORM_REGISTER
 	struct fwnode_handle fwnode;
 #endif
-	struct visp_pad_data pad_data[VISP_PAD_NR];
+	struct visp_pad_data *pad_data;
 
 	struct visp_reserve_mem reserve_mem;
 	struct visp_event_shm event_shm;
@@ -339,5 +342,10 @@ struct visp_dev {
 
 #define ISP_DEV_EXTENDED(isp_dev) \
 ((struct visp_lilo_isp_dev_extended *)((isp_dev)->extended_struct))
+static inline int visp_get_num_pads(struct visp_dev *isp_dev)
+{
+	return isp_dev->num_streams * VISP_PAD_NR;
+}
+
 
 #endif

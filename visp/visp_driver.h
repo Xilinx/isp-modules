@@ -103,6 +103,12 @@ enum visp_port_pad_e {
 };
 
 #define VISP_PAD_NR (VISP_PORT_NR * VISP_PORT_PAD_NR)
+
+/* Helper function to calculate number of pads based on num_streams */
+static inline int visp_get_num_pads(u32 num_streams)
+{
+	return num_streams * VISP_PORT_PAD_NR;
+}
 typedef int (*frameout_cb_t)(struct visp_dev *dev);
 enum visp_path_out_type_e {
 	VISP_PATH_OUT_TYPE_MEMORY = 0, /**< path out in memory type*/
@@ -252,12 +258,14 @@ struct visp_dev {
 	struct mutex calib_lock;
 	uint32_t refcnt;
 	struct v4l2_subdev sd;
-	struct media_pad pads[VISP_PAD_NR];
+	/* Dynamic pad allocation based on num_streams */
+	int num_pads;
+	struct media_pad *pads;
 	struct v4l2_async_notifier notifier;
 #ifdef VISP_PLATFORM_REGISTER
 	struct fwnode_handle fwnode;
 #endif
-	struct visp_pad_data pad_data[VISP_PAD_NR];
+	struct visp_pad_data *pad_data;
 
 	struct visp_reserve_mem reserve_mem;
 	struct visp_event_shm event_shm;
@@ -300,6 +308,7 @@ struct visp_dev {
 	media_isp_port_attr isp_ports[MEDIA_ISP_PORT_MAX];
 	struct mutex port_lock[MEDIA_ISP_PORT_MAX];
 	int streamon[VISP_PORT_PAD_NR * MAX_PORTS];
+	// Pipeline subdevices storage
 	// flags
 	struct completion apu_wait_for_ack;
 	struct completion apu_wait_for_data;

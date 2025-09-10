@@ -211,7 +211,7 @@ struct oba_info {
 };
 
 #define VISP_DISPLAY_KFIFO_SIZE 16
-
+#define VISP_KFIFO_SIZE 16
 struct visp_dev {
 	phys_addr_t paddr;
 	struct rpu_dev *rpu;
@@ -229,12 +229,14 @@ struct visp_dev {
 	struct mutex calib_lock;
 	uint32_t refcnt;
 	struct v4l2_subdev sd;
-	struct media_pad pads[VISP_PAD_NR];
+	/* Dynamic pad allocation based on num_streams */
+	int num_pads;
+	struct media_pad *pads;
 	struct v4l2_async_notifier notifier;
 #ifdef VISP_PLATFORM_REGISTER
 	struct fwnode_handle fwnode;
 #endif
-	struct visp_pad_data pad_data[VISP_PAD_NR];
+	struct visp_pad_data *pad_data;
 
 	struct visp_reserve_mem reserve_mem;
 	struct visp_event_shm event_shm;
@@ -243,10 +245,9 @@ struct visp_dev {
 	uint32_t ctrl_pad;
 
 	unsigned long pde;
-	// struct visp_sensor_info sensor_info[VISP_PORT_NR];
 	struct iba_info iba[MAX_IBA_PER_ISP];
 	enum visp_path_out_type_e output_type[VISP_PORT_NR]
-						 [VISP_PORT_PAD_NR - 1];
+					     [VISP_PORT_PAD_NR - 1];
 	enum visp_mcm_input_select_e mcm_input_select[VISP_PORT_NR];
 
 	struct list_head mcm_input[VISP_PORT_NR];
@@ -261,6 +262,7 @@ struct visp_dev {
 	struct work_struct mbox_work;
 	struct sk_buff_head tx_mc_skbs;
 	struct idr notifyids;
+
 	const char *ss_mode_i0; // Example member to store device tree property
 	u32 num_streams;	// Example member to store device tree property
 	u32 isp_mem;
@@ -302,6 +304,11 @@ struct visp_dev {
 	DECLARE_KFIFO(display_fifo, struct mbox_post_msg *, VISP_DISPLAY_KFIFO_SIZE);
 	void *extended_struct;
 };
+
+static inline int visp_get_num_pads(struct visp_dev *isp_dev)
+{
+	return isp_dev->num_streams * VISP_PORT_PAD_NR;
+}
 
 int handle_frameout_buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);
 #endif

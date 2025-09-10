@@ -95,7 +95,7 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 	isp_dev = isp_proc->isp_dev;
 
 	seq_printf(sfile, "/******isp configuration******/\n");
-	for (pad_idx = 0; pad_idx < VISP_PAD_NR; pad_idx++) {
+	for (pad_idx = 0; pad_idx < isp_dev->num_pads; pad_idx++) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
 		pad = media_pad_remote_pad_first(&isp_dev->pads[pad_idx]);
 #else

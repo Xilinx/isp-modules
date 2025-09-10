@@ -876,7 +876,7 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev, int p
 
     dev_dbg(isp_dev->dev, "Searching for input sub-device...\n");
 
-    for (pad = port; pad < VISP_PAD_NR; pad++)
+    for (pad = port; pad < isp_dev->num_pads; pad++)
     {
         // Check if this pad is a SINK (input pad)
         if (!(isp_dev->pads[pad].flags & MEDIA_PAD_FL_SINK)) {
@@ -2118,7 +2118,7 @@ static int visp_async_notifier(struct visp_dev *isp_dev)
 	if (dev_fwnode(isp_dev->dev) == NULL)
 		return 0;
 
-	for (pad = 0; pad < VISP_PAD_NR; pad++) {
+	for (pad = 0; pad < isp_dev->num_pads; pad++) {
 		if (isp_dev->pads[pad].flags != MEDIA_PAD_FL_SINK)
 			continue;
 
@@ -2172,7 +2172,16 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 {
 	int pad = 0;
 
-	for (pad = 0; pad < VISP_PAD_NR; pad++) {
+	isp_dev->num_pads = visp_get_num_pads(isp_dev);
+	isp_dev->pads = devm_kzalloc(isp_dev->dev, sizeof(struct media_pad) * isp_dev->num_pads, GFP_KERNEL);
+	if (!isp_dev->pads)
+		return -ENOMEM;
+
+	isp_dev->pad_data = devm_kzalloc(isp_dev->dev, sizeof(struct visp_pad_data) * isp_dev->num_pads, GFP_KERNEL);
+	if (!isp_dev->pad_data)
+		return -ENOMEM;
+
+	for (pad = 0; pad < isp_dev->num_pads; pad++) {
 		if ((pad % VISP_PORT_PAD_NR) == VISP_PORT_PAD_SINK)
 			isp_dev->pads[pad].flags = MEDIA_PAD_FL_SINK;
 		else
@@ -2637,7 +2646,7 @@ static int visp_probe(struct platform_device *pdev)
 	v4l2_set_subdevdata(&isp_dev->sd, isp_dev);
 
 	visp_pads_init(isp_dev);
-	ret = media_entity_pads_init(&isp_dev->sd.entity, VISP_PAD_NR,
+	ret = media_entity_pads_init(&isp_dev->sd.entity, isp_dev->num_pads,
 					 isp_dev->pads);
 	if (ret)
 		return ret;

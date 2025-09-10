@@ -1774,7 +1774,7 @@ static void set_default_pad_config(struct visp_dev *isp_dev)
 	struct visp_pad_data *pad_data;
 
 	/* Initialize default formats for all pads */
-	for (pad = 0; pad < VISP_PAD_NR; pad++) {
+	for (pad = 0; pad < isp_dev->num_pads; pad++) {
 		pad_data = &isp_dev->pad_data[pad];
 
 		/* Common format properties */
@@ -2245,7 +2245,7 @@ static int visp_notifier_complete(struct v4l2_async_notifier *notifier)
 		 isp_dev->sd.entity.name, isp_dev->sd.entity.num_pads);
 
 	/* Print ISP pad information */
-	for (i = 0; i < isp_dev->sd.entity.num_pads; i++) {
+	for (i = 0; i < isp_dev->num_pads; i++) {
 		dev_info(isp_dev->dev, "  ISP pad[%d]: %s\n", i,
 			 (isp_dev->pads[i].flags & MEDIA_PAD_FL_SOURCE) ? "source" : "sink");
 	}
@@ -2282,7 +2282,7 @@ static int visp_async_notifier(struct visp_dev *isp_dev)
 	if (dev_fwnode(isp_dev->dev) == NULL)
 		return 0;
 
-	for (pad = 0; pad < VISP_PAD_NR; pad++) {
+	for (pad = 0; pad < isp_dev->num_pads; pad++) {
 		if (isp_dev->pads[pad].flags != MEDIA_PAD_FL_SINK)
 			continue;
 
@@ -2335,8 +2335,23 @@ static int visp_async_notifier(struct visp_dev *isp_dev)
 static int visp_pads_init(struct visp_dev *isp_dev)
 {
 	int pad = 0;
+	int num_pads = visp_get_num_pads(isp_dev->num_streams);
 
-	for (pad = 0; pad < VISP_PAD_NR; pad++) {
+	/* Allocate pads dynamically based on num_streams */
+	isp_dev->num_pads = num_pads;
+	isp_dev->pads = devm_kzalloc(isp_dev->dev, sizeof(struct media_pad) * num_pads, GFP_KERNEL);
+	if (!isp_dev->pads) {
+		dev_err(isp_dev->dev, "Failed to allocate pads\n");
+		return -ENOMEM;
+	}
+
+	isp_dev->pad_data = devm_kzalloc(isp_dev->dev, sizeof(struct visp_pad_data) * num_pads, GFP_KERNEL);
+	if (!isp_dev->pad_data) {
+		dev_err(isp_dev->dev, "Failed to allocate pad_data\n");
+		return -ENOMEM;
+	}
+
+	for (pad = 0; pad < num_pads; pad++) {
 		if ((pad % VISP_PORT_PAD_NR) == VISP_PORT_PAD_SINK)
 			isp_dev->pads[pad].flags = MEDIA_PAD_FL_SINK;
 		else
@@ -2663,7 +2678,7 @@ static int visp_probe(struct platform_device *pdev)
 	v4l2_set_subdevdata(&isp_dev->sd, isp_dev);
 
 	visp_pads_init(isp_dev);
-	ret = media_entity_pads_init(&isp_dev->sd.entity, VISP_PAD_NR,
+	ret = media_entity_pads_init(&isp_dev->sd.entity, isp_dev->num_pads,
 				     isp_dev->pads);
 	if (ret)
 		return ret;
