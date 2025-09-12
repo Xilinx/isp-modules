@@ -95,7 +95,7 @@ struct visp_video_dma_buf {
 	_IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_video_dma_buf)
 
 #include "visp_mimo_driver.h"
-int visp_video_create_pipeline_event(struct isp_mimo *visp_vdev);
-int visp_video_destroy_pipeline_event(struct isp_mimo *visp_vdev);
-int visp_l_calib_event(struct isp_mimo *isp_dev, int pad, int event);
+int visp_video_create_pipeline_event(struct visp_mimo_device *visp_vdev);
+int visp_video_destroy_pipeline_event(struct visp_mimo_device *visp_vdev);
+int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event);
 #endif

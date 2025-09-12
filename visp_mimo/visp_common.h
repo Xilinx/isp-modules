@@ -107,6 +107,6 @@ RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 					 cam_device_handle_t h_cam_device);
 
 int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
-			    media_buf *buf, void *packet_from_rpu,
+			    void *packet_from_rpu,
 			    media_buffer_t *p_media_buffer);
 #endif

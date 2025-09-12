@@ -205,7 +205,9 @@ int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 	PathStatus.out_path_enable = 0;
 	ret_val = vsi_cam_device_set_path_streaming(
 		isp_dev, isp_port->cam_device_handle, &PathStatus);
-	media_isp_device_destroy_buf_pool(isp_dev, port, chn);
+
+	media_isp_device_destroy_buf_pool(isp_dev, port, CAMDEV_BUFCHAIN_RDMA);
+	media_isp_device_destroy_buf_pool(isp_dev, port, CAMDEV_BUFCHAIN_MP);
 
 	return ret_val;
 }
@@ -1690,7 +1692,7 @@ int read_dq_buf_info(void *data, media_buffer_t *p_media_buffer,
 	p_media_buffer->p_meta_data =
 		kzalloc(sizeof(pic_buf_meta_data_t), GFP_KERNEL);
 	if (!(p_media_buffer->p_meta_data)) {
-		pr_err("FAILED TO KZALLOC %s %d\n", __func__, __LINE__);
+		loge("FAILED TO KZALLOC %s %d\n", __func__, __LINE__);
 		return -ENOMEM;
 	}
 
@@ -1723,11 +1725,11 @@ int read_dq_buf_info(void *data, media_buffer_t *p_media_buffer,
 	return 0;
 }
 int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
-				media_buf *buf, void *packet_from_rpu,
+				void *packet_from_rpu,
 				media_buffer_t *p_media_buffer);
 
 int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
-				media_buf *buf, void *packet_from_rpu,
+				void *packet_from_rpu,
 				media_buffer_t *p_media_buffer)
 {
 	int ret_val = VSI_SUCCESS;

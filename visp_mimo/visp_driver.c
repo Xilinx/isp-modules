@@ -92,7 +92,7 @@
 
 static uint32_t sensor_dev_id[VISP_PORT_NR] = {9, 2, 5, 10};
 int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
-				media_buf *buf, void *packet_from_rpu,
+				void *packet_from_rpu,
 				media_buffer_t *p_media_buffer);
 int visp_buf_done(struct v4l2_subdev *sd, void *arg);
 
@@ -766,78 +766,6 @@ int media_isp_device_dqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 			   media_buf *buf, void *enque_buff_g,
 			   media_buffer_t *p_media_buffer);
 
-int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
-{
-	media_buf *buf = NULL;
-	media_buffer_t *p_media_buffer = NULL;
-	struct Chn_info info;
-	mbox_post_msg *msg;
-	size_t size;
-	int ret = 0;
-	void *packet_from_rpu;
-
-	/* Validate inputs */
-	if (!isp_dev) {
-		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: isp_dev is NULL\n");
-		ret = -EINVAL;
-		goto error;
-	}
-
-	if (!kfifo_out(&isp_dev->display_fifo, &msg, 1)) {
-		pr_err("Failed to queue into kfifo\n");
-		ret = -ENOMEM;
-		goto error;
-	}
-
-	size = msg->size;
-	packet_from_rpu = kzalloc(size, GFP_KERNEL);
-	if (!packet_from_rpu) {
-		dev_err(isp_dev->dev, "Failed to allocate packet_from_rpu\n");
-		ret = -ENOMEM;
-		goto error;
-	}
-
-	memcpy(packet_from_rpu, msg->payload, size);
-
-	/* Allocate memory for the buffer */
-	p_media_buffer = kzalloc(sizeof(media_buffer_t), GFP_KERNEL);
-	if (!p_media_buffer) {
-		dev_err(isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__,
-			__LINE__);
-		ret = -ENOMEM;
-		goto error;
-	}
-
-	buf = kzalloc(sizeof(media_buf), GFP_KERNEL);
-	if (!buf) {
-		dev_err(isp_dev->dev, "handle_frameout_buffer: Failed to "
-					  "allocate memory for media_buf\n");
-		ret = -ENOMEM;
-		goto error;
-	}
-
-	/* Dequeue buffer from the ISP device*/
-	ret = media_isp_device_dq_buf_out(isp_dev, &info, buf, packet_from_rpu,
-					  p_media_buffer);
-	if (ret != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: MediaIspDeviceDqbuf failed "
-			"with error %d\n",
-			ret);
-		goto error;
-	}
-
-	wake_up(&isp_dev->wq_frame_done_finished);
-
-error:
-	kfree(buf);
-	kfree(packet_from_rpu);
-	return ret;
-}
-EXPORT_SYMBOL(handle_frameout_buffer_mimo);
-
-//
 int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index);
 int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 				uint8_t chn);
@@ -2313,8 +2241,6 @@ static int visp_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to init mbox\n");
 		return -EINVAL;
 	}
-
-	INIT_KFIFO(isp_dev->display_fifo);
 
 	v4l2_subdev_init(&isp_dev->sd, &visp_subdev_ops);
 	snprintf(isp_dev->sd.name, V4L2_SUBDEV_NAME_SIZE, "%s.%d", VISP_NAME,

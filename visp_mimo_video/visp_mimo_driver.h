@@ -73,6 +73,9 @@
 #define FMT_CAPTURE (1)
 #define FMT_MAX (2)
 
+#define VISP_MIMO_FMT_TYPE_OUTPUT (0)
+#define VISP_MIMO_FMT_TYPE_CAPTURE (1)
+
 #define DEFAULT_WIDTH (1920)
 #define DEFAULT_HEIGHT (1080)
 
@@ -89,7 +92,7 @@ struct visp_video_reserve_mem {
 	void *va;
 };
 
-struct isp_mimo {
+struct visp_mimo_device {
 	struct v4l2_device v4l2_dev;
 	struct video_device video_dev;
 	struct v4l2_subdev subdev;
@@ -103,9 +106,9 @@ struct isp_mimo {
 	struct miscdevice event_misc;
 };
 
-struct isp_mimo_ctx {
+struct visp_mimo_ctx {
 	struct v4l2_fh fh;
-	struct isp_mimo *device;
+	struct visp_mimo_device *device;
 	struct v4l2_format fmt[2];
 	uint64_t sequence;
 	int id;
@@ -130,55 +133,57 @@ int xlnx_link_mbox(struct visp_dev *isp_dev);
 int isp_device_create_m_i_m_o(struct visp_dev *isp_dev, uint8_t port);
 int isp_device_distroy_m_i_m_o(struct visp_dev *isp_dev, uint8_t port);
 
-int isp_mimo_open(struct file *file);
-int isp_mimo_release(struct file *file);
-int isp_mimo_probe(struct platform_device *pdev);
-void isp_mimo_remove(struct platform_device *pdev);
+int visp_mimo_open(struct file *file);
+int visp_mimo_release(struct file *file);
+int visp_mimo_probe(struct platform_device *pdev);
+void visp_mimo_remove(struct platform_device *pdev);
 
-int isp_mimo_v4l2_m2m_ioctl_querycap(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_querycap(struct file *file, void *priv,
 				     struct v4l2_capability *cap);
-int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
 					struct v4l2_format *f);
-int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 					struct v4l2_format *f);
-int isp_mimo_v4l2_m2m_ioctl_enum_fmt_cap(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_enum_fmt_cap(struct file *file, void *priv,
 					 struct v4l2_fmtdesc *f);
-int isp_mimo_v4l2_m2m_ioctl_enum_fmt_out(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_enum_fmt_out(struct file *file, void *priv,
 					 struct v4l2_fmtdesc *f);
-int isp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
 				  struct v4l2_format *f);
-int isp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 				      struct v4l2_format *f);
-int isp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 				      struct v4l2_format *f);
-int isp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
 				     enum v4l2_buf_type type);
-int isp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 				      enum v4l2_buf_type type);
-int isp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
 				    struct v4l2_requestbuffers *rb);
-int isp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
 				     struct v4l2_buffer *buf);
-int isp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
 				 struct v4l2_buffer *buf);
-int isp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
 				  struct v4l2_buffer *buf);
-int isp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
 					struct v4l2_buffer *buf);
-int isp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
 					struct v4l2_create_buffers *create);
-int isp_mimo_v4l2_m2m_ioctl_expbuf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_expbuf(struct file *file, void *fh,
 				   struct v4l2_exportbuffer *eb);
 
-void isp_mimo_device_run(void *priv);
+void visp_mimo_device_run(void *priv);
 
-int isp_mimo_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
+int visp_mimo_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
 			 unsigned int *nplanes, unsigned int sizes[],
 			 struct device *alloc_devs[]);
-int isp_mimo_buf_prepare(struct vb2_buffer *vb);
-void isp_mimo_buf_queue(struct vb2_buffer *vb);
-int isp_mimo_start_streaming(struct vb2_queue *q, unsigned int count);
-void isp_mimo_stop_streaming(struct vb2_queue *q);
+int visp_mimo_buf_prepare(struct vb2_buffer *vb);
+void visp_mimo_buf_queue(struct vb2_buffer *vb);
+int visp_mimo_start_streaming(struct vb2_queue *q, unsigned int count);
+void visp_mimo_stop_streaming(struct vb2_queue *q);
 int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq);
+
+int visp_mimo_queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq);
 
 #endif

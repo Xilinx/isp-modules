@@ -589,9 +589,6 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 	packet->payload_size += sizeof(buff_mode);
 	p_data += sizeof(buff_mode);
 
-	// dev_err(isp_dev->dev , "The value of p_owner is 0x%x
-	// p_media_buf->p_owner 0x%x\n",
-	// *((uint32_t*)p_data),(p_media_buf)->p_owner);
 	memcpy(p_data, &((p_media_buf)->p_ipl_address), sizeof(uint32_t));
 	packet->payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);
@@ -603,7 +600,7 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 	if (packet->payload_size > MAX_ITEM)
 		return RET_OUTOFRANGE;
 
-	result = xlnx_send_mbox_without_ack_cmd(
+	result = xlnx_send_mbox_acked_cmd(
 	    isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);

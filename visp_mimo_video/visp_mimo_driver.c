@@ -69,7 +69,7 @@ static int debug;
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "debug level (0-3)");
 
-struct isp_mimo_ctx;
+struct visp_mimo_ctx;
 
 int xlnx_link_mbox(struct visp_dev *isp_dev);
 
@@ -361,16 +361,20 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s,
 	}
 }
 static int on;
-void isp_mimo_device_run(void *priv)
+void visp_mimo_device_run(void *priv)
 {
-	struct isp_mimo_ctx *ctx = priv;
-	struct isp_mimo *device = ctx->device;
+	struct visp_mimo_ctx *ctx = priv;
+	struct visp_mimo_device *device = ctx->device;
 	struct vb2_v4l2_buffer *src_vb, *dst_vb;
-
 	dma_addr_t input_addr[2], output_addr[4];
 	struct vb2_v4l2_buffer *src_buf, *dst_buf;
 	int s_cnt, d_cnt;
-	struct isp_mimo_ctx *curr_ctx = ctx;
+	struct visp_mimo_ctx *curr_ctx = ctx;
+	media_buffer_t *p_media_buffer = NULL;
+	mbox_post_msg *msg;
+	struct Chn_info info;
+	int ret;
+
 
 	s_cnt = v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx);
 	d_cnt = v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx);
@@ -387,8 +391,6 @@ void isp_mimo_device_run(void *priv)
 	device->isp_dev->op_a[2] = output_addr[2];
 	device->isp_dev->op_a[3] = output_addr[3];
 	if (!on) {
-		int ret;
-
 		ret = visp_l_calib_event(device, 0, VIDEO_EVENT_LOAD_CALIB);
 		if (ret != 0)
 			pr_err("[EVENT_FAIL] %s %d\n", __func__, __LINE__);
@@ -398,21 +400,62 @@ void isp_mimo_device_run(void *priv)
 		ret = visp_l_calib_event(device, 0, VIDEO_EVENT_LOAD_JSON);
 		if (ret != 0)
 			pr_err("[EVENT_FAIL] %s %d\n", __func__, __LINE__);
+
 		media_isp_device_stream_on_out(device->isp_dev, 0, 0);
 		on = 1;
 	}
-	media_isp_device_deque(device->isp_dev, 0);
 
 	device->isp_dev->apu_wait_for_isp_frame_done = 1;
+
+	media_isp_device_deque(device->isp_dev, 0);
 
 	wait_event_interruptible(device->isp_dev->wq_frame_done_finished,
 				 !device->isp_dev->apu_wait_for_isp_frame_done);
 
+	if (!kfifo_out(&device->isp_dev->display_fifo, &msg, 1)) {
+		pr_err("Failed to queue into kfifo\n");
+		goto skip_isp_dequeue;
+	}
+	if (!msg) {
+		dev_err(device->isp_dev->dev, "%s: invalid msg or payload\n", __func__);
+		goto skip_isp_dequeue;
+	}
+
+	/* Allocate memory for the buffer */
+	p_media_buffer = kzalloc(sizeof(media_buffer_t), GFP_KERNEL);
+	if (!p_media_buffer) {
+		dev_err(device->isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__,
+			__LINE__);
+		goto skip_isp_dequeue;
+	}
+
+	/* Dequeue buffer from the ISP device*/
+	ret = media_isp_device_dq_buf_out(device->isp_dev, &info, (void *)msg->payload,
+					 p_media_buffer);
+	if (ret != VSI_SUCCESS) {
+		dev_err(device->isp_dev->dev,
+			"MediaIspDeviceDqbuf failed with error %d\n",
+			ret);
+	}
+
+	/* Free allocated buffer after successful processing*/
+	kfree(p_media_buffer);
+
 	// return the src and dst buffers back to V4L2 M2M layer to return to
 	// application
 	src_vb = v4l2_m2m_src_buf_remove(curr_ctx->fh.m2m_ctx);
-	dst_vb = v4l2_m2m_dst_buf_remove_by_idx(
-	    curr_ctx->fh.m2m_ctx, device->isp_dev->isp_dq_out_index);
+
+	/* Validate the dequeue index before using it */
+	if (device->isp_dev->isp_dq_out_index >= vb2_get_num_buffers(v4l2_m2m_get_dst_vq(curr_ctx->fh.m2m_ctx))) {
+		dev_err(device->isp_dev->dev, "Invalid dq_out_index %d, max buffers %d\n",
+			device->isp_dev->isp_dq_out_index,
+			vb2_get_num_buffers(v4l2_m2m_get_dst_vq(curr_ctx->fh.m2m_ctx)));
+		dst_vb = NULL;
+	} else {
+		dst_vb = v4l2_m2m_dst_buf_remove_by_idx(
+		    curr_ctx->fh.m2m_ctx, device->isp_dev->isp_dq_out_index);
+	}
+
 	if (src_vb && dst_vb) {
 		dst_vb->vb2_buf.timestamp = src_vb->vb2_buf.timestamp;
 		dst_vb->timecode = src_vb->timecode;
@@ -420,8 +463,19 @@ void isp_mimo_device_run(void *priv)
 		dst_vb->flags |= src_vb->flags & V4L2_BUF_FLAG_TSTAMP_SRC_MASK;
 		v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_DONE);
 		v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_DONE);
+	} else {
+		// Handle case where buffers are not available
+		if (src_vb) {
+			v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_ERROR);
+		}
+		if (dst_vb) {
+			v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_ERROR);
+		}
+		dev_err(device->isp_dev->dev, "Buffer removal failed: src_vb=%p, dst_vb=%p, dq_index=%d\n",
+			src_vb, dst_vb, device->isp_dev->isp_dq_out_index);
 	}
 	src_vb->sequence = dst_vb->sequence = curr_ctx->sequence++;
+skip_isp_dequeue:
 	v4l2_m2m_job_finish(device->m2m_dev, curr_ctx->fh.m2m_ctx);
 }
 
@@ -1245,20 +1299,20 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 	return NULL;
 }
 
-struct v4l2_format *isp_mimo_get_format(struct isp_mimo_ctx *ctx,
+struct v4l2_format *visp_mimo_get_format(struct visp_mimo_ctx *ctx,
 					enum v4l2_buf_type type);
-struct v4l2_format *isp_mimo_get_format(struct isp_mimo_ctx *ctx,
+struct v4l2_format *visp_mimo_get_format(struct visp_mimo_ctx *ctx,
 					enum v4l2_buf_type type)
 {
-	struct isp_mimo *device = ctx->device;
+	struct visp_mimo_device *device = ctx->device;
 	struct v4l2_device *v4l2_dev = &device->v4l2_dev;
 
 	switch (type) {
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
-		return &ctx->fmt[FMT_OUTPUT];
+		return &ctx->fmt[VISP_MIMO_FMT_TYPE_OUTPUT];
 
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
-		return &ctx->fmt[FMT_CAPTURE];
+		return &ctx->fmt[VISP_MIMO_FMT_TYPE_CAPTURE];
 
 	default:
 		v4l2_err(v4l2_dev, "Unknown type\n");
@@ -1266,7 +1320,7 @@ struct v4l2_format *isp_mimo_get_format(struct isp_mimo_ctx *ctx,
 	}
 }
 
-int isp_mimo_v4l2_m2m_ioctl_querycap(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_querycap(struct file *file, void *priv,
 				     struct v4l2_capability *cap)
 {
 	strscpy(cap->driver, MEM2MEM_NAME, sizeof(cap->driver));
@@ -1462,10 +1516,10 @@ static int visp_m2m_cal_imagesize(struct v4l2_format *f)
 
 	return 0;
 }
-int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
 					struct v4l2_format *f)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)priv;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
 	struct visp_dev *isp_dev = ctx->device->isp_dev;
 	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
 	struct v4l2_format *fmt;
@@ -1497,7 +1551,7 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
 	if (ret)
 		return -EINVAL;
 
-	fmt = isp_mimo_get_format(ctx, f->type);
+	fmt = visp_mimo_get_format(ctx, f->type);
 	fmt->fmt.pix.sizeimage = f->fmt.pix.sizeimage;
 	fmt->fmt.pix.width = f->fmt.pix.width;
 	fmt->fmt.pix.height = f->fmt.pix.height;
@@ -1510,10 +1564,10 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
 	return 0;
 }
 
-int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 					struct v4l2_format *f)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)priv;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
 	struct visp_dev *isp_dev = ctx->device->isp_dev;
 	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
 	struct v4l2_format *fmt;
@@ -1546,7 +1600,7 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 	if (ret)
 		return -EINVAL;
 
-	fmt = isp_mimo_get_format(ctx, f->type);
+	fmt = visp_mimo_get_format(ctx, f->type);
 	fmt->fmt.pix.sizeimage = f->fmt.pix.sizeimage;
 	fmt->fmt.pix.width = f->fmt.pix.width;
 	fmt->fmt.pix.height = f->fmt.pix.height;
@@ -1559,7 +1613,7 @@ int isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 	return 0;
 }
 
-int isp_mimo_v4l2_m2m_ioctl_enum_fmt_cap(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_enum_fmt_cap(struct file *file, void *priv,
 					 struct v4l2_fmtdesc *f)
 {
 	if (f->index >= ARRAY_SIZE(visp_mp_fmts))
@@ -1569,7 +1623,7 @@ int isp_mimo_v4l2_m2m_ioctl_enum_fmt_cap(struct file *file, void *priv,
 	return 0;
 }
 
-int isp_mimo_v4l2_m2m_ioctl_enum_fmt_out(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_enum_fmt_out(struct file *file, void *priv,
 					 struct v4l2_fmtdesc *f)
 {
 	if (f->index >= ARRAY_SIZE(visp_raw_fmts))
@@ -1579,13 +1633,13 @@ int isp_mimo_v4l2_m2m_ioctl_enum_fmt_out(struct file *file, void *priv,
 	return 0;
 }
 
-int isp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
 				  struct v4l2_format *f)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)priv;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
 	struct v4l2_format *fmt;
 
-	fmt = isp_mimo_get_format(ctx, f->type);
+	fmt = visp_mimo_get_format(ctx, f->type);
 
 	if (IS_ERR(fmt))
 		return -EINVAL;
@@ -1598,15 +1652,15 @@ int isp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
 	return 0;
 }
 
-int isp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 				      struct v4l2_format *f)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)priv;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
 	struct v4l2_format *fmt;
 
-	isp_mimo_v4l2_m2m_ioctl_try_fmt_out(file, priv, f);
+	visp_mimo_v4l2_m2m_ioctl_try_fmt_out(file, priv, f);
 
-	fmt = isp_mimo_get_format(ctx, f->type);
+	fmt = visp_mimo_get_format(ctx, f->type);
 
 	if (IS_ERR(fmt))
 		return -EINVAL;
@@ -1619,15 +1673,15 @@ int isp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 
 	return 0;
 }
-int isp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
+int visp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 				      struct v4l2_format *f)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)priv;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
 	struct v4l2_format *fmt;
 
-	isp_mimo_v4l2_m2m_ioctl_try_fmt_cap(file, priv, f);
+	visp_mimo_v4l2_m2m_ioctl_try_fmt_cap(file, priv, f);
 
-	fmt = isp_mimo_get_format(ctx, f->type);
+	fmt = visp_mimo_get_format(ctx, f->type);
 
 	if (IS_ERR(fmt))
 		return -EINVAL;
@@ -1641,18 +1695,18 @@ int isp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 	return 0;
 }
 
-int isp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
 				     enum v4l2_buf_type type)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 
 	return v4l2_m2m_streamon(file, ctx->fh.m2m_ctx, type);
 }
 
-int isp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 				      enum v4l2_buf_type type)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 
 	if (on) {
 		media_isp_stream_off(ctx->device->isp_dev, 0, 0);
@@ -1661,74 +1715,74 @@ int isp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 	return v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, type);
 }
 
-int isp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
 				    struct v4l2_requestbuffers *rb)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 
 	return v4l2_m2m_ioctl_reqbufs(file, ctx->fh.m2m_ctx, rb);
 }
 
-int isp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
 				     struct v4l2_buffer *buf)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 
 	return v4l2_m2m_ioctl_querybuf(file, ctx->fh.m2m_ctx, buf);
 }
 
-int isp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
 				 struct v4l2_buffer *buf)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 
 	return v4l2_m2m_ioctl_qbuf(file, ctx->fh.m2m_ctx, buf);
 }
 
-int isp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
 				  struct v4l2_buffer *buf)
 {
 	int status;
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 
 	status = v4l2_m2m_ioctl_dqbuf(file, ctx->fh.m2m_ctx, buf);
 
 	return status;
 }
 
-int isp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
 					struct v4l2_buffer *buf)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 
 	return v4l2_m2m_ioctl_prepare_buf(file, ctx->fh.m2m_ctx, buf);
 }
 
-int isp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
 					struct v4l2_create_buffers *create)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 
 	return v4l2_m2m_ioctl_create_bufs(file, ctx->fh.m2m_ctx, create);
 }
 
-int isp_mimo_v4l2_m2m_ioctl_expbuf(struct file *file, void *fh,
+int visp_mimo_v4l2_m2m_ioctl_expbuf(struct file *file, void *fh,
 				   struct v4l2_exportbuffer *eb)
 {
-	struct isp_mimo_ctx *ctx = (struct isp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 
 	return v4l2_m2m_ioctl_expbuf(file, ctx->fh.m2m_ctx, eb);
 }
 
-int isp_mimo_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
+int visp_mimo_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
 			 unsigned int *nplanes, unsigned int sizes[],
 			 struct device *alloc_devs[])
 {
-	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(vq);
+	struct visp_mimo_ctx *ctx = vb2_get_drv_priv(vq);
 
 	struct v4l2_format *fmt;
 
-	fmt = isp_mimo_get_format(ctx, vq->type);
+	fmt = visp_mimo_get_format(ctx, vq->type);
 	if (IS_ERR(fmt))
 		return -EINVAL;
 
@@ -1738,13 +1792,13 @@ int isp_mimo_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers,
 	return 0;
 }
 
-int isp_mimo_buf_prepare(struct vb2_buffer *vb)
+int visp_mimo_buf_prepare(struct vb2_buffer *vb)
 {
-	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
+	struct visp_mimo_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
 
 	struct v4l2_format *fmt;
 
-	fmt = isp_mimo_get_format(ctx, vb->type);
+	fmt = visp_mimo_get_format(ctx, vb->type);
 	if (IS_ERR(fmt))
 		return -EINVAL;
 
@@ -1755,25 +1809,25 @@ int isp_mimo_buf_prepare(struct vb2_buffer *vb)
 	return 0;
 }
 
-void isp_mimo_buf_queue(struct vb2_buffer *vb)
+void visp_mimo_buf_queue(struct vb2_buffer *vb)
 {
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
-	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
+	struct visp_mimo_ctx *ctx = vb2_get_drv_priv(vb->vb2_queue);
 
 	v4l2_m2m_buf_queue(ctx->fh.m2m_ctx, vbuf);
 }
 
-int isp_mimo_start_streaming(struct vb2_queue *q, unsigned int count)
+int visp_mimo_start_streaming(struct vb2_queue *q, unsigned int count)
 {
-	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(q);
+	struct visp_mimo_ctx *ctx = vb2_get_drv_priv(q);
 
 	ctx->sequence = 0;
 	return 0;
 }
 
-void isp_mimo_stop_streaming(struct vb2_queue *q)
+void visp_mimo_stop_streaming(struct vb2_queue *q)
 {
-	struct isp_mimo_ctx *ctx = vb2_get_drv_priv(q);
+	struct visp_mimo_ctx *ctx = vb2_get_drv_priv(q);
 	struct vb2_v4l2_buffer *vbuf;
 
 	for (;;) {
@@ -1809,7 +1863,7 @@ static long visp_return_rpu_id(struct v4l2_subdev *sd, void *arg)
 	if (!arg)
 		dev_err(sd->dev, "%s %d NULL ARG\n", __func__, __LINE__);
 
-	struct isp_mimo *device = v4l2_get_subdevdata(sd);
+	struct visp_mimo_device *device = v4l2_get_subdevdata(sd);
 
 	if (!device)
 		pr_err("%s %d NULLL\n", __func__, __LINE__);
@@ -1850,7 +1904,7 @@ static const struct v4l2_subdev_ops subdev_ops = {
 static int event_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	// struct isp_mimo *device = video_drvdata(filp);
-	struct isp_mimo *device = filp->private_data;
+	struct visp_mimo_device *device = filp->private_data;
 
 	unsigned long pfn = device->event_shm.phy_addr >> PAGE_SHIFT;
 	size_t size = vma->vm_end - vma->vm_start;
@@ -1869,8 +1923,8 @@ static int event_open(struct inode *inode, struct file *file)
 	//   struct miscdevice *misc = container_of(file->f_inode->i_cdev,
 	//   struct miscdevice, this_device->dev);
 	struct miscdevice *misc = file->private_data;
-	struct isp_mimo *device =
-	    container_of(misc, struct isp_mimo, event_misc);
+	struct visp_mimo_device *device =
+	    container_of(misc, struct visp_mimo_device, event_misc);
 	file->private_data = device;
 	return 0;
 }
@@ -1881,10 +1935,10 @@ static const struct file_operations event_fops = {
 	.mmap = event_mmap,
 };
 
-static const struct v4l2_file_operations isp_mimo_fops = {
+static const struct v4l2_file_operations visp_mimo_fops = {
 	.owner = THIS_MODULE,
-	.open = isp_mimo_open,
-	.release = isp_mimo_release,
+	.open = visp_mimo_open,
+	.release = visp_mimo_release,
 	.poll = v4l2_m2m_fop_poll,
 	.unlocked_ioctl = video_ioctl2,
 	.mmap = v4l2_m2m_fop_mmap,
@@ -1894,68 +1948,68 @@ static const struct v4l2_file_operations isp_mimo_fops = {
 /*
  * File operations
  */
-static const struct v4l2_ioctl_ops isp_mimo_ioctl_ops = {
-	.vidioc_querycap = isp_mimo_v4l2_m2m_ioctl_querycap,
-	.vidioc_enum_fmt_vid_cap = isp_mimo_v4l2_m2m_ioctl_enum_fmt_cap,
-	.vidioc_g_fmt_vid_cap = isp_mimo_v4l2_m2m_ioctl_g_fmt,
-	.vidioc_try_fmt_vid_cap = isp_mimo_v4l2_m2m_ioctl_try_fmt_cap,
-	.vidioc_s_fmt_vid_cap = isp_mimo_v4l2_m2m_ioctl_s_fmt_cap,
-	.vidioc_enum_fmt_vid_out = isp_mimo_v4l2_m2m_ioctl_enum_fmt_out,
-	.vidioc_g_fmt_vid_out = isp_mimo_v4l2_m2m_ioctl_g_fmt,
-	.vidioc_try_fmt_vid_out = isp_mimo_v4l2_m2m_ioctl_try_fmt_out,
-	.vidioc_s_fmt_vid_out = isp_mimo_v4l2_m2m_ioctl_s_fmt_out,
-	.vidioc_reqbufs = isp_mimo_v4l2_m2m_ioctl_reqbufs,
-	.vidioc_querybuf = isp_mimo_v4l2_m2m_ioctl_querybuf,
-	.vidioc_qbuf = isp_mimo_v4l2_m2m_ioctl_qbuf,
-	.vidioc_dqbuf = isp_mimo_v4l2_m2m_ioctl_dqbuf,
-	.vidioc_prepare_buf = isp_mimo_v4l2_m2m_ioctl_prepare_buf,
-	.vidioc_create_bufs = isp_mimo_v4l2_m2m_ioctl_create_bufs,
-	.vidioc_expbuf = isp_mimo_v4l2_m2m_ioctl_expbuf,
-	.vidioc_streamon = isp_mimo_v4l2_m2m_ioctl_streamon,
-	.vidioc_streamoff = isp_mimo_v4l2_m2m_ioctl_streamoff,
+static const struct v4l2_ioctl_ops visp_mimo_ioctl_ops = {
+	.vidioc_querycap = visp_mimo_v4l2_m2m_ioctl_querycap,
+	.vidioc_enum_fmt_vid_cap = visp_mimo_v4l2_m2m_ioctl_enum_fmt_cap,
+	.vidioc_g_fmt_vid_cap = visp_mimo_v4l2_m2m_ioctl_g_fmt,
+	.vidioc_try_fmt_vid_cap = visp_mimo_v4l2_m2m_ioctl_try_fmt_cap,
+	.vidioc_s_fmt_vid_cap = visp_mimo_v4l2_m2m_ioctl_s_fmt_cap,
+	.vidioc_enum_fmt_vid_out = visp_mimo_v4l2_m2m_ioctl_enum_fmt_out,
+	.vidioc_g_fmt_vid_out = visp_mimo_v4l2_m2m_ioctl_g_fmt,
+	.vidioc_try_fmt_vid_out = visp_mimo_v4l2_m2m_ioctl_try_fmt_out,
+	.vidioc_s_fmt_vid_out = visp_mimo_v4l2_m2m_ioctl_s_fmt_out,
+	.vidioc_reqbufs = visp_mimo_v4l2_m2m_ioctl_reqbufs,
+	.vidioc_querybuf = visp_mimo_v4l2_m2m_ioctl_querybuf,
+	.vidioc_qbuf = visp_mimo_v4l2_m2m_ioctl_qbuf,
+	.vidioc_dqbuf = visp_mimo_v4l2_m2m_ioctl_dqbuf,
+	.vidioc_prepare_buf = visp_mimo_v4l2_m2m_ioctl_prepare_buf,
+	.vidioc_create_bufs = visp_mimo_v4l2_m2m_ioctl_create_bufs,
+	.vidioc_expbuf = visp_mimo_v4l2_m2m_ioctl_expbuf,
+	.vidioc_streamon = visp_mimo_v4l2_m2m_ioctl_streamon,
+	.vidioc_streamoff = visp_mimo_v4l2_m2m_ioctl_streamoff,
     //.vidioc_subscribe_event     = visp_videoc_subscribe_event,
     //.vidioc_unsubscribe_event   = v4l2_event_unsubscribe,
 };
 
-static const struct video_device isp_mimo_video_dev = {
+static const struct video_device visp_mimo_video_dev = {
 	.name = MEM2MEM_NAME,
 	.vfl_dir = VFL_DIR_M2M,
-	.fops = &isp_mimo_fops,
+	.fops = &visp_mimo_fops,
 	.device_caps = V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING,
-	.ioctl_ops = &isp_mimo_ioctl_ops,
+	.ioctl_ops = &visp_mimo_ioctl_ops,
 	.minor = -1,
 	.release = video_device_release_empty,
 };
 
 static const struct v4l2_m2m_ops m2m_ops = {
-	.device_run = isp_mimo_device_run,
+	.device_run = visp_mimo_device_run,
 };
 
-static const struct vb2_ops isp_mimo_qops = {
-	.queue_setup = isp_mimo_queue_setup,
-	.buf_prepare = isp_mimo_buf_prepare,
-	.buf_queue = isp_mimo_buf_queue,
-	.start_streaming = isp_mimo_start_streaming,
-	.stop_streaming = isp_mimo_stop_streaming,
+static const struct vb2_ops visp_mimo_qops = {
+	.queue_setup = visp_mimo_queue_setup,
+	.buf_prepare = visp_mimo_buf_prepare,
+	.buf_queue = visp_mimo_buf_queue,
+	.start_streaming = visp_mimo_start_streaming,
+	.stop_streaming = visp_mimo_stop_streaming,
 	.wait_prepare = vb2_ops_wait_prepare,
 	.wait_finish = vb2_ops_wait_finish,
 };
 
-inline struct isp_mimo_ctx *file2ctx(struct file *file)
+inline struct visp_mimo_ctx *file2ctx(struct file *file)
 {
-	return container_of(file->private_data, struct isp_mimo_ctx, fh);
+	return container_of(file->private_data, struct visp_mimo_ctx, fh);
 }
 
-int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
+int visp_mimo_queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 {
-	struct isp_mimo_ctx *ctx = priv;
+	struct visp_mimo_ctx *ctx = priv;
 	int ret;
 
 	src_vq->type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 	src_vq->io_modes = VB2_MMAP | VB2_DMABUF | VB2_USERPTR;
 	src_vq->drv_priv = ctx;
 	src_vq->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
-	src_vq->ops = &isp_mimo_qops;
+	src_vq->ops = &visp_mimo_qops;
 	src_vq->mem_ops = &vb2_dma_contig_memops;
 	src_vq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	src_vq->lock = &ctx->device->lock;
@@ -1969,7 +2023,7 @@ int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 	dst_vq->io_modes = VB2_MMAP | VB2_DMABUF | VB2_USERPTR;
 	dst_vq->drv_priv = ctx;
 	dst_vq->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
-	dst_vq->ops = &isp_mimo_qops;
+	dst_vq->ops = &visp_mimo_qops;
 	dst_vq->mem_ops = &vb2_dma_contig_memops;
 	dst_vq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	dst_vq->lock = &ctx->device->lock;
@@ -1978,7 +2032,7 @@ int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 	return vb2_queue_init(dst_vq);
 }
 static char dev_open;
-int isp_mimo_open(struct file *file)
+int visp_mimo_open(struct file *file)
 {
 	static int device_open_count;
 
@@ -1988,9 +2042,9 @@ int isp_mimo_open(struct file *file)
 		visp_pr_debug("===== [VISP_M2M] Device opened %d times\n",
 			      device_open_count);
 
-	struct isp_mimo_ctx *ctx = NULL;
+	struct visp_mimo_ctx *ctx = NULL;
 
-	struct isp_mimo *device = video_drvdata(file);
+	struct visp_mimo_device *device = video_drvdata(file);
 	int rc = 0;
 
 	if (mutex_lock_interruptible(&device->lock))
@@ -2007,7 +2061,7 @@ int isp_mimo_open(struct file *file)
 		ctx->device = device;
 
 		ctx->fh.m2m_ctx =
-		    v4l2_m2m_ctx_init(device->m2m_dev, ctx, &queue_init);
+		    v4l2_m2m_ctx_init(device->m2m_dev, ctx, &visp_mimo_queue_init);
 
 		if (IS_ERR(ctx->fh.m2m_ctx)) {
 			rc = PTR_ERR(ctx->fh.m2m_ctx);
@@ -2020,17 +2074,17 @@ int isp_mimo_open(struct file *file)
 		v4l2_fh_add(&ctx->fh);
 
 		/* set default format */
-		ctx->fmt[FMT_OUTPUT].type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-		ctx->fmt[FMT_OUTPUT].fmt.pix.pixelformat = FORMAT_OUT_BAYER12;
-		ctx->fmt[FMT_OUTPUT].fmt.pix.width = DEFAULT_WIDTH;
-		ctx->fmt[FMT_OUTPUT].fmt.pix.height = DEFAULT_HEIGHT;
-		ctx->fmt[FMT_OUTPUT].fmt.pix.colorspace = V4L2_COLORSPACE_RAW;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_OUTPUT].type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_OUTPUT].fmt.pix.pixelformat = FORMAT_OUT_BAYER12;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_OUTPUT].fmt.pix.width = DEFAULT_WIDTH;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_OUTPUT].fmt.pix.height = DEFAULT_HEIGHT;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_OUTPUT].fmt.pix.colorspace = V4L2_COLORSPACE_RAW;
 
-		ctx->fmt[FMT_CAPTURE].type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		ctx->fmt[FMT_CAPTURE].fmt.pix.pixelformat = FORMAT_CAP_NV12;
-		ctx->fmt[FMT_CAPTURE].fmt.pix.width = DEFAULT_WIDTH;
-		ctx->fmt[FMT_CAPTURE].fmt.pix.height = DEFAULT_HEIGHT;
-		ctx->fmt[FMT_CAPTURE].fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_CAPTURE].type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_CAPTURE].fmt.pix.pixelformat = FORMAT_CAP_NV12;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_CAPTURE].fmt.pix.width = DEFAULT_WIDTH;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_CAPTURE].fmt.pix.height = DEFAULT_HEIGHT;
+		ctx->fmt[VISP_MIMO_FMT_TYPE_CAPTURE].fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
 
 		visp_v4l2_dbg(
 		    1, debug, v4l2_dev,
@@ -2053,10 +2107,10 @@ open_unlock:
 	return rc;
 }
 
-int isp_mimo_release(struct file *file)
+int visp_mimo_release(struct file *file)
 {
-	struct isp_mimo *device = video_drvdata(file);
-	struct isp_mimo_ctx *ctx = file2ctx(file);
+	struct visp_mimo_device *device = video_drvdata(file);
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	if (dev_open == 1)
 		dev_open = 0;
@@ -2136,14 +2190,6 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 
 int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
 {
-	int ret_val = 0;
-	media_buf *buf = NULL;
-	media_buffer_t *p_media_buffer = NULL;
-	mbox_post_msg *msg;
-	void *packet_from_rpu;
-	size_t size;
-
-	struct Chn_info info;
 	/* Validate inputs */
 	if (!isp_dev) {
 		dev_err(isp_dev->dev,
@@ -2151,67 +2197,20 @@ int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
 		return -EINVAL;
 	}
 
-	if (!kfifo_out(&isp_dev->display_fifo, &msg, 1)) {
-		pr_err("Failed to queue into kfifo\n");
-		return -ENOMEM;
-	}
-	 if (!msg) {
-                dev_err(isp_dev->dev, "%s: invalid msg or payload\n", __func__);
-                ret_val = -EINVAL;
-                goto error_free_buf;
-        }
-
-	size = msg->size;
-	packet_from_rpu = kzalloc(size, GFP_KERNEL);
-	if (!packet_from_rpu) {
-		dev_err(isp_dev->dev, "Failed to allocate packet_from_rpu\n");
-		return -ENOMEM;
-	}
-	memcpy(packet_from_rpu, msg->payload, size);
-
-	/* Allocate memory for the buffer */
-	p_media_buffer = kzalloc(sizeof(media_buffer_t), GFP_KERNEL);
-	if (!p_media_buffer) {
-		dev_err(isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__,
-			__LINE__);
-		return -ENOMEM;
-	}
-
-	buf = kzalloc(sizeof(media_buf), GFP_KERNEL);
-	if (!buf) {
-		dev_err(isp_dev->dev, "handle_frameout_buffer: Failed to "
-				      "allocate memory for media_buf\n");
-		return -ENOMEM;
-	}
-	/* Dequeue buffer from the ISP device*/
-	ret_val = media_isp_device_dq_buf_out(isp_dev, &info, buf, packet_from_rpu,
-					 p_media_buffer);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: MediaIspDeviceDqbuf failed "
-			"with error %d\n",
-			ret_val);
-		goto error_free_buf;
-	}
+	// Message processing moved to visp_mimo_device_run
+	// Just wake up the waiting process
 	isp_dev->apu_wait_for_isp_frame_done = 0;
 	wake_up(&isp_dev->wq_frame_done_finished);
-	/* Free allocated buffer after successful processing*/
-	kfree(buf);
-	return 0;
 
-error_free_buf:
-	/* Free buffer in case of any error*/
-	kfree(packet_from_rpu);
-	kfree(buf);
-	return ret_val;
+	return 0;
 }
 
 //
-int isp_mimo_probe(struct platform_device *pdev)
+int visp_mimo_probe(struct platform_device *pdev)
 {
 	static int probe_cnt;
 
-	struct isp_mimo *device;
+	struct visp_mimo_device *device;
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	struct video_device *vfd;
@@ -2255,7 +2254,7 @@ int isp_mimo_probe(struct platform_device *pdev)
 		return ret;
 	}
 	v4l2_dev = &device->v4l2_dev;
-	device->video_dev = isp_mimo_video_dev;
+	device->video_dev = visp_mimo_video_dev;
 	vfd = &device->video_dev;
 	vfd->lock = &device->lock;
 	vfd->v4l2_dev = &device->v4l2_dev;
@@ -2276,6 +2275,9 @@ int isp_mimo_probe(struct platform_device *pdev)
 	    devm_kzalloc(&pdev->dev, sizeof(struct visp_dev), GFP_KERNEL);
 	if (!device->isp_dev)
 		return -ENOMEM;
+
+	/* Initialize isp_dq_out_index to a safe default value */
+	device->isp_dev->isp_dq_out_index = 0;
 
 	mutex_init(&device->isp_dev->mlock);
 	mutex_init(&device->isp_dev->ctrl_lock);
@@ -2362,9 +2364,9 @@ err_v4l2:
 	return ret;
 }
 
-void isp_mimo_remove(struct platform_device *pdev)
+void visp_mimo_remove(struct platform_device *pdev)
 {
-	struct isp_mimo *device = platform_get_drvdata(pdev);
+	struct visp_mimo_device *device = platform_get_drvdata(pdev);
 
 	if (pdev->id >= 0) {
 		video_unregister_device(&device->video_dev);
@@ -2373,24 +2375,24 @@ void isp_mimo_remove(struct platform_device *pdev)
 	}
 }
 
-static const struct of_device_id isp_mimo_dt_ids[] = {
+static const struct of_device_id visp_mimo_dt_ids[] = {
 	{
 		.compatible = "xlnx,visp-ss-mimo-1.0",
 	},
 	{},
 };
 
-static struct platform_driver isp_mimo_driver = {
-	.probe = isp_mimo_probe,
-	.remove = isp_mimo_remove,
+static struct platform_driver visp_mimo_driver = {
+	.probe = visp_mimo_probe,
+	.remove = visp_mimo_remove,
 	.driver = {
 			.name = MEM2MEM_NAME,
-			.of_match_table = isp_mimo_dt_ids,
+			.of_match_table = visp_mimo_dt_ids,
 		},
 };
 
-MODULE_DEVICE_TABLE(of, isp_mimo_dt_ids);
-module_platform_driver(isp_mimo_driver);
+MODULE_DEVICE_TABLE(of, visp_mimo_dt_ids);
+module_platform_driver(visp_mimo_driver);
 
 MODULE_DESCRIPTION("AMD ISP MIMO driver");
 MODULE_AUTHOR("AMD ISP SW Team");

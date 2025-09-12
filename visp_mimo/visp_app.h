@@ -70,7 +70,7 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 					uint8_t chn);
 
 int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
-			    media_buf *buf, void *packet_from_rpu,
+			    void *packet_from_rpu,
 			    media_buffer_t *p_media_buffer);
 
 #define ENABLE_LOG 1

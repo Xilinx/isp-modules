@@ -65,7 +65,7 @@ struct visp_subdev_dma_buf {
 	int size;
 };
 
-static bool __maybe_unused visp_video_event_subscribed(struct isp_mimo *visp_vdev,
+static bool __maybe_unused visp_video_event_subscribed(struct visp_mimo_device *visp_vdev,
 							uint32_t type, uint32_t id)
 {
 	struct v4l2_fh *fh;
@@ -92,9 +92,9 @@ static bool __maybe_unused visp_video_event_subscribed(struct isp_mimo *visp_vde
 	return subscribed;
 }
 
-int visp_video_post_event(struct isp_mimo *visp_vdev,
+int visp_video_post_event(struct visp_mimo_device *visp_vdev,
 			  struct visp_event_pkg *event_pkg);
-int visp_video_post_event(struct isp_mimo *visp_vdev,
+int visp_video_post_event(struct visp_mimo_device *visp_vdev,
 			  struct visp_event_pkg *event_pkg)
 {
 	struct v4l2_event event;
@@ -136,7 +136,7 @@ int visp_video_post_event(struct isp_mimo *visp_vdev,
 	return 0;
 }
 
-int visp_video_create_pipeline_event(struct isp_mimo *visp_vdev)
+int visp_video_create_pipeline_event(struct visp_mimo_device *visp_vdev)
 {
 	struct visp_event_pkg *event_pkg = visp_vdev->event_shm.virt_addr;
 	int ret;
@@ -158,7 +158,7 @@ int visp_video_create_pipeline_event(struct isp_mimo *visp_vdev)
 	return ret;
 }
 
-int visp_video_destroy_pipeline_event(struct isp_mimo *visp_vdev)
+int visp_video_destroy_pipeline_event(struct visp_mimo_device *visp_vdev)
 {
 	struct visp_event_pkg *event_pkg = visp_vdev->event_shm.virt_addr;
 	int ret;
@@ -181,7 +181,7 @@ int visp_video_destroy_pipeline_event(struct isp_mimo *visp_vdev)
 	return ret;
 }
 
-int visp_l_calib_event(struct isp_mimo *isp_dev, int pad, int event)
+int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event)
 {
 
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
