@@ -13,6 +13,7 @@ $(TARGET)-objs += $(pwd)/mailbox/mbox_fifo.o
 
 $(info PWD_PATH is $(PWD))
 
+ccflags-y := -DISP_VERSION_MACRO=\"Version:M15\ Release:25.2.0\"
 
 EXTRA_CFLAGS := -I$(PWD)
 EXTRA_CFLAGS += -I$(PWD)/visp/

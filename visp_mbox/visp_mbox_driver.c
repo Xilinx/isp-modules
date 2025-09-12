@@ -873,6 +873,12 @@ static int visp_mbox_probe(struct platform_device *pdev)
 
 	node = pdev->dev.of_node;
 
+	#ifdef ISP_VERSION_MACRO
+	    dev_info(dev, "|****************************************|\n");
+	    dev_info(dev, "|isp modules : %s|\n", ISP_VERSION_MACRO);
+	    dev_info(dev, "|****************************************|\n");
+	#endif
+
 	/* Read the rpu_id property */
 	ret = of_property_read_u32(node, "rpu_id", &rpu_id);
 	if (ret) {
