@@ -273,7 +273,6 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 		return -EINVAL;
 	}
 
-	mutex_lock(&rpu->ack_lock);
 
 	rpu->app_wait_flag = 1;
 	/* Acquire lock to protect RPU structure */
@@ -286,6 +285,8 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 				     // interruption
 		goto ERROR;
 	}
+	mutex_lock(&rpu->ack_lock);
+	mutex_unlock(&rpu->write_lock);
 
 	if (!kfifo_out(&rpu->app_fifo, &msg, 1)) {
 		pr_err("Failed to queue into kfifo\n");
@@ -307,7 +308,6 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 	}
 ERROR:
 	mutex_unlock(&rpu->ack_lock);
-	mutex_unlock(&rpu->write_lock);
 	return bytes_copied; // Return the size of data copied on success
 }
 
@@ -597,6 +597,7 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 		goto ERROR;
 	}
 
+	mutex_unlock(&rpu->write_lock);
 	if (!kfifo_out(&rpu->data_fifo, &msg, 1)) {
 		pr_err("Failed to queue into kfifo\n");
 		ret = -ENOMEM;
@@ -668,6 +669,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		goto unlock_and_exit;
 	}
 
+	return result;
 unlock_and_exit:
 	mutex_unlock(&rpu->write_lock);
 	return result;
@@ -686,6 +688,7 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		return -EINVAL;
 	}
 	rpu = isp_dev->rpu;
+	mutex_lock(&rpu->write_lock);
 	result = visp_mbox_send_command(cmd, data, size, rpu->core_id,
 					src_cpu);
 	if (result != 0) {
@@ -701,8 +704,10 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
 			__func__, __LINE__);
+		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
+	mutex_unlock(&rpu->write_lock);
 	return 0; // Success
 }
 EXPORT_SYMBOL(xlnx_send_mbox_without_ack_cmd);
@@ -750,7 +755,6 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	result = xlnx_mbox_apu_wait_for_ack(isp_dev);
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: Failed to get ack\n", __func__);
-		mutex_unlock(&rpu->write_lock);
 		goto unlock_and_exit;
 	}
 
