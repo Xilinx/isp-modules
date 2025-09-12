@@ -2368,6 +2368,11 @@ void visp_mimo_remove(struct platform_device *pdev)
 {
 	struct visp_mimo_device *device = platform_get_drvdata(pdev);
 
+	// Only deregister if it was registered
+	if (device && device->event_misc.this_device) {
+		misc_deregister(&device->event_misc);
+	}
+
 	if (pdev->id >= 0) {
 		video_unregister_device(&device->video_dev);
 		v4l2_m2m_release(device->m2m_dev);
