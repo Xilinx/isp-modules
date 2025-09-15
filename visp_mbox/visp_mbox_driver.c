@@ -116,6 +116,7 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 	mclient->rx_callback = visp_mbox_rx_cb; // Set the RX callback
 
 	tasklet_init(&rpu->mbox_tasklet, visp_mbox_event_notified, (unsigned long)rpu);
+	rpu->tasklet_initialized = true;
 
 	dev_dbg(rpu->dev, "Mailbox work handler initialized.\n");
 
@@ -721,6 +722,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 {
 	struct rpu_dev *rpu;
 	struct device_node *node;
+	struct device *mboxdev;
 	char dev_name[20];
 	int ret;
 
@@ -742,8 +744,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	rpu = devm_kzalloc(&pdev->dev, sizeof(*rpu), GFP_KERNEL);
 	if (!rpu) {
 		dev_err(&pdev->dev, "Failed to allocate memory for RPU\n");
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
+		goto cleanup;
 	}
 
 	snprintf(dev_name, sizeof(dev_name), "%s_%d", CHAR_DEV_NAME, rpu_id);
@@ -765,72 +766,46 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	if (ret) {
 		dev_err(&pdev->dev,
 			"Failed to allocate device number (error %d)\n", ret);
-		devm_kfree(&pdev->dev, rpu);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(ret);
+		goto cleanup;
 	}
 
 	rpu->visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
 	if (!rpu->visp_mbox_intr_data) {
-		pr_err("Failed to allocate memory\n");
-		devm_kfree(&pdev->dev, rpu);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
+		dev_err(&pdev->dev, "Failed to allocate visp_mbox_intr_data memory\n");
+		goto cleanup;
 	}
+
 	rpu->msg = kzalloc(sizeof(mbox_post_msg), GFP_KERNEL);
 	if (!rpu->msg) {
-		pr_err("Failed to allocate memory\n");
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
+		dev_err(&pdev->dev, "Failed to allocate msg memory\n");
+		goto cleanup;
 	}
+
 	rpu->visp_mbox_app_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
 	if (!rpu->visp_mbox_app_data) {
-		pr_err("Failed to allocate memory\n");
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		kfree(rpu->msg);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
+		dev_err(&pdev->dev, "Failed to allocate visp_mbox_app_data memory\n");
+		goto cleanup;
 	}
+
 	rpu->visp_mbox_apu_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
 	if (!rpu->visp_mbox_apu_data) {
-		pr_err("Failed to allocate memory\n");
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		kfree(rpu->msg);
-		kfree(rpu->visp_mbox_app_data);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
+		dev_err(&pdev->dev, "Failed to allocate visp_mbox_apu_data memory\n");
+		goto cleanup;
 	}
 
 	/* Add the character device */
 	ret = cdev_add(&rpu->cdev, rpu->devno, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add cdev (error %d)\n", ret);
-		unregister_chrdev_region(rpu->devno, 1);
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		kfree(rpu->msg);
-		kfree(rpu->visp_mbox_app_data);
-		kfree(rpu->visp_mbox_apu_data);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(ret);
+		goto cleanup;
 	}
 
 	/* Create a device node */
-	if (!device_create(mailbox_class, NULL, rpu->devno, NULL, dev_name)) {
+	mboxdev = device_create(mailbox_class, NULL, rpu->devno, NULL,
+				dev_name);
+	if (!mboxdev) {
 		dev_err(&pdev->dev, "Failed to create device node\n");
-		cdev_del(&rpu->cdev);
-		unregister_chrdev_region(rpu->devno, 1);
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		kfree(rpu->msg);
-		kfree(rpu->visp_mbox_app_data);
-		kfree(rpu->visp_mbox_apu_data);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
+		goto cleanup;
 	}
 
 	kref_init(&rpu->refcount);
@@ -846,16 +821,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 		if (ret) {
 			dev_err(&pdev->dev,
 				"Failed to set up mailboxes (error %d)\n", ret);
-			device_destroy(mailbox_class, rpu->devno);
-			cdev_del(&rpu->cdev);
-			unregister_chrdev_region(rpu->devno, 1);
-			devm_kfree(&pdev->dev, rpu);
-			kfree(rpu->visp_mbox_intr_data);
-			kfree(rpu->msg);
-			kfree(rpu->visp_mbox_app_data);
-			kfree(rpu->visp_mbox_apu_data);
-			mutex_unlock(&rpu_list_lock);
-			return ERR_PTR(ret);
+			goto cleanup;
 		}
 	}
 
@@ -869,13 +835,38 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to initialize mailbox for RPU id: %d\n",
 			rpu_id);
-		 /* Clear driver data on failure */
+		/* Clear driver data on failure */
 		platform_set_drvdata(pdev, NULL);
-		return ERR_PTR(ret);
+		goto cleanup;
 	}
 
 	mutex_unlock(&rpu_list_lock);
 	return rpu;
+
+cleanup:
+	if (rpu) {
+		if (rpu->tx_chan)
+			mbox_free_channel(rpu->tx_chan);
+		if (rpu->rx_chan)
+			mbox_free_channel(rpu->rx_chan);
+		if (rpu->tasklet_initialized) {
+			tasklet_kill(&rpu->mbox_tasklet);
+			rpu->tasklet_initialized = false;
+		}
+		kfree(rpu->visp_mbox_apu_data);
+		kfree(rpu->visp_mbox_app_data);
+		kfree(rpu->msg);
+		kfree(rpu->visp_mbox_intr_data);
+		cdev_del(&rpu->cdev);
+		if (rpu->devno)
+			unregister_chrdev_region(rpu->devno, 1);
+		if (mboxdev)
+			device_destroy(mailbox_class, rpu->devno);
+
+		devm_kfree(&pdev->dev, rpu);
+	}
+	mutex_unlock(&rpu_list_lock);
+	return NULL;
 }
 
 static int visp_mbox_probe(struct platform_device *pdev)
@@ -939,7 +930,10 @@ static void visp_mbox_rpu_remove(void)
 			continue;
 		}
 
-		tasklet_kill(&rpu->mbox_tasklet);
+		if (rpu->tasklet_initialized) {
+			tasklet_kill(&rpu->mbox_tasklet);
+			rpu->tasklet_initialized = false;
+		}
 		/* Debug log the current RPU's reference count */
 		dev_dbg(rpu->dev, "RPU id %d - refcount = %d\n", rpu->rpu_id,
 			atomic_read(&rpu->refcount.refcount.refs));
