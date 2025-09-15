@@ -352,154 +352,6 @@ struct rpu_dev *visp_mbox_get_rpu_dev(int rpu_id)
 }
 EXPORT_SYMBOL(visp_mbox_get_rpu_dev);
 
-static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
-						   int rpu_id)
-{
-
-	struct rpu_dev *rpu;
-	struct device_node *node;
-	char dev_name[20];
-	int ret;
-
-	node = pdev->dev.of_node;
-	mutex_lock(&rpu_list_lock);
-
-	/* Look for an existing RPU with the given rpu_id */
-	list_for_each_entry(rpu, &rpu_devices, node) {
-		if (rpu->rpu_id == rpu_id) {
-			kref_get(&rpu->refcount);
-			//      dev_dbg(&pdev->dev, "Found existing RPU with id
-			//      %d\n", rpu_id);
-			mutex_unlock(&rpu_list_lock);
-			return rpu;
-		}
-	}
-
-	/* Create a new RPU */
-	rpu = devm_kzalloc(&pdev->dev, sizeof(*rpu), GFP_KERNEL);
-	if (!rpu) {
-		dev_err(&pdev->dev, "Failed to allocate memory for RPU\n");
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	snprintf(dev_name, sizeof(dev_name), "%s_%d", CHAR_DEV_NAME, rpu_id);
-
-	rpu->dev = &pdev->dev;
-	rpu->rpu_id = rpu_id;
-	rpu->core_id = rpu_id - VISP_MBOX_RPU6;
-	/* Initialize mutexes, cdev, and reference count */
-
-	mutex_init(&rpu->rpu_lock);
-	mutex_init(&rpu->ack_lock);
-	mutex_init(&rpu->read_lock);
-	mutex_init(&rpu->write_lock);
-	cdev_init(&rpu->cdev, &visp_mbox_rpudev_fops);
-	rpu->cdev.owner = THIS_MODULE;
-
-	/* Allocate a device number */
-	ret = alloc_chrdev_region(&rpu->devno, rpu_id, 1, dev_name);
-	if (ret) {
-		dev_err(&pdev->dev,
-			"Failed to allocate device number (error %d)\n", ret);
-		devm_kfree(&pdev->dev, rpu);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(ret);
-	}
-
-	rpu->visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
-	if (!rpu->visp_mbox_intr_data) {
-		pr_err("Failed to allocate memory\n");
-		devm_kfree(&pdev->dev, rpu);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
-	}
-	rpu->msg = kzalloc(sizeof(mbox_post_msg), GFP_KERNEL);
-	if (!rpu->msg) {
-		pr_err("Failed to allocate memory\n");
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
-	}
-	rpu->visp_mbox_app_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
-	if (!rpu->visp_mbox_app_data) {
-		pr_err("Failed to allocate memory\n");
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		kfree(rpu->msg);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
-	}
-	rpu->visp_mbox_apu_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
-	if (!rpu->visp_mbox_apu_data) {
-		pr_err("Failed to allocate memory\n");
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		kfree(rpu->msg);
-		kfree(rpu->visp_mbox_app_data);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	/* Add the character device */
-	ret = cdev_add(&rpu->cdev, rpu->devno, 1);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to add cdev (error %d)\n", ret);
-		unregister_chrdev_region(rpu->devno, 1);
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		kfree(rpu->msg);
-		kfree(rpu->visp_mbox_app_data);
-		kfree(rpu->visp_mbox_apu_data);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(ret);
-	}
-
-	/* Create a device node */
-	if (!device_create(mailbox_class, NULL, rpu->devno, NULL, dev_name)) {
-		dev_err(&pdev->dev, "Failed to create device node\n");
-		cdev_del(&rpu->cdev);
-		unregister_chrdev_region(rpu->devno, 1);
-		devm_kfree(&pdev->dev, rpu);
-		kfree(rpu->visp_mbox_intr_data);
-		kfree(rpu->msg);
-		kfree(rpu->visp_mbox_app_data);
-		kfree(rpu->visp_mbox_apu_data);
-		mutex_unlock(&rpu_list_lock);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	kref_init(&rpu->refcount);
-
-	/* Add the new RPU to the list */
-	list_add_tail(&rpu->node, &rpu_devices);
-
-	/* Setup mailbox if required */
-	if (of_property_read_bool(node, "mboxes")) {
-		dev_dbg(&pdev->dev, "Setting up mailboxes for RPU with id %d\n",
-			rpu_id);
-		ret = visp_mbox_setup(rpu, node);
-		if (ret) {
-			dev_err(&pdev->dev,
-				"Failed to set up mailboxes (error %d)\n", ret);
-			device_destroy(mailbox_class, rpu->devno);
-			cdev_del(&rpu->cdev);
-			unregister_chrdev_region(rpu->devno, 1);
-			devm_kfree(&pdev->dev, rpu);
-			kfree(rpu->visp_mbox_intr_data);
-			kfree(rpu->msg);
-			kfree(rpu->visp_mbox_app_data);
-			kfree(rpu->visp_mbox_apu_data);
-			mutex_unlock(&rpu_list_lock);
-			return ERR_PTR(ret);
-		}
-	}
-
-	mutex_unlock(&rpu_list_lock);
-	return rpu;
-}
-
 // TODO make this as static and keep appropriate name
 static int visp_mbox_reserved_memory_init(const char *node_name)
 {
@@ -863,6 +715,169 @@ static void visp_mbox_rpu_cleanup(struct kref *ref)
 	//   struct rpu_dev *rpu = container_of(ref, struct rpu_dev, refcount);
 	//        devm_kfree(&rpu->pdev->dev, rpu);
 }
+
+static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
+						   int rpu_id)
+{
+	struct rpu_dev *rpu;
+	struct device_node *node;
+	char dev_name[20];
+	int ret;
+
+	node = pdev->dev.of_node;
+	mutex_lock(&rpu_list_lock);
+
+	/* Look for an existing RPU with the given rpu_id */
+	list_for_each_entry(rpu, &rpu_devices, node) {
+		if (rpu->rpu_id == rpu_id) {
+			kref_get(&rpu->refcount);
+			//      dev_dbg(&pdev->dev, "Found existing RPU with id
+			//      %d\n", rpu_id);
+			mutex_unlock(&rpu_list_lock);
+			return rpu;
+		}
+	}
+
+	/* Create a new RPU */
+	rpu = devm_kzalloc(&pdev->dev, sizeof(*rpu), GFP_KERNEL);
+	if (!rpu) {
+		dev_err(&pdev->dev, "Failed to allocate memory for RPU\n");
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	snprintf(dev_name, sizeof(dev_name), "%s_%d", CHAR_DEV_NAME, rpu_id);
+
+	rpu->dev = &pdev->dev;
+	rpu->rpu_id = rpu_id;
+	rpu->core_id = rpu_id - VISP_MBOX_RPU6;
+	/* Initialize mutexes, cdev, and reference count */
+
+	mutex_init(&rpu->rpu_lock);
+	mutex_init(&rpu->ack_lock);
+	mutex_init(&rpu->read_lock);
+	mutex_init(&rpu->write_lock);
+	cdev_init(&rpu->cdev, &visp_mbox_rpudev_fops);
+	rpu->cdev.owner = THIS_MODULE;
+
+	/* Allocate a device number */
+	ret = alloc_chrdev_region(&rpu->devno, rpu_id, 1, dev_name);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"Failed to allocate device number (error %d)\n", ret);
+		devm_kfree(&pdev->dev, rpu);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(ret);
+	}
+
+	rpu->visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
+	if (!rpu->visp_mbox_intr_data) {
+		pr_err("Failed to allocate memory\n");
+		devm_kfree(&pdev->dev, rpu);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+	rpu->msg = kzalloc(sizeof(mbox_post_msg), GFP_KERNEL);
+	if (!rpu->msg) {
+		pr_err("Failed to allocate memory\n");
+		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+	rpu->visp_mbox_app_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
+	if (!rpu->visp_mbox_app_data) {
+		pr_err("Failed to allocate memory\n");
+		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		kfree(rpu->msg);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+	rpu->visp_mbox_apu_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
+	if (!rpu->visp_mbox_apu_data) {
+		pr_err("Failed to allocate memory\n");
+		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		kfree(rpu->msg);
+		kfree(rpu->visp_mbox_app_data);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	/* Add the character device */
+	ret = cdev_add(&rpu->cdev, rpu->devno, 1);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to add cdev (error %d)\n", ret);
+		unregister_chrdev_region(rpu->devno, 1);
+		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		kfree(rpu->msg);
+		kfree(rpu->visp_mbox_app_data);
+		kfree(rpu->visp_mbox_apu_data);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(ret);
+	}
+
+	/* Create a device node */
+	if (!device_create(mailbox_class, NULL, rpu->devno, NULL, dev_name)) {
+		dev_err(&pdev->dev, "Failed to create device node\n");
+		cdev_del(&rpu->cdev);
+		unregister_chrdev_region(rpu->devno, 1);
+		devm_kfree(&pdev->dev, rpu);
+		kfree(rpu->visp_mbox_intr_data);
+		kfree(rpu->msg);
+		kfree(rpu->visp_mbox_app_data);
+		kfree(rpu->visp_mbox_apu_data);
+		mutex_unlock(&rpu_list_lock);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	kref_init(&rpu->refcount);
+
+	/* Add the new RPU to the list */
+	list_add_tail(&rpu->node, &rpu_devices);
+
+	/* Setup mailbox if required */
+	if (of_property_read_bool(node, "mboxes")) {
+		dev_dbg(&pdev->dev, "Setting up mailboxes for RPU with id %d\n",
+			rpu_id);
+		ret = visp_mbox_setup(rpu, node);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Failed to set up mailboxes (error %d)\n", ret);
+			device_destroy(mailbox_class, rpu->devno);
+			cdev_del(&rpu->cdev);
+			unregister_chrdev_region(rpu->devno, 1);
+			devm_kfree(&pdev->dev, rpu);
+			kfree(rpu->visp_mbox_intr_data);
+			kfree(rpu->msg);
+			kfree(rpu->visp_mbox_app_data);
+			kfree(rpu->visp_mbox_apu_data);
+			mutex_unlock(&rpu_list_lock);
+			return ERR_PTR(ret);
+		}
+	}
+
+	init_completion(&rpu->mailbox_completion);
+
+	/* Store the RPU pointer in the platform device's driver data */
+	platform_set_drvdata(pdev, rpu);
+
+	/* Initialize the mailbox */
+	ret = visp_mbox_mailbox_initialization(rpu);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to initialize mailbox for RPU id: %d\n",
+			rpu_id);
+		 /* Clear driver data on failure */
+		platform_set_drvdata(pdev, NULL);
+		return ERR_PTR(ret);
+	}
+
+	mutex_unlock(&rpu_list_lock);
+	return rpu;
+}
+
 static int visp_mbox_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -901,21 +916,6 @@ static int visp_mbox_probe(struct platform_device *pdev)
 		dev_err(dev, "Failed to find or create RPU with id: %d\n",
 			rpu_id);
 		return -ENOMEM;
-	}
-
-	init_completion(&rpu->mailbox_completion);
-
-	/* Store the RPU pointer in the platform device's driver data */
-	platform_set_drvdata(pdev, rpu);
-
-	/* Initialize the mailbox */
-	ret = visp_mbox_mailbox_initialization(rpu);
-	if (ret) {
-		dev_err(dev, "Failed to initialize mailbox for RPU id: %d\n",
-			rpu_id);
-		 /* Clear driver data on failure */
-		platform_set_drvdata(pdev, NULL);
-		return ret;
 	}
 
 	dev_info(dev, "Mailbox successfully initialized for RPU id: %d\n",
