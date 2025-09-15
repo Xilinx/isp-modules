@@ -73,8 +73,8 @@ static void visp_mbox_event_notified(unsigned long data)
 	/* Read command from mailbox */
 	ret = visp_mbox_apu_read(rpu);
 	if (ret != 0) {
-		dev_err(rpu->dev, "%s:Failed to read mailbox command:%d\n",
-			__func__, rpu->rpu_id);
+		dev_err(rpu->dev, "Failed to read mailbox command:%d\n",
+			rpu->rpu_id);
 		return;
 	}
 }
@@ -125,7 +125,7 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 	if (IS_ERR(rpu->tx_chan)) {
 		dev_err(rpu->dev, "Failed to request TX mailbox channel.\n");
 		rpu->tx_chan = NULL;
-		return PTR_ERR(rpu->tx_chan);
+		return -ENODEV;
 	}
 
 	/* Request RX channel */
@@ -133,7 +133,7 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 	if (IS_ERR(rpu->rx_chan)) {
 		dev_err(rpu->dev, "Failed to request RX mailbox channel.\n");
 		rpu->rx_chan = NULL;
-		return PTR_ERR(rpu->rx_chan);
+		return -ENODEV;
 	}
 
 	INIT_KFIFO(rpu->ack_fifo);
@@ -552,7 +552,6 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		return result;
 	}
 
-	// result = mbox_send_message(isp_dev->tx_chan, NULL);
 	result = mbox_send_message(rpu->tx_chan, NULL);
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
@@ -733,8 +732,6 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	list_for_each_entry(rpu, &rpu_devices, node) {
 		if (rpu->rpu_id == rpu_id) {
 			kref_get(&rpu->refcount);
-			//      dev_dbg(&pdev->dev, "Found existing RPU with id
-			//      %d\n", rpu_id);
 			mutex_unlock(&rpu_list_lock);
 			return rpu;
 		}
@@ -748,11 +745,6 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	}
 
 	snprintf(dev_name, sizeof(dev_name), "%s_%d", CHAR_DEV_NAME, rpu_id);
-
-	rpu->dev = &pdev->dev;
-	rpu->rpu_id = rpu_id;
-	rpu->core_id = rpu_id - VISP_MBOX_RPU6;
-	/* Initialize mutexes, cdev, and reference count */
 
 	mutex_init(&rpu->rpu_lock);
 	mutex_init(&rpu->ack_lock);
@@ -808,10 +800,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 		goto cleanup;
 	}
 
-	kref_init(&rpu->refcount);
-
-	/* Add the new RPU to the list */
-	list_add_tail(&rpu->node, &rpu_devices);
+	rpu->dev = &pdev->dev;
 
 	/* Setup mailbox if required */
 	if (of_property_read_bool(node, "mboxes")) {
@@ -823,12 +812,15 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 				"Failed to set up mailboxes (error %d)\n", ret);
 			goto cleanup;
 		}
+	} else {
+		goto cleanup;
 	}
-
-	init_completion(&rpu->mailbox_completion);
 
 	/* Store the RPU pointer in the platform device's driver data */
 	platform_set_drvdata(pdev, rpu);
+
+	rpu->rpu_id = rpu_id;
+	rpu->core_id = rpu_id - VISP_MBOX_RPU6;
 
 	/* Initialize the mailbox */
 	ret = visp_mbox_mailbox_initialization(rpu);
@@ -839,6 +831,16 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 		platform_set_drvdata(pdev, NULL);
 		goto cleanup;
 	}
+
+	kref_init(&rpu->refcount);
+
+	/*
+	 * Add the new RPU to the list only after successful setup and
+	 * kref_init
+	 */
+	list_add_tail(&rpu->node, &rpu_devices);
+
+	init_completion(&rpu->mailbox_completion);
 
 	mutex_unlock(&rpu_list_lock);
 	return rpu;
@@ -910,7 +912,7 @@ static int visp_mbox_probe(struct platform_device *pdev)
 	}
 
 	dev_info(dev, "Mailbox successfully initialized for RPU id: %d\n",
-		 rpu_id);
+		 rpu->rpu_id);
 	return 0;
 }
 
