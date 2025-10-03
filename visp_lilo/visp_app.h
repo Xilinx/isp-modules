@@ -89,4 +89,5 @@ int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad);
 int visp_stream_on(struct visp_dev *isp_dev);
 void visp_stream_off(struct visp_dev *isp_dev);
+void set_default_pad_config(struct visp_dev *isp_dev);
 #endif

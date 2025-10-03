@@ -1561,27 +1561,6 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 		for (i = 1; i < VISP_PORT_PAD_NR; i++) {
 			source_pad = &isp_dev->pad_data[sink_pad_index + i];
 			source_pad->sink_detected = 1;
-
-			switch (i) {
-			case VISP_PORT_PAD_SOURCE_MP:
-			case VISP_PORT_PAD_SOURCE_SP1:
-			case VISP_PORT_PAD_SOURCE_SP2:
-			case VISP_PORT_PAD_SOURCE_RAW:
-				source_pad->format = format->format;
-				source_pad->format.code =
-					source_pad->fmts[0].code;
-				memcpy(source_pad->format.reserved,
-					   &source_pad->fmts[0].fourcc,
-					   sizeof(uint32_t));
-				source_pad->format.field = V4L2_FIELD_NONE;
-				source_pad->format.quantization =
-					V4L2_QUANTIZATION_DEFAULT;
-				source_pad->format.colorspace =
-					V4L2_COLORSPACE_DEFAULT;
-				break;
-			default:
-				break;
-			}
 		}
 		return 0;
 	}
@@ -1721,27 +1700,6 @@ int visp_set_fmt_public(struct visp_dev *isp_dev,
 		for (i = 1; i < VISP_PORT_PAD_NR; i++) {
 			source_pad = &isp_dev->pad_data[sink_pad_index + i];
 			source_pad->sink_detected = 1;
-
-			switch (i) {
-			case VISP_PORT_PAD_SOURCE_MP:
-			case VISP_PORT_PAD_SOURCE_SP1:
-			case VISP_PORT_PAD_SOURCE_SP2:
-			case VISP_PORT_PAD_SOURCE_RAW:
-				source_pad->format = format->format;
-				source_pad->format.code =
-					source_pad->fmts[0].code;
-				memcpy(source_pad->format.reserved,
-					   &source_pad->fmts[0].fourcc,
-					   sizeof(uint32_t));
-				source_pad->format.field = V4L2_FIELD_NONE;
-				source_pad->format.quantization =
-					V4L2_QUANTIZATION_DEFAULT;
-				source_pad->format.colorspace =
-					V4L2_COLORSPACE_DEFAULT;
-				break;
-			default:
-				break;
-			}
 		}
 		return 0;
 	}
@@ -2568,6 +2526,7 @@ static int visp_probe(struct platform_device *pdev)
 
 	get_yuv_420_format_index(isp_dev, CAMDEV_BUFCHAIN_MP);
 	get_yuv_420_format_index(isp_dev, CAMDEV_BUFCHAIN_SP1);
+	set_default_pad_config(isp_dev);
 
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
 

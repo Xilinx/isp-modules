@@ -2239,6 +2239,7 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 	}
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
 }
+
 int visp_stream_on(struct visp_dev *isp_dev)
 {
 	int pad = 0;
@@ -2343,4 +2344,48 @@ void visp_stream_off(struct visp_dev *isp_dev)
 		}
 	}
 	fwnode_handle_put(ports);
+}
+
+void set_default_pad_config(struct visp_dev *isp_dev)
+{
+	int i = 0;
+	struct visp_pad_data *source_pad;
+
+	source_pad = &isp_dev->pad_data[0];
+	source_pad->format.field = V4L2_FIELD_NONE;
+	source_pad->format.code = MEDIA_BUS_FMT_SRGGB12_1X12;
+	source_pad->format.quantization = V4L2_QUANTIZATION_DEFAULT;
+	source_pad->format.colorspace = V4L2_COLORSPACE_SRGB;
+	source_pad->format.width = 1920;
+	source_pad->format.height = 1080;
+
+	media_fmt format_media;
+	struct media_pad *mediapad_t;
+
+	for (i = 1; i < VISP_PORT_PAD_NR; i++) {
+		source_pad = &isp_dev->pad_data[i];
+		source_pad->format.field = V4L2_FIELD_NONE;
+		if (ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_MP] == true) {
+			source_pad->format.code =  MEDIA_BUS_FMT_VYYUYY8_1X24;
+			format_media.pixel_format = MEDIA_PIX_FMT_NV12;
+		}
+		else {
+			source_pad->format.code = MEDIA_BUS_FMT_RBG888_1X24;
+			format_media.pixel_format = V4L2_PIX_FMT_RGB24;
+		}
+		source_pad->format.quantization = V4L2_QUANTIZATION_DEFAULT;
+		source_pad->format.width = 1920;
+		source_pad->format.height = 1080;
+
+		/* for ISP path configuration */
+		format_media.width = 1920;
+		format_media.height = 1080;
+		format_media.color_space = V4L2_COLORSPACE_SRGB;
+		format_media.quantization = V4L2_QUANTIZATION_DEFAULT;
+
+		mediapad_t = &isp_dev->pads[i];
+		media_isp_set_format(isp_dev, mediapad_t->index, format_media);
+
+		memset(&format_media, 0, sizeof(media_fmt));
+	}
 }
