@@ -1837,20 +1837,7 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	struct media_pad *mediapad_t;
 	uint32_t fourcc_code = 0;
 
-	/* Try to create ISP device if not already created */
-	{
-		int port = format->pad / VISP_PORT_PAD_NR;
-		int ret_val = 0;
-
-		if (!isp_dev->isp_ports[port].cam_device_handle) {
-			ret_val = isp_device_create(isp_dev, port);
-			if (ret_val) {
-				dev_err(isp_dev->dev,
-					"set_fmt: device creation failed with %d\n",
-					ret_val);
-			}
-		}
-	}
+	visp_setup_isp_pipeline(isp_dev, format->pad);
 
 	sink_pad_index = format->pad - (format->pad % VISP_PORT_PAD_NR);
 	sink_pad = &isp_dev->pad_data[sink_pad_index];
@@ -2033,19 +2020,8 @@ static int visp_enum_mbus_code(struct v4l2_subdev *sd,
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_data *pad_data = &isp_dev->pad_data[code->pad];
-	int port = code->pad / VISP_PORT_PAD_NR;
-	int ret_val = 0;
 
-	/* Try to create ISP device if not already created */
-	if (!isp_dev->isp_ports[port].cam_device_handle) {
-		ret_val = isp_device_create(isp_dev, port);
-		if (ret_val) {
-			/* If device creation fails, continue with basic enumeration */
-			dev_err(isp_dev->dev,
-				"enum_mbus_code: device creation failed with %d\n",
-				ret_val);
-		}
-	}
+	visp_setup_isp_pipeline(isp_dev, code->pad);
 
 	if (code->index >= pad_data->num_formats)
 		return 0;

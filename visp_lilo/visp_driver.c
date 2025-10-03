@@ -1672,6 +1672,8 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 		return 0;
 	}
 
+	visp_setup_isp_pipeline(isp_dev, format->pad);
+
 	w = ALIGN(format->format.width, VISP_WIDTH_ALIGN);
 	h = ALIGN(format->format.height, VISP_HEIGHT_ALIGN);
 	w = clamp_t(uint32_t, w, VISP_WIDTH_MIN, sink_pad->format.width);
@@ -1887,57 +1889,8 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_data *pad_data = &isp_dev->pad_data[format->pad];
-	int index = isp_dev->pads[format->pad].index;
-	int port = index / MEDIA_ISP_PORT_PAD_COUNT;
-	int ret_val;
 
-	port = 0; // for LILO
-	/*Create Instance*/
-	mutex_lock(&isp_dev->rpu->rpu_lock);
-
-	// camdevice_create;
-	if (!isp_dev->isp_ports[port].ref_count) {
-		media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
-
-		if (isp_port->cam_device_handle) {
-			/*Exit port Level Critical Section */
-			mutex_unlock(&isp_dev->rpu->rpu_lock);
-			return VSI_SUCCESS;
-		}
-
-		if (!isp_dev->isp_ports[port].ref_count) {
-			if (isp_dev->num_streams == 1 /*NMCM*/) {
-				ret_val = isp_device_create(isp_dev, port);
-				if (ret_val != VSI_SUCCESS) {
-					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					dev_err(
-						isp_dev->dev,
-						"CamDevice Creat Isp , ret is %d",
-						ret_val);
-					return ret_val;
-				}
-			} else if (isp_dev->num_streams > 1 /*MCM*/) {
-				ret_val = isp_device_create(isp_dev, port);
-				if (ret_val != VSI_SUCCESS) {
-					mutex_unlock(&isp_dev->rpu->rpu_lock);
-					dev_err(
-						isp_dev->dev,
-						"CamDevice Creat Isp , ret is %d",
-						ret_val);
-					return ret_val;
-				}
-			} else {
-				dev_info(
-					isp_dev->dev,
-					"Check the mode %d (1:Non-MCM 2:MCM)\n",
-					isp_dev->num_streams);
-			}
-		}
-	}
-	isp_dev->isp_ports[port].ref_count++;
-
-	/*Exit port Level Critical Section */
-	mutex_unlock(&isp_dev->rpu->rpu_lock);
+	visp_setup_isp_pipeline(isp_dev, format->pad);
 	format->format = pad_data->format;
 	dev_info(isp_dev->dev, "%s %d GET_FMT pad=:%d format->format.code=:%x\n",
 		 __func__, __LINE__, format->pad, format->format.code);

@@ -2216,3 +2216,23 @@ ERR_TO_DESTROY_CAMDEVICE_HANDLE:
 	isp_port->cam_device_handle = VSI_NULL;
 	return ret_val;
 }
+
+void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
+{
+	int ret = 0;
+
+	int port = 0; // for LILO
+	/*Create Instance*/
+	mutex_lock(&isp_dev->rpu->rpu_lock);
+
+	// camdevice_create;
+	if (!isp_dev->isp_ports[port].cam_device_handle) {
+		ret = isp_device_create(isp_dev, port);
+		if (ret != VSI_SUCCESS) {
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			dev_err(isp_dev->dev, "CamDevice Creat Isp , ret is %d", ret);
+			return;
+		}
+	}
+	mutex_unlock(&isp_dev->rpu->rpu_lock);
+}

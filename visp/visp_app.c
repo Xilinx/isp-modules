@@ -2130,3 +2130,20 @@ ERR_TO_DESTROY_CAMDEVICE_HANDLE:
 	isp_port->cam_device_handle = VSI_NULL;
 	return ret_val;
 }
+
+void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
+{
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int ret = 0;
+
+	/* Try to create ISP device if not already created */
+	if (!isp_dev->isp_ports[port].cam_device_handle) {
+		ret = isp_device_create(isp_dev, port);
+		if (ret) {
+			/* If device creation fails, continue with basic enumeration */
+			dev_err(isp_dev->dev,
+				"enum_mbus_code: device creation failed with %d\n",
+				ret);
+		}
+	}
+}
