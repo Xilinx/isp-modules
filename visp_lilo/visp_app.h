@@ -87,4 +87,6 @@ int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 #define LOAD_CALIB_ENABLE 1
 
 void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad);
+int visp_stream_on(struct visp_dev *isp_dev);
+void visp_stream_off(struct visp_dev *isp_dev);
 #endif

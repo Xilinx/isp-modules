@@ -275,8 +275,11 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 {
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 
-	if (isp_port->camera_connect_ref_cnt > 0)
+	if (isp_port->camera_connect_ref_cnt > 0) {
 		isp_port->camera_connect_ref_cnt--;
+	} else {
+		return 0;
+	}
 
 	if (isp_port->camera_connect_ref_cnt == 0) {
 		media_isp_device_un_register3a_lib(isp_dev, port, chn);
@@ -287,7 +290,7 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 		media_isp_device_sensor_close(isp_dev, port);
 	}
 
-	return VSI_SUCCESS;
+	return 0;
 }
 
 static int isp_read_atm_properties(struct visp_dev *isp)
@@ -2235,4 +2238,109 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 		}
 	}
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
+}
+int visp_stream_on(struct visp_dev *isp_dev)
+{
+	int pad = 0;
+	int port = 0;
+	struct device *dev = isp_dev->dev;
+	struct fwnode_handle *ep = NULL;
+	struct fwnode_handle *ports, *port_p,  *remote;
+	int ret;
+
+	/* Get the "ports" block under visp node*/
+	ports = fwnode_get_named_child_node(dev_fwnode(dev), "ports");
+	if (!ports) {
+		dev_err(dev, "no 'ports' node\n");
+		return -ENODEV;
+	}
+
+	fwnode_for_each_available_child_node(ports, port_p) {
+		ret = fwnode_property_read_u32(port_p, "reg", &pad);
+		if (ret || pad == 0) {
+			dev_warn(dev, "port %s has no reg\n", fwnode_get_name(port_p));
+			continue;
+		}
+
+		/* Look at endpoints under this port */
+		fwnode_for_each_available_child_node(port_p, ep) {
+			remote = fwnode_graph_get_remote_endpoint(ep);
+			if (remote) {
+				dev_info(dev,
+					 "pad=%u (%s) has valid remote %s\n",
+					 pad,
+					 fwnode_get_name(port_p),
+					 fwnode_get_name(remote));
+
+				fwnode_handle_put(remote);
+
+				int chn = pad - 1;
+
+				ret = media_isp_device_set_format(isp_dev, port, chn);
+				if (ret != 0) {
+					dev_err(isp_dev->dev,
+						"%s isp_id : %d FAILED SetFormat\n",
+						__func__, isp_dev->id);
+					return -EINVAL;
+				}
+
+				ret = media_isp_device_stream_on(isp_dev, port, chn);
+				if (ret != 0) {
+					dev_err(isp_dev->dev,
+						"%s %d FAILED to stream  on\n",
+						__func__, __LINE__);
+					return -EINVAL;
+				}
+				isp_dev->streamon[pad] = 1;
+			}
+		}
+	}
+
+	fwnode_handle_put(ports);
+	return 0;
+}
+
+void visp_stream_off(struct visp_dev *isp_dev)
+{
+	int pad = 0;
+	int port = 0;
+	struct device *dev = isp_dev->dev;
+	struct fwnode_handle *ep = NULL;
+	struct fwnode_handle *ports, *port_p, *remote;
+	int ret;
+	/* Get the "ports" block under visp device */
+	ports = fwnode_get_named_child_node(dev_fwnode(dev), "ports");
+	if (!ports)
+		dev_err(dev, "no 'ports' node\n");
+
+	fwnode_for_each_available_child_node(ports, port_p) {
+		ret = fwnode_property_read_u32(port_p, "reg", &pad);
+		if (ret || pad == 0) {
+			dev_warn(dev, "port %s has no reg\n", fwnode_get_name(port_p));
+			continue;
+		}
+
+		/* Look at endpoints under this port */
+		fwnode_for_each_available_child_node(port_p, ep) {
+			remote = fwnode_graph_get_remote_endpoint(ep);
+			if (remote) {
+				dev_info(dev,
+					 "pad=%u (%s) has valid remote %s\n",
+					 pad,
+					 fwnode_get_name(port_p),
+					 fwnode_get_name(remote));
+
+				fwnode_handle_put(remote);
+				/* obtain chn by offsetting pad*/
+				int chn = pad - 1;
+
+				if (isp_dev->streamon[pad] == 1) {
+					/*stream off on chn*/
+					media_isp_device_stream_off(isp_dev, port, chn);
+					isp_dev->streamon[pad] = 0;
+				}
+			}
+		}
+	}
+	fwnode_handle_put(ports);
 }
