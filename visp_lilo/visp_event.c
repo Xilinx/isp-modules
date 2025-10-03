@@ -138,6 +138,16 @@ typedef struct test {
 
 int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 {
+	struct v4l2_event event;
+
+	event.type = VISP_DEAMON_EVENT;
+	event.id = VISP_EVENT_LOAD_CALIB;
+
+	if (!visp_event_subscribed(&isp_dev->sd, event.type, event.id)) {
+		dev_err(isp_dev->dev, "post event %d not subscribed\n", event.id);
+		return -EPIPE;
+	}
+
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret = 0;
 	uint8_t *pdata = event_pkg->data;
@@ -188,7 +198,6 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	ret = visp_post_event(&isp_dev->sd, event_pkg);
 	if (ret != 0) {
 		dev_info(isp_dev->dev, "[FAIL] %s %d\n", __func__, __LINE__);
-		return ret;
 	}
 	mutex_unlock(&isp_dev->event_shm.event_lock);
 	return ret;
@@ -196,6 +205,16 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 
 int visp_l_json_event(struct visp_dev *isp_dev, int pad)
 {
+	struct v4l2_event event;
+
+	event.type = VISP_DEAMON_EVENT;
+	event.id = VISP_EVENT_LOAD_JSON;
+
+	if (!visp_event_subscribed(&isp_dev->sd, event.type, event.id)) {
+		dev_err(isp_dev->dev, "post event %d not subscribed\n", event.id);
+		return -EPIPE;
+	}
+
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret = 0;
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
@@ -222,7 +241,6 @@ int visp_l_json_event(struct visp_dev *isp_dev, int pad)
 	if (ret != 0) {
 		dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__,
 			__LINE__);
-		return ret;
 	}
 
 	mutex_unlock(&isp_dev->event_shm.event_lock);

@@ -1179,11 +1179,15 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 #ifdef LOAD_CALIB_ENABLE
 			ret = visp_l_calib_event(isp_dev, pad_stream->pad);
-			if (ret != 0) {
+			if (ret != 0 && ret != -EPIPE) {
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 					__func__, __LINE__, isp_dev->id, port);
 				ret = -ENOMEM;
 				goto ERR_TO_RPU_LOCK;
+			}
+			if (ret == -EPIPE) {
+				dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
+					isp_dev->id, port);
 			}
 #endif
 
@@ -1199,11 +1203,15 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 #ifdef LOAD_CALIB_ENABLE
 			ret = visp_l_json_event(isp_dev, pad_stream->pad);
-			if (ret != 0) {
+			if (ret != 0 && ret != -EPIPE) {
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 					__func__, __LINE__, isp_dev->id, port);
 				ret = -ENOMEM;
 				goto ERR_TO_RPU_LOCK;
+			}
+			if (ret == -EPIPE) {
+				dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
+					isp_dev->id, port);
 			}
 			/* Stream on all pipeline subdevices */
 			ret = visp_stream_pipeline_subdevs(isp_dev, port, 1);
