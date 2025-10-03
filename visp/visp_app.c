@@ -268,9 +268,7 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 {
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 
-	if (isp_port->camera_connect_ref_cnt > 0)
-		isp_port->camera_connect_ref_cnt--;
-
+	isp_port->camera_connect_ref_cnt = 0;
 	if (isp_port->camera_connect_ref_cnt == 0) {
 		media_isp_device_un_register3a_lib(isp_dev, port, chn);
 		vsi_cam_device_disconnect_camera(isp_dev,
@@ -670,13 +668,23 @@ int isp_destroy_pipeline(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 
 int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 {
-	media_isp_device_stream_off(isp_dev, port, chn);
+	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
+	/* if stream on status would be 0, if not streamed on or closed during streamon*/
+	if (isp_dev->streamon[pad_index] != 0) {
+		media_isp_device_stream_off(isp_dev, port, chn);
+		isp_dev->streamon[pad_index] = 0;
+	}
+	/* subdev_streamon_count
+	 * if > 0 implies there are other pipelines still processing streams from this port
+	 * if == 0 implies that the last avaialble pipeline has arrived for stream off and
+	 * proceeds to perform complete cleanup of input pipeline.
+	 */
+	if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
+		media_isp_device_camera_dis_connect(isp_dev, port, chn);
 
-	media_isp_device_camera_dis_connect(isp_dev, port, chn);
-
-	isp_destroy_pipeline(isp_dev, port, chn);
-
-	return VSI_SUCCESS;
+		isp_destroy_pipeline(isp_dev, port, chn);
+	}
+	return 0;
 }
 
 int media_isp_device_qbuf(struct visp_dev *isp_dev, uint8_t port, uint8_t chn,
@@ -2134,8 +2142,10 @@ ERR_TO_DESTROY_CAMDEVICE_HANDLE:
 void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 {
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 	int ret = 0;
 
+	mutex_lock(&isp_dev->rpu->rpu_lock);
 	/* Try to create ISP device if not already created */
 	if (!isp_dev->isp_ports[port].cam_device_handle) {
 		ret = isp_device_create(isp_dev, port);
@@ -2144,6 +2154,52 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev,
 				"enum_mbus_code: device creation failed with %d\n",
 				ret);
+
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			return;
 		}
 	}
+	/*perform camera or filter configuration if not already done*/
+	if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
+#ifdef LOAD_CALIB_ENABLE
+		ret = visp_l_calib_event(isp_dev, pad);
+		if (ret != 0 && ret != -EPIPE) {
+			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+				__func__, __LINE__, isp_dev->id, port);
+			ret = -ENOMEM;
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+		}
+		if (ret == -EPIPE) {
+			dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
+				isp_dev->id, port);
+		}
+#endif
+
+		ret = media_isp_device_camera_connect(isp_dev, pad);
+		if (ret != 0) {
+			dev_err(isp_dev->dev,
+				"%s %d FAiled camera connect\n",
+				__func__, __LINE__);
+			ret = -ENODEV;
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+		}
+		isp_dev->isp_ports[port].camera_connect_ref_cnt++;
+
+#ifdef LOAD_CALIB_ENABLE
+		ret = visp_l_json_event(isp_dev, pad);
+		if (ret != 0 && ret != -EPIPE) {
+			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+				__func__, __LINE__, isp_dev->id, port);
+			ret = -ENOMEM;
+			media_isp_device_camera_dis_connect(isp_dev, port, chn);
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			return;
+		}
+		if (ret == -EPIPE) {
+			dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
+				isp_dev->id, port);
+		}
+#endif
+		}
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
 }

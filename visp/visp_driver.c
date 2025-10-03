@@ -1170,50 +1170,19 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	if (pad_stream->status == 0)
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 
-	if (pad_stream->status == 1) {
+	/* the camera_connect_ref_cnt if >0 implies that submodules/filter configuration
+	 * is done and allows the ISP/ input subdev streamon
+	 */
+	if (pad_stream->status == 1 && isp_dev->isp_ports[port].camera_connect_ref_cnt) {
 		/* ENTER PORT Level CRITICAL SECTION */
 		mutex_lock(&isp_dev->rpu->rpu_lock);
-
-		if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
-			isp_dev->isp_ports[port].camera_connect_ref_cnt++;
-
-#ifdef LOAD_CALIB_ENABLE
-			ret = visp_l_calib_event(isp_dev, pad_stream->pad);
-			if (ret != 0 && ret != -EPIPE) {
-				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
-					__func__, __LINE__, isp_dev->id, port);
-				ret = -ENOMEM;
-				goto ERR_TO_RPU_LOCK;
-			}
-			if (ret == -EPIPE) {
-				dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
-					isp_dev->id, port);
-			}
-#endif
-
-			ret = media_isp_device_camera_connect(isp_dev,
-							      pad_stream->pad);
-			if (ret != 0) {
-				dev_err(isp_dev->dev,
-					"%s %d FAiled camera connect\n",
-					__func__, __LINE__);
-				ret = -ENODEV;
-				goto ERR_TO_RPU_LOCK;
-			}
-
-#ifdef LOAD_CALIB_ENABLE
-			ret = visp_l_json_event(isp_dev, pad_stream->pad);
-			if (ret != 0 && ret != -EPIPE) {
-				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
-					__func__, __LINE__, isp_dev->id, port);
-				ret = -ENOMEM;
-				goto ERR_TO_RPU_LOCK;
-			}
-			if (ret == -EPIPE) {
-				dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
-					isp_dev->id, port);
-			}
-			/* Stream on all pipeline subdevices */
+		/*
+		 * the subdev_streamon_count[port] holds the count of number of
+		 * piplines MP/SP/RAW are up on a port
+		 */
+		if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
+			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
+		/* Stream on all pipeline subdevices */
 			ret = visp_stream_pipeline_subdevs(isp_dev, port, 1);
 			if (ret) {
 				dev_err(isp_dev->dev, "Failed to start pipeline streaming on port %d: %d\n",
@@ -1221,9 +1190,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				goto ERR_TO_RPU_LOCK;
 			}
 
-#endif
 		} else {
-			isp_dev->isp_ports[port].camera_connect_ref_cnt++;
+			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
 		}
 
 		/* EXIT PORT Level CRITICAL SECTION */
@@ -1255,14 +1223,22 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		}
 		mutex_unlock(&isp_dev->rpu->rpu_lock);
 	} else {
-		media_isp_stream_off(isp_dev, port, chn);
-
-		if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
-			/* Stream off all pipeline subdevices */
-			ret = visp_stream_pipeline_subdevs(isp_dev, port, 0);
-			if (ret) {
-				dev_warn(isp_dev->dev, "Failed to stop pipeline streaming on isp: %d port: %d ret: %d\n",
-					 isp_dev->id, port, ret);
+		if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]) {
+			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]--;
+			media_isp_stream_off(isp_dev, port, chn);
+			/* subdev_streamon_count
+			 * if > 0 implies there are other pipelines still processing streams
+			 * from this subdev.
+			 * if == 0 implies that the last avaialble pipeline has arrived for
+			 * stream off and proceeds to perform complete cleanup of input pipeline.
+			 */
+			if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
+				/* Stream off all pipeline subdevices */
+				ret = visp_stream_pipeline_subdevs(isp_dev, port, 0);
+				if (ret) {
+					dev_warn(isp_dev->dev, "Failed to stop pipeline streaming on isp: %d port: %d ret: %d\n",
+						 isp_dev->id, port, ret);
+				}
 			}
 		}
 		isp_dev->streamon[pad_stream->pad] = 0;
@@ -1272,7 +1248,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 ERR_TO_RPU_LOCK:
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
-	media_isp_device_camera_dis_connect(isp_dev, port, chn);
 	isp_dev->streamon[pad_stream->pad] = 0;
 	return ret;
 }
@@ -2625,6 +2600,11 @@ static int visp_probe(struct platform_device *pdev)
 
 	isp_dev = devm_kzalloc(&pdev->dev, sizeof(struct visp_dev), GFP_KERNEL);
 	if (!isp_dev)
+		return -ENOMEM;
+
+	isp_dev->extended_struct =
+		devm_kzalloc(&pdev->dev, sizeof(struct visp_limo_isp_dev_extended), GFP_KERNEL);
+	if (!isp_dev->extended_struct)
 		return -ENOMEM;
 
 	mutex_init(&isp_dev->mlock);

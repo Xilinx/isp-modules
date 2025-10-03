@@ -259,15 +259,16 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
-	if (isp_dev->streamon[pad] == 0) {
-		dev_err(isp_dev->dev,
-			"%s %d Should not use v4l2-ctrl for this node, Device is not streamed on ispid : %d, port %d Chn:%d\n",
-			 __func__, __LINE__, isp_dev->id, port, chn);
-		return -1;
-	}
+	visp_setup_isp_pipeline(isp_dev, pad);
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 
+	if (isp_dev->isp_ports[port].camera_connect_ref_cnt < 1) {
+		dev_err(isp_dev->dev,
+			"%s %d issue communicating with the ispid : %d, port %d Chn:%d\n",
+			 __func__, __LINE__, isp_dev->id, port, chn);
+		return 0;
+	}
 	memcpy(pdata, &port, sizeof(uint32_t));
 	pdata += sizeof(uint32_t);
 	event_pkg->head.data_size += sizeof(uint32_t);
@@ -314,15 +315,20 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
-	if (isp_dev->streamon[pad] == 0) {
-		dev_err(isp_dev->dev,
-			"%s %d Should not use v4l2-ctrl for this node, Device is not streamed on ispid : %d, port %d Chn:%d\n",
-			 __func__, __LINE__, isp_dev->id, port, chn);
-		return -1;
-	}
+	visp_setup_isp_pipeline(isp_dev, pad);
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 
+	if (isp_dev->isp_ports[port].camera_connect_ref_cnt < 1) {
+		dev_err(isp_dev->dev,
+			"%s %d issue communicating with the ispid : %d, port %d Chn:%d\n",
+			 __func__, __LINE__, isp_dev->id, port, chn);
+		/* Return Zero'd control value*/
+		isp_ctrl->cid = ctrl->id;
+		isp_ctrl->size = ctrl->elem_size * ctrl->elems;
+		memset(ctrl->p_new.p_u8, 0, sizeof(isp_ctrl));
+		return 0;
+	}
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
 
@@ -367,6 +373,8 @@ int visp_s_interval_event(struct visp_dev *isp_dev, int pad,
 {
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret;
+
+	visp_setup_isp_pipeline(isp_dev, pad);
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 	event_pkg->head.pad = pad;

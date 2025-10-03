@@ -59,6 +59,8 @@
 #include <linux/module.h>
 #include "visp_event.h"
 
+#define LOAD_CALIB_ENABLE 1
+
 struct Chn_info {
 	uint32_t hw_id;
 	uint32_t mode;
@@ -84,7 +86,6 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 				uint8_t chn);
 
-#define LOAD_CALIB_ENABLE 1
 
 void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad);
 int visp_stream_on(struct visp_dev *isp_dev);

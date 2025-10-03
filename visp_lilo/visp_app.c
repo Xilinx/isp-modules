@@ -670,7 +670,6 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 	}
 
 	pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
-	isp_dev->streamon[pad_index] = 1;
 	return ret_val;
 
 ERR_TO_DESTROY_BUFPOOL:
@@ -2237,6 +2236,50 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			return;
 		}
 	}
+	if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
+		isp_dev->isp_ports[port].camera_connect_ref_cnt++;
+
+#ifdef LOAD_CALIB_ENABLE
+		ret = visp_l_calib_event(isp_dev, pad);
+		if (ret != 0) {
+			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+				__func__, __LINE__, isp_dev->id, port);
+			isp_dev->isp_ports[port].camera_connect_ref_cnt = 0;
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			return;
+		}
+#endif
+
+		ret = media_isp_device_camera_connect(isp_dev, pad);
+		if (ret != 0) {
+			dev_err(isp_dev->dev,
+				"%s %d FAiled camera connect\n",
+				__func__, __LINE__);
+			isp_dev->isp_ports[port].camera_connect_ref_cnt = 0;
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			return;
+		}
+
+#ifdef LOAD_CALIB_ENABLE
+		ret = visp_l_json_event(isp_dev, pad);
+		if (ret != 0) {
+			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+				__func__, __LINE__, isp_dev->id, port);
+
+			/*clean connect camera*/
+			int chn = 0;
+
+			media_isp_device_camera_dis_connect(isp_dev, port, chn);
+			/*cleanup done Release the lock*/
+			isp_dev->isp_ports[port].camera_connect_ref_cnt = 0;
+
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			return;
+		}
+#endif
+		}
+
+	/*Exit port Level Critical Section */
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
 }
 

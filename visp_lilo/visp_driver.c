@@ -930,51 +930,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		/*ENTER PORT Level CRITICAL SECITON*/
 		mutex_lock(&isp_dev->rpu->rpu_lock);
 
-		if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
-			isp_dev->isp_ports[port].camera_connect_ref_cnt++;
-
-#ifdef LOAD_CALIB_ENABLE
-			ret = visp_l_calib_event(isp_dev, pad_stream->pad);
-			if (ret != 0 && ret != -EPIPE) {
-				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
-					__func__, __LINE__, isp_dev->id, port);
-				mutex_unlock(&isp_dev->rpu->rpu_lock);
-				return ret;
-			}
-			if (ret == -EPIPE) {
-				dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
-					isp_dev->id, port);
-			}
-#endif
-
-			ret = media_isp_device_camera_connect(isp_dev,
-								  pad_stream->pad);
-			if (ret != 0) {
-				dev_err(isp_dev->dev,
-					"%s %d FAiled camera connect\n",
-					__func__, __LINE__);
-				mutex_unlock(&isp_dev->rpu->rpu_lock);
-				return ret;
-			}
-
-#ifdef LOAD_CALIB_ENABLE
-			ret = visp_l_json_event(isp_dev, pad_stream->pad);
-			if (ret != 0 && ret != -EPIPE) {
-				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
-					__func__, __LINE__, isp_dev->id, port);
-				goto ERR_TO_CAMERA_DISCONNECT;
-			}
-			if (ret == -EPIPE) {
-				dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
-					isp_dev->id, port);
-			}
-#endif
-		} else {
-			isp_dev->isp_ports[port].camera_connect_ref_cnt++;
-		}
-
-		/*EXIT PORT Level CRITICAL SECITON*/
-
 		ret = media_isp_device_set_frame_rate(
 			isp_dev, port,
 			&isp_dev->isp_ports[port].sensor_info.frame_rate);
@@ -1018,7 +973,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			/* call s_stream */
 			v4l2_subdev_call(subdev, video, s_stream, 0);
 		}
-
 		isp_dev->streamon[pad_stream->pad] = 0;
 	}
 
@@ -1026,7 +980,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 ERR_TO_CAMERA_DISCONNECT:
 	visp_stream_off(isp_dev);
-	media_isp_device_camera_dis_connect(isp_dev, port, chn);
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
 	isp_dev->streamon[pad_stream->pad] = 0;
 	return ret;

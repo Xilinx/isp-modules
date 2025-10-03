@@ -216,6 +216,11 @@ enum isp_mode {
 	ISP_MODE_UNKNOWN,
 };
 
+struct visp_limo_isp_dev_extended {
+	int id;
+	int subdev_streamon_count[VISP_PORT_PAD_NR];
+};
+
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
 {
 	if (!mode_str)
@@ -338,6 +343,9 @@ struct visp_dev {
 /* Pipeline management function declarations */
 int visp_get_pipeline_subdev_count(struct visp_dev *isp_dev, int port);
 struct v4l2_subdev *visp_get_pipeline_subdev(struct visp_dev *isp_dev, int port, int index);
+
+#define ISP_DEV_EXTENDED(isp_dev) \
+((struct visp_limo_isp_dev_extended *)((isp_dev)->extended_struct))
 
 //
 #endif
