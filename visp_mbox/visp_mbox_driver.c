@@ -1089,9 +1089,6 @@ static void __exit visp_mbox_exit_module(void)
 {
 	pr_info("Exiting AMD MBox driver.\n");
 
-	/* Cleanup RPU devices */
-	visp_mbox_rpu_remove();
-
 	/* Clean up reserved memory structure */
 	visp_mbox_reserved_memory_exit();
 	pr_info("Reserved memory cleaned up.\n");
