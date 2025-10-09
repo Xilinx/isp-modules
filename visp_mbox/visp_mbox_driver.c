@@ -907,71 +907,61 @@ static int visp_mbox_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static void visp_mbox_rpu_remove(void)
+static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 {
-	struct rpu_dev *rpu, *tmp;
+	int ref_count = 0;
 
-	/* Lock the RPU list to prevent concurrent access */
-	mutex_lock(&rpu_list_lock);
-
-	/* Iterate through the list of RPU devices */
-	list_for_each_entry_safe(rpu, tmp, &rpu_devices, node) {
-		if (!rpu) {
-			/* Handle NULL RPU device (shouldn't normally happen) */
-			pr_err("Encountered a NULL RPU device in the list, "
-			       "skipping.\n");
-			continue;
-		}
-
-		if (rpu->tasklet_initialized) {
-			tasklet_kill(&rpu->mbox_tasklet);
-			rpu->tasklet_initialized = false;
-		}
-		/* Debug log the current RPU's reference count */
-		dev_dbg(rpu->dev, "RPU id %d - refcount = %d\n", rpu->rpu_id,
-			atomic_read(&rpu->refcount.refcount.refs));
-
-		/* Check if the device is safe to remove */
-		if (atomic_read(&rpu->refcount.refcount.refs) == 1) {
-			/* Perform cleanup and removal */
-			kfree(rpu->visp_mbox_intr_data);
-			kfree(rpu->msg);
-			kfree(rpu->visp_mbox_app_data);
-			kfree(rpu->visp_mbox_apu_data);
-
-			device_destroy(mailbox_class, rpu->devno);
-			cdev_del(&rpu->cdev);
-			unregister_chrdev_region(rpu->devno, 1);
-
-			/* Free resources using the kref_put mechanism */
-			kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
-
-			/* Remove the RPU from the list */
-			list_del(&rpu->node);
-
-			/* Log successful removal */
-			dev_info(rpu->dev,
-				 "RPU with id %d removed successfully.\n",
-				 rpu->rpu_id);
-		} else {
-			/* If still in use, decrement reference and log */
-			kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
-			dev_warn(rpu->dev,
-				 "Cannot remove RPU with id %d - still in use "
-				 "(refcount = "
-				 "%d).\n",
-				 rpu->rpu_id,
-				 atomic_read(&rpu->refcount.refcount.refs));
-		}
+	if (!rpu) {
+		/* Handle NULL RPU device (shouldn't normally happen) */
+		pr_err("Encountered a NULL RPU device in the list skipping.\n");
+		return -ENODEV;
 	}
 
-	/* Unlock the RPU list */
-	mutex_unlock(&rpu_list_lock);
+	if (rpu->tasklet_initialized) {
+		tasklet_kill(&rpu->mbox_tasklet);
+		rpu->tasklet_initialized = false;
+	}
+	/* Debug log the current RPU's reference count */
+	ref_count = atomic_read(&rpu->refcount.refcount.refs);
+
+	dev_dbg(rpu->dev, "RPU id %d - refcount = %d\n", rpu->rpu_id, ref_count);
+
+	/* Check if the device is safe to remove */
+	if (ref_count == 1) {
+		/* Perform cleanup and removal */
+		kfree(rpu->visp_mbox_intr_data);
+		kfree(rpu->msg);
+		kfree(rpu->visp_mbox_app_data);
+		kfree(rpu->visp_mbox_apu_data);
+
+		device_destroy(mailbox_class, rpu->devno);
+		cdev_del(&rpu->cdev);
+		unregister_chrdev_region(rpu->devno, 1);
+
+		/* Free resources using the kref_put mechanism */
+		kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
+
+		/* Remove the RPU from the list */
+		list_del(&rpu->node);
+		/* Log successful removal */
+		dev_info(rpu->dev,
+			 "RPU with id %d removed successfully.\n", rpu->rpu_id);
+	} else {
+		/* If still in use, decrement reference and log */
+		kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
+		dev_warn(rpu->dev,
+			 "Cannot remove RPU%d still in use (refcount=%d)",
+			 rpu->rpu_id, ref_count);
+		return -EBUSY;
+	}
+
+		return SUCCESS;
 }
 
 static void visp_mbox_shutdown(struct platform_device *pdev)
 {
 	struct rpu_dev *rpu;
+	int ret;
 
 	/* Retrieve the RPU device associated with this platform device */
 	rpu = platform_get_drvdata(pdev);
@@ -996,12 +986,15 @@ static void visp_mbox_shutdown(struct platform_device *pdev)
 	dev_dbg(&pdev->dev, "Reserved memory cleaned up.\n");
 
 	/* Call rpu_remove to handle RPU-specific cleanup */
-	visp_mbox_rpu_remove();
+	ret = visp_mbox_rpu_remove(rpu);
+	if (ret != 0)
+		pr_err("Failed to do rpu resource clean up.\n");
 }
 
 static void visp_mbox_remove(struct platform_device *pdev)
 {
 	struct rpu_dev *rpu;
+	int ret;
 
 	/* Retrieve the RPU device associated with this platform device */
 	rpu = platform_get_drvdata(pdev);
@@ -1027,7 +1020,9 @@ static void visp_mbox_remove(struct platform_device *pdev)
 	}
 
 	/* Call rpu_remove to handle RPU-specific cleanup */
-	visp_mbox_rpu_remove();
+	ret = visp_mbox_rpu_remove(rpu);
+	if (ret != 0)
+		pr_err("Failed to do rpu resource clean up.\n");
 
 	return;
 }
