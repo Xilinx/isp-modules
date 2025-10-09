@@ -686,15 +686,6 @@ static int visp_mbox_mailbox_initialization(struct rpu_dev *rpu)
 		return -EINVAL;
 	}
 
-	/* Initialize reserved memory */
-	ret = visp_mbox_reserved_memory_init("isp_mbox_buffer");
-	if (ret) {
-		dev_err(rpu->dev,
-			"Failed to initialize reserved memory. Error: %d\n",
-			ret);
-		return ret;
-	}
-
 	/* Initialize mailbox with reserved memory */
 	visp_mbox_mailbox_init(rpu, MBOX_CORE_APU,
 			       (uintptr_t)reserved_memory.virt_addr,
@@ -1035,10 +1026,6 @@ static void visp_mbox_remove(struct platform_device *pdev)
 		dev_dbg(rpu->dev, "No mailbox channels to free.\n");
 	}
 
-	/* Clean up reserved memory structure */
-	visp_mbox_reserved_memory_exit();
-	dev_dbg(&pdev->dev, "Reserved memory cleaned up.\n");
-
 	/* Call rpu_remove to handle RPU-specific cleanup */
 	visp_mbox_rpu_remove();
 
@@ -1078,6 +1065,14 @@ static int __init visp_mbox_init_module(void)
 		return PTR_ERR(mailbox_class);
 	}
 
+	/* Initialize reserved memory */
+	ret = visp_mbox_reserved_memory_init("isp_mbox_buffer");
+	if (ret) {
+		pr_err("Failed to initialize reserved memory. Error: %d\n",
+		       ret);
+		return ret;
+	}
+
 	/* Register the platform driver */
 	ret = platform_driver_register(&visp_mbox_driver);
 	if (ret) {
@@ -1096,6 +1091,10 @@ static void __exit visp_mbox_exit_module(void)
 
 	/* Cleanup RPU devices */
 	visp_mbox_rpu_remove();
+
+	/* Clean up reserved memory structure */
+	visp_mbox_reserved_memory_exit();
+	pr_info("Reserved memory cleaned up.\n");
 
 	/* Unregister the platform driver */
 	platform_driver_unregister(&visp_mbox_driver);
