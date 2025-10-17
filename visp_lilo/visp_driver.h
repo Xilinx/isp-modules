@@ -344,7 +344,7 @@ struct visp_dev {
 ((struct visp_lilo_isp_dev_extended *)((isp_dev)->extended_struct))
 static inline int visp_get_num_pads(struct visp_dev *isp_dev)
 {
-	return isp_dev->num_streams * VISP_PAD_NR;
+	return isp_dev->num_streams * VISP_PORT_PAD_NR;
 }
 
 
