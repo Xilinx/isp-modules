@@ -99,7 +99,7 @@ static int visp_post_event(struct v4l2_subdev *sd,
 
 	if (!visp_event_subscribed(sd, event.type, event.id)) {
 		dev_err(sd->dev, "post event %d not subscribed\n", event.id);
-		return -EINVAL;
+		return -EPIPE;
 	}
 
 	v4l2_event_queue(sd->devnode, &event);

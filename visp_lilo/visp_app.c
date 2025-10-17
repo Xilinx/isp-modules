@@ -1707,6 +1707,8 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 		goto ERR_TO_TERMINATE_MCM;
 	}
 
+	isp_dev->isp_ports[port].camera_connect_ref_cnt++;
+
 	return ret_val;
 
 ERR_TO_TERMINATE_MCM:
@@ -2226,8 +2228,7 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 	int port = 0; // for LILO
 	/*Create Instance*/
 	mutex_lock(&isp_dev->rpu->rpu_lock);
-
-	// camdevice_create;
+	/* Try to create ISP device if not already created */
 	if (!isp_dev->isp_ports[port].cam_device_handle) {
 		ret = isp_device_create(isp_dev, port);
 		if (ret != VSI_SUCCESS) {
@@ -2236,17 +2237,19 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			return;
 		}
 	}
+	/*perform camera or filter configuration if not already done*/
 	if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
-		isp_dev->isp_ports[port].camera_connect_ref_cnt++;
-
 #ifdef LOAD_CALIB_ENABLE
 		ret = visp_l_calib_event(isp_dev, pad);
-		if (ret != 0) {
+		if (ret != 0 && ret != -EPIPE) {
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 				__func__, __LINE__, isp_dev->id, port);
-			isp_dev->isp_ports[port].camera_connect_ref_cnt = 0;
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
 			return;
+		}
+		if (ret == -EPIPE) {
+			dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
+				isp_dev->id, port);
 		}
 #endif
 
@@ -2255,26 +2258,26 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev,
 				"%s %d FAiled camera connect\n",
 				__func__, __LINE__);
-			isp_dev->isp_ports[port].camera_connect_ref_cnt = 0;
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
 			return;
 		}
 
 #ifdef LOAD_CALIB_ENABLE
 		ret = visp_l_json_event(isp_dev, pad);
-		if (ret != 0) {
+		if (ret != 0 && ret != -EPIPE) {
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 				__func__, __LINE__, isp_dev->id, port);
-
 			/*clean connect camera*/
 			int chn = 0;
 
 			media_isp_device_camera_dis_connect(isp_dev, port, chn);
 			/*cleanup done Release the lock*/
-			isp_dev->isp_ports[port].camera_connect_ref_cnt = 0;
-
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
 			return;
+		}
+		if (ret == -EPIPE) {
+			dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
+				isp_dev->id, port);
 		}
 #endif
 		}
