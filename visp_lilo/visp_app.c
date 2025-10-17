@@ -1910,6 +1910,7 @@ static int media_isp_device_get_port_sink_info(struct visp_dev *isp_dev,
 
 int media_isp_calib_query_sensor(struct visp_dev *isp_dev, uint8_t port)
 {
+	static int fps_init[MAX_NO_ISP]={0};
 	int ret_val = VSI_SUCCESS;
 	uint8_t sensor_mode = 0;
 	cam_device_sensor_query_t QueryInfo_s = {0};
@@ -1952,10 +1953,10 @@ int media_isp_calib_query_sensor(struct visp_dev *isp_dev, uint8_t port)
 	memcpy(&isp_port->sensor_info.mode_info,
 	       &QueryInfo->sensor_mode_info[sensor_mode],
 	       sizeof(QueryInfo->sensor_mode_info[sensor_mode]));
-
-	isp_port->sensor_info.frame_rate =
-	    isp_port->sensor_info.mode_info.max_fps;
-
+	if (fps_init[isp_dev->id]==0) {
+		isp_port->sensor_info.frame_rate = isp_port->sensor_info.mode_info.max_fps;
+		fps_init[isp_dev->id]++;
+	}
 	return ret_val;
 }
 
