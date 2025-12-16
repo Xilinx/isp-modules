@@ -43,7 +43,7 @@ oba_inst_t oba_config_table[XPAR_ISP_INSTANCE][MAX_OBA_PER_ISP] = {
 			.base_address[0] = ISP0_OBA0_BASEADDR,
 	  .device_id = OBA_0_MP,
 	  .path_info = MAIN_PATH,
-	  .pixle_mode = QUAD_PIXEL_MODE,
+	  .pixel_mode = QUAD_PIXEL_MODE,
 	  .data_format = RGB888_FORMAT,
 	  .data_type = YUV_420_8_BIT,
 	  .tile_id = TILE_0,
@@ -53,7 +53,7 @@ oba_inst_t oba_config_table[XPAR_ISP_INSTANCE][MAX_OBA_PER_ISP] = {
 	  .base_address[0] = ISP0_OBA1_BASEADDR,
 	  .device_id = OBA_1_SP,
 	  .path_info = SELF_PATH,
-	  .pixle_mode = QUAD_PIXEL_MODE,
+	  .pixel_mode = QUAD_PIXEL_MODE,
 	  .data_format = RGB888_FORMAT,
 	  .data_type = YUV_420_8_BIT,
 	  .tile_id = TILE_0,
@@ -66,7 +66,7 @@ oba_inst_t oba_config_table[XPAR_ISP_INSTANCE][MAX_OBA_PER_ISP] = {
 	  .base_address[0] = ISP1_OBA0_BASEADDR,
 	  .device_id = OBA_2_MP,
 	  .path_info = MAIN_PATH,
-	  .pixle_mode = QUAD_PIXEL_MODE,
+	  .pixel_mode = QUAD_PIXEL_MODE,
 	  .data_format = RGB888_FORMAT,
 	  .data_type = YUV_420_8_BIT,
 	  .tile_id = TILE_0,
@@ -76,7 +76,7 @@ oba_inst_t oba_config_table[XPAR_ISP_INSTANCE][MAX_OBA_PER_ISP] = {
 	  .base_address[0] = ISP1_OBA0_BASEADDR,
 	  .device_id = OBA_3_SP,
 	  .path_info = SELF_PATH,
-	  .pixle_mode = QUAD_PIXEL_MODE,
+	  .pixel_mode = QUAD_PIXEL_MODE,
 	  .data_format = RGB888_FORMAT,
 	  .data_type = YUV_420_8_BIT,
 	  .tile_id = TILE_0,
@@ -103,11 +103,14 @@ RESULT oba_init_send_command(struct visp_dev *isp_dev,
 				 cam_device_handle_t h_cam_device, u8 path)
 {
 	RESULT result = RET_SUCCESS;
-	oba_map_t oba_map;
 	int oba_no = 0;
 	u8 *p_data; // = packet->payload;
 
-	memset(&oba_map, 0, sizeof(oba_map));
+	if(path >= MAX_OBA_PER_ISP || path < 0 )
+	{
+		dev_info(isp_dev->dev, "Skipping OBA configuration for path>1, path=%d", path);
+		return 0;
+	}
 
 	//OBA initialization needed only for non-MCM streaming cases.
 
@@ -149,21 +152,21 @@ RESULT oba_init_send_command(struct visp_dev *isp_dev,
 	case MEDIA_BUS_FMT_UYVY8_1X16:
 		dev_info(isp_dev->dev,
 			 "Configure OBA for path:%d of ISP :%d format:YUV_422 bits:%d\n",
-			 path, isp_dev->id, isp_dev->oba[pad_no].bpp);
+			 path, isp_dev->id, isp_dev->oba[oba_no].bpp);
 		config_ptr->data_format = YUV422_SP_FORMAT;
-		if (isp_dev->oba[pad_no].bpp == 8)
+		if (isp_dev->oba[oba_no].bpp == 8)
 			config_ptr->data_type = YUV_422_8_BIT;
-		if (isp_dev->oba[pad_no].bpp == 10)
+		if (isp_dev->oba[oba_no].bpp == 10)
 			config_ptr->data_type = YUV_422_10_BIT;
 		break;
 	case MEDIA_BUS_FMT_VYYUYY8_1X24:
 		dev_info(isp_dev->dev,
 			 "Configure OBA for path:%d of ISP :%d format:YUV_420 bits:%d\n",
-			 path, isp_dev->id, isp_dev->oba[pad_no].bpp);
+			 path, isp_dev->id, isp_dev->oba[oba_no].bpp);
 		config_ptr->data_format = YUV420_SP_FORMAT;
-		if (isp_dev->oba[pad_no].bpp == 8)
+		if (isp_dev->oba[oba_no].bpp == 8)
 			config_ptr->data_type = YUV_420_8_BIT;
-		if (isp_dev->oba[pad_no].bpp == 10)
+		if (isp_dev->oba[oba_no].bpp == 10)
 			config_ptr->data_type = YUV_420_10_BIT;
 		break;
 	default:
@@ -172,6 +175,10 @@ RESULT oba_init_send_command(struct visp_dev *isp_dev,
 			path, isp_dev->id);
 		return -1;
 	}
+	config_ptr->pixel_mode = isp_dev->oba[oba_no].ppc/2; // pixel_mode is 0x0 for 1 PPC, 0x1 for 2PPC , 0x2 for 4PPC.
+	dev_info(isp_dev->dev,
+			 "Configure OBA for path:%d of ISP :%d ppc:%d mode:%d\n",
+			 path, isp_dev->id, isp_dev->oba[oba_no].ppc, config_ptr->pixel_mode);
 
 	payload_packet * packet;
 

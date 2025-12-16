@@ -113,7 +113,7 @@ typedef struct oba_instance {
 	u32 hcamdev_instanceid;
 	oba_id_t device_id;
 	oba_path_t path_info;
-	oba_pixel_mode_t pixle_mode;
+	oba_pixel_mode_t pixel_mode;
 	oba_data_mode_t data_format;
 	oba_data_type_t data_type;
 	tile_id_t tile_id;
