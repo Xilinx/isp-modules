@@ -1633,6 +1633,7 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 		ret_val = VSI_ERR_ILLEGAL_PARAM;
 		goto ERR_TO_TERMINATE_MCM;
 	}
+	isp_dev->isp_ports[port].camera_connect_ref_cnt++;
 
 	return ret_val;
 
@@ -2166,8 +2167,8 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 		if (ret != 0 && ret != -EPIPE) {
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 				__func__, __LINE__, isp_dev->id, port);
-			ret = -ENOMEM;
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			return;
 		}
 		if (ret == -EPIPE) {
 			dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
@@ -2180,10 +2181,9 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev,
 				"%s %d FAiled camera connect\n",
 				__func__, __LINE__);
-			ret = -ENODEV;
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			return;
 		}
-		isp_dev->isp_ports[port].camera_connect_ref_cnt++;
 
 #ifdef LOAD_CALIB_ENABLE
 		ret = visp_l_json_event(isp_dev, pad);
@@ -2201,5 +2201,5 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 		}
 #endif
 		}
-			mutex_unlock(&isp_dev->rpu->rpu_lock);
+		mutex_unlock(&isp_dev->rpu->rpu_lock);
 }
