@@ -22,7 +22,7 @@ $(TARGET)-objs += vsi_units/source/cam_device/cam_device_buffer_api.o
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device_ae_api.o
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device_awb_api.o
 
-ccflags-y := -I$(PWD)/visp/
+ccflags-y += -I$(PWD)/visp/
 ccflags-y += -I$(PWD)/common/
 ccflags-y += -I$(PWD)/visp_mbox/mailbox/
 ccflags-y += -I$(PWD)/visp_mbox/
@@ -484,7 +484,7 @@ $(TARGET)-objs += isp_ctrl/sensor/visp_sensor.o
 ccflags-y += -I$(PWD)/visp/isp_ctrl/sensor
 USER_INC += $(PWD)/visp/isp_ctrl/sensor/*.h
 
-EXTRA_CFLAGS += -DDEBUG -O2 
+ccflags-y += -DDEBUG -O2
 
 #EXTRA_CFLAGS += -DDEBUG -O2 -g3 -fno-inline
 

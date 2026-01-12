@@ -2071,7 +2071,7 @@ int visp_mimo_open(struct file *file)
 			goto open_unlock;
 		}
 
-		v4l2_fh_add(&ctx->fh);
+		v4l2_fh_add(&ctx->fh, file);
 
 		/* set default format */
 		ctx->fmt[VISP_MIMO_FMT_TYPE_OUTPUT].type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -2115,7 +2115,7 @@ int visp_mimo_release(struct file *file)
 	if (dev_open == 1)
 		dev_open = 0;
 
-	v4l2_fh_del(&ctx->fh);
+	v4l2_fh_del(&ctx->fh, file);
 	v4l2_fh_exit(&ctx->fh);
 	mutex_lock(&device->lock);
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
