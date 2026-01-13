@@ -1668,10 +1668,8 @@ int media_isp_hal_buf_done(struct v4l2_subdev *sd, int pad,
 	return VSI_SUCCESS;
 }
 
-int read_dq_buf_info(void *data, media_buffer_t *p_media_buffer,
-			struct Chn_info *info);
-int read_dq_buf_info(void *data, media_buffer_t *p_media_buffer,
-			struct Chn_info *info)
+static int read_dq_buf_info(void *data, media_buffer_t *p_media_buffer,
+			struct Chn_info *info, int *instance_id)
 {
 	uint8_t *p_data = NULL;
 	uint32_t hw_id_t = 100;
@@ -1687,6 +1685,7 @@ int read_dq_buf_info(void *data, media_buffer_t *p_media_buffer,
 	memcpy(&(hw_id_t), p_data, sizeof(uint32_t));
 	p_data += sizeof(uint32_t);
 
+	*instance_id = hw_id_t;
 	memcpy(info, p_data, sizeof(struct Chn_info));
 	p_data += sizeof(struct Chn_info);
 	p_media_buffer->p_meta_data =
@@ -1724,29 +1723,33 @@ int read_dq_buf_info(void *data, media_buffer_t *p_media_buffer,
 	memcpy(&(p_media_buffer->p_owner), p_data, sizeof(uint32_t));
 	return 0;
 }
-int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
-				void *packet_from_rpu,
-				media_buffer_t *p_media_buffer);
 
 int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
 				void *packet_from_rpu,
 				media_buffer_t *p_media_buffer)
 {
 	int ret_val = VSI_SUCCESS;
+	int instance_id;
 
 	if (!packet_from_rpu) {
 		dev_err(isp_dev->dev, "Received Null data %s %d\n", __func__,
 			__LINE__);
 		return -ENOMEM;
 	}
-	read_dq_buf_info(packet_from_rpu, p_media_buffer, info);
+
+	ret_val = read_dq_buf_info(packet_from_rpu, p_media_buffer, info, &instance_id);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(isp_dev->dev, "failed to read dq_buf info %d", ret_val);
+		return ret_val;
+	}
+
 	isp_dev->isp_dq_out_index = p_media_buffer->index;
 
 	cam_device_context_t p_cam_dev_ctx;
 
 	p_cam_dev_ctx.isp_hw_id = isp_dev->id;
 	p_cam_dev_ctx.isp_vt_id = 0;
-	p_cam_dev_ctx.instance_id = 0;
+	p_cam_dev_ctx.instance_id = instance_id;
 	p_cam_dev_ctx.cookie = 99;
 
 	ret_val = vsi_cam_device_en_que_buffer(
