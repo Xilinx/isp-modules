@@ -1516,10 +1516,17 @@ static int visp_m2m_cal_imagesize(struct v4l2_format *f)
 
 	return 0;
 }
+
+static struct visp_mimo_ctx *file2ctx(struct file *file)
+{
+	return container_of(file->private_data, struct visp_mimo_ctx, fh);
+}
+
 int visp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
 					struct v4l2_format *f)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+	(void)priv; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 	struct visp_dev *isp_dev = ctx->device->isp_dev;
 	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
 	struct v4l2_format *fmt;
@@ -1567,7 +1574,8 @@ int visp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 					struct v4l2_format *f)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+	(void )priv; //keep -Werror=unused-parameter builds clean;
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 	struct visp_dev *isp_dev = ctx->device->isp_dev;
 	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
 	struct v4l2_format *fmt;
@@ -1636,7 +1644,8 @@ int visp_mimo_v4l2_m2m_ioctl_enum_fmt_out(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
 				  struct v4l2_format *f)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+	(void)priv; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 	struct v4l2_format *fmt;
 
 	fmt = visp_mimo_get_format(ctx, f->type);
@@ -1655,7 +1664,8 @@ int visp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 				      struct v4l2_format *f)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+	(void)priv; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 	struct v4l2_format *fmt;
 
 	visp_mimo_v4l2_m2m_ioctl_try_fmt_out(file, priv, f);
@@ -1676,7 +1686,8 @@ int visp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 				      struct v4l2_format *f)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+	(void)priv; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 	struct v4l2_format *fmt;
 
 	visp_mimo_v4l2_m2m_ioctl_try_fmt_cap(file, priv, f);
@@ -1698,7 +1709,8 @@ int visp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
 				     enum v4l2_buf_type type)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+	(void)fh; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	return v4l2_m2m_streamon(file, ctx->fh.m2m_ctx, type);
 }
@@ -1706,7 +1718,8 @@ int visp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 				      enum v4l2_buf_type type)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+	(void)fh; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	if (on) {
 		media_isp_stream_off(ctx->device->isp_dev, 0, 0);
@@ -1718,7 +1731,8 @@ int visp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
 				    struct v4l2_requestbuffers *rb)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+	(void)fh; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	return v4l2_m2m_ioctl_reqbufs(file, ctx->fh.m2m_ctx, rb);
 }
@@ -1726,7 +1740,8 @@ int visp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
 				     struct v4l2_buffer *buf)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+	(void)fh; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	return v4l2_m2m_ioctl_querybuf(file, ctx->fh.m2m_ctx, buf);
 }
@@ -1734,7 +1749,8 @@ int visp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
 				 struct v4l2_buffer *buf)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+	(void)fh; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	return v4l2_m2m_ioctl_qbuf(file, ctx->fh.m2m_ctx, buf);
 }
@@ -1742,8 +1758,9 @@ int visp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
 				  struct v4l2_buffer *buf)
 {
+	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	int status;
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	status = v4l2_m2m_ioctl_dqbuf(file, ctx->fh.m2m_ctx, buf);
 
@@ -1753,7 +1770,8 @@ int visp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
 					struct v4l2_buffer *buf)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+	(void)fh; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	return v4l2_m2m_ioctl_prepare_buf(file, ctx->fh.m2m_ctx, buf);
 }
@@ -1761,7 +1779,8 @@ int visp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
 					struct v4l2_create_buffers *create)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+	(void)fh; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	return v4l2_m2m_ioctl_create_bufs(file, ctx->fh.m2m_ctx, create);
 }
@@ -1769,7 +1788,8 @@ int visp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_expbuf(struct file *file, void *fh,
 				   struct v4l2_exportbuffer *eb)
 {
-	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+	(void)fh; //To keep -Werror=unused-parameter builds clean.
+	struct visp_mimo_ctx *ctx = file2ctx(file);
 
 	return v4l2_m2m_ioctl_expbuf(file, ctx->fh.m2m_ctx, eb);
 }
@@ -1994,11 +2014,6 @@ static const struct vb2_ops visp_mimo_qops = {
 	.wait_prepare = vb2_ops_wait_prepare,
 	.wait_finish = vb2_ops_wait_finish,
 };
-
-inline struct visp_mimo_ctx *file2ctx(struct file *file)
-{
-	return container_of(file->private_data, struct visp_mimo_ctx, fh);
-}
 
 int visp_mimo_queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 {
