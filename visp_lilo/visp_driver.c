@@ -1045,6 +1045,19 @@ int visp_buf_done(struct v4l2_subdev *sd, void *arg)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+static int visp_queryctrl(struct v4l2_subdev *sd, void *arg)
+{
+	int ret;
+	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+	struct visp_pad_queryctrl *pad_querctrl =
+		(struct visp_pad_queryctrl *)arg;
+	ret = v4l2_queryctrl(&isp_dev->ctrl_handler, pad_querctrl->query_ctrl);
+
+	return ret;
+}
+#endif
+
 static int visp_query_ext_ctrl(struct v4l2_subdev *sd, void *arg)
 {
 	int ret;
@@ -1067,6 +1080,36 @@ static int visp_querymenu(struct v4l2_subdev *sd, void *arg)
 
 	return ret;
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+static int visp_g_ctrl(struct v4l2_subdev *sd, void *arg)
+{
+	int ret;
+	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+	struct visp_pad_control *pad_ctrl = (struct visp_pad_control *)arg;
+
+	mutex_lock(&isp_dev->ctrl_lock);
+	isp_dev->ctrl_pad = pad_ctrl->pad;
+	ret = v4l2_g_ctrl(&isp_dev->ctrl_handler, pad_ctrl->control);
+	mutex_unlock(&isp_dev->ctrl_lock);
+
+	return ret;
+}
+
+static int visp_s_ctrl(struct v4l2_subdev *sd, void *arg)
+{
+	int ret;
+	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+	struct visp_pad_control *pad_ctrl = (struct visp_pad_control *)arg;
+
+	mutex_lock(&isp_dev->ctrl_lock);
+	isp_dev->ctrl_pad = pad_ctrl->pad;
+	ret = v4l2_s_ctrl(NULL, &isp_dev->ctrl_handler, pad_ctrl->control);
+	mutex_unlock(&isp_dev->ctrl_lock);
+
+	return ret;
+}
+#endif
 
 static int visp_g_ext_ctrls(struct v4l2_subdev *sd, void *arg)
 {
@@ -1311,9 +1354,22 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 	case VISP_IOC_BUFDONE:
 		ret = visp_buf_done(sd, arg);
 		break;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+	case VISP_PAD_QUERYCTRL:
+		ret = visp_queryctrl(sd, arg);
+		break;
+#endif
 	case VISP_PAD_QUERY_EXT_CTRL:
 		ret = visp_query_ext_ctrl(sd, arg);
 		break;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+	case VISP_PAD_G_CTRL:
+		ret = visp_g_ctrl(sd, arg);
+		break;
+	case VISP_PAD_S_CTRL:
+		ret = visp_s_ctrl(sd, arg);
+		break;
+#endif
 	case VISP_PAD_G_EXT_CTRLS:
 		ret = visp_g_ext_ctrls(sd, arg);
 		break;

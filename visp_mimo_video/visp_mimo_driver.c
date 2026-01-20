@@ -1525,8 +1525,12 @@ static struct visp_mimo_ctx *file2ctx(struct file *file)
 int visp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
 					struct v4l2_format *f)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)priv; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+#endif
 	struct visp_dev *isp_dev = ctx->device->isp_dev;
 	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
 	struct v4l2_format *fmt;
@@ -1574,8 +1578,12 @@ int visp_mimo_v4l2_m2m_ioctl_try_fmt_out(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_try_fmt_cap(struct file *file, void *priv,
 					struct v4l2_format *f)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void )priv; //keep -Werror=unused-parameter builds clean;
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+#endif
 	struct visp_dev *isp_dev = ctx->device->isp_dev;
 	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
 	struct v4l2_format *fmt;
@@ -1644,8 +1652,12 @@ int visp_mimo_v4l2_m2m_ioctl_enum_fmt_out(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
 				  struct v4l2_format *f)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)priv; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+#endif
 	struct v4l2_format *fmt;
 
 	fmt = visp_mimo_get_format(ctx, f->type);
@@ -1664,8 +1676,12 @@ int visp_mimo_v4l2_m2m_ioctl_g_fmt(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 				      struct v4l2_format *f)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)priv; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+#endif
 	struct v4l2_format *fmt;
 
 	visp_mimo_v4l2_m2m_ioctl_try_fmt_out(file, priv, f);
@@ -1686,8 +1702,12 @@ int visp_mimo_v4l2_m2m_ioctl_s_fmt_out(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 				      struct v4l2_format *f)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)priv; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)priv;
+#endif
 	struct v4l2_format *fmt;
 
 	visp_mimo_v4l2_m2m_ioctl_try_fmt_cap(file, priv, f);
@@ -1709,8 +1729,12 @@ int visp_mimo_v4l2_m2m_ioctl_s_fmt_cap(struct file *file, void *priv,
 int visp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
 				     enum v4l2_buf_type type)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+#endif
 
 	return v4l2_m2m_streamon(file, ctx->fh.m2m_ctx, type);
 }
@@ -1718,8 +1742,12 @@ int visp_mimo_v4l2_m2m_ioctl_streamon(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 				      enum v4l2_buf_type type)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+#endif
 
 	if (on) {
 		media_isp_stream_off(ctx->device->isp_dev, 0, 0);
@@ -1731,8 +1759,12 @@ int visp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
 				    struct v4l2_requestbuffers *rb)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+#endif
 
 	return v4l2_m2m_ioctl_reqbufs(file, ctx->fh.m2m_ctx, rb);
 }
@@ -1740,8 +1772,12 @@ int visp_mimo_v4l2_m2m_ioctl_reqbufs(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
 				     struct v4l2_buffer *buf)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+#endif
 
 	return v4l2_m2m_ioctl_querybuf(file, ctx->fh.m2m_ctx, buf);
 }
@@ -1749,8 +1785,12 @@ int visp_mimo_v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
 				 struct v4l2_buffer *buf)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+#endif
 
 	return v4l2_m2m_ioctl_qbuf(file, ctx->fh.m2m_ctx, buf);
 }
@@ -1758,9 +1798,14 @@ int visp_mimo_v4l2_m2m_ioctl_qbuf(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
 				  struct v4l2_buffer *buf)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	int status;
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	int status;
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+#endif
 
 	status = v4l2_m2m_ioctl_dqbuf(file, ctx->fh.m2m_ctx, buf);
 
@@ -1770,8 +1815,12 @@ int visp_mimo_v4l2_m2m_ioctl_dqbuf(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
 					struct v4l2_buffer *buf)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+#endif
 
 	return v4l2_m2m_ioctl_prepare_buf(file, ctx->fh.m2m_ctx, buf);
 }
@@ -1779,8 +1828,12 @@ int visp_mimo_v4l2_m2m_ioctl_prepare_buf(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
 					struct v4l2_create_buffers *create)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+#endif
 
 	return v4l2_m2m_ioctl_create_bufs(file, ctx->fh.m2m_ctx, create);
 }
@@ -1788,8 +1841,12 @@ int visp_mimo_v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
 int visp_mimo_v4l2_m2m_ioctl_expbuf(struct file *file, void *fh,
 				   struct v4l2_exportbuffer *eb)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	(void)fh; //To keep -Werror=unused-parameter builds clean.
 	struct visp_mimo_ctx *ctx = file2ctx(file);
+#else
+	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
+#endif
 
 	return v4l2_m2m_ioctl_expbuf(file, ctx->fh.m2m_ctx, eb);
 }
@@ -2086,7 +2143,11 @@ int visp_mimo_open(struct file *file)
 			goto open_unlock;
 		}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 		v4l2_fh_add(&ctx->fh, file);
+#else
+		v4l2_fh_add(&ctx->fh);
+#endif
 
 		/* set default format */
 		ctx->fmt[VISP_MIMO_FMT_TYPE_OUTPUT].type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
@@ -2130,7 +2191,11 @@ int visp_mimo_release(struct file *file)
 	if (dev_open == 1)
 		dev_open = 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	v4l2_fh_del(&ctx->fh, file);
+#else
+	v4l2_fh_del(&ctx->fh);
+#endif
 	v4l2_fh_exit(&ctx->fh);
 	mutex_lock(&device->lock);
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);

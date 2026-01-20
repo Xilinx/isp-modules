@@ -1824,6 +1824,35 @@ static int visp_videoc_g_parm(struct file *file, void *fh,
 	return ret;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+static int visp_videoc_queryctrl(struct file *file, void *fh,
+				 struct v4l2_queryctrl *a)
+{
+	struct visp_video_dev *visp_vdev = video_drvdata(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *subdev;
+	struct visp_pad_queryctrl pad_query_ctrl;
+	int ret;
+
+	subdev = visp_video_remote_subdev(visp_vdev);
+	if (subdev) {
+#if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
+		pad = media_pad_remote_pad_first(&visp_vdev->pad);
+#else
+		pad = media_entity_remote_pad(&visp_vdev->pad);
+#endif
+		pad_query_ctrl.pad = pad->index;
+		pad_query_ctrl.query_ctrl = a;
+		ret = v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_QUERYCTRL,
+				       &pad_query_ctrl);
+	} else {
+		return -ENOTTY;
+	}
+
+	return ret;
+}
+#endif
+
 static int visp_videoc_query_ext_ctrl(struct file *file, void *fh,
 				      struct v4l2_query_ext_ctrl *a)
 {
@@ -1852,6 +1881,61 @@ static int visp_videoc_query_ext_ctrl(struct file *file, void *fh,
 	return ret;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+static int visp_vidioc_g_ctrl(struct file *file, void *fh,
+			      struct v4l2_control *a)
+{
+	struct visp_video_dev *visp_vdev = video_drvdata(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *subdev;
+	struct visp_pad_control pad_control;
+	int ret;
+
+	subdev = visp_video_remote_subdev(visp_vdev);
+	if (subdev) {
+#if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
+		pad = media_pad_remote_pad_first(&visp_vdev->pad);
+#else
+		pad = media_entity_remote_pad(&visp_vdev->pad);
+#endif
+		pad_control.pad = pad->index;
+		pad_control.control = a;
+		ret = v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_G_CTRL,
+				       &pad_control);
+	} else {
+		return -ENOTTY;
+	}
+
+	return ret;
+}
+
+static int visp_vidioc_s_ctrl(struct file *file, void *fh,
+			      struct v4l2_control *a)
+{
+	struct visp_video_dev *visp_vdev = video_drvdata(file);
+	struct media_pad *pad;
+	struct v4l2_subdev *subdev;
+	struct visp_pad_control pad_control;
+	int ret;
+
+	subdev = visp_video_remote_subdev(visp_vdev);
+	if (subdev) {
+#if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
+		pad = media_pad_remote_pad_first(&visp_vdev->pad);
+#else
+		pad = media_entity_remote_pad(&visp_vdev->pad);
+#endif
+		pad_control.pad = pad->index;
+		pad_control.control = a;
+		ret = v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_S_CTRL,
+				       &pad_control);
+	} else {
+		return -ENOTTY;
+	}
+
+	return ret;
+}
+#endif
 
 static int visp_vidioc_g_ext_ctrls(struct file *file, void *fh,
 				   struct v4l2_ext_controls *a)
@@ -2006,10 +2090,14 @@ static const struct v4l2_ioctl_ops visp_video_ioctl_ops = {
 	.vidioc_s_parm = visp_videoc_s_parm,
 	//.vidioc_enum_framesizes     = visp_videoc_enum_framesizes,
 	// .vidioc_enum_frameintervals = visp_videoc_enum_frmaeintervals,
-	//.vidioc_queryctrl = visp_videoc_queryctrl,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+	.vidioc_queryctrl = visp_videoc_queryctrl,
+#endif
 	.vidioc_query_ext_ctrl = visp_videoc_query_ext_ctrl,
-	//.vidioc_g_ctrl = visp_vidioc_g_ctrl,
-	//.vidioc_s_ctrl = visp_vidioc_s_ctrl,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+	.vidioc_g_ctrl = visp_vidioc_g_ctrl,
+	.vidioc_s_ctrl = visp_vidioc_s_ctrl,
+#endif
 	.vidioc_g_ext_ctrls = visp_vidioc_g_ext_ctrls,
 	.vidioc_s_ext_ctrls = visp_vidioc_s_ext_ctrls,
 	.vidioc_try_ext_ctrls = visp_vidioc_try_ext_ctrls,
