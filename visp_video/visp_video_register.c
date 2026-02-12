@@ -2368,6 +2368,9 @@ static int visp_video_queue_init(struct visp_video_dev *visp_vdev)
 	queue->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	queue->lock = &visp_vdev->video_lock;
 	queue->dev = visp_vdev->visp_mdev->dev;
+
+	queue->min_queued_buffers = 3;
+
 	ret = vb2_queue_init(queue);
 	if (ret) {
 		dev_err(visp_vdev->visp_mdev->dev, "vb2 queue init failed\n");
