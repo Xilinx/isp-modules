@@ -1030,6 +1030,7 @@ static void visp_mbox_remove(struct platform_device *pdev)
 static const struct of_device_id visp_mbox_of_match[] = {
 	{.compatible = "xlnx,mimo-mbox"},
 	{.compatible = "xlnx,mbox"},
+	{.compatible = "xlnx,isp-mbox"},
 	{/* sentinel */},
 };
 
