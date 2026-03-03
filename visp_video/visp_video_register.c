@@ -1674,7 +1674,7 @@ static int visp_videoc_g_fmt_vid_cap(struct file *file, void *fh,
 	if (ret)
 		return ret;
 
-	*f = visp_vdev->format;
+	f->fmt.pix = visp_vdev->format.fmt.pix;
 	return 0;
 }
 
