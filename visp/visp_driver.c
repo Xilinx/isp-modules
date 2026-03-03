@@ -1167,13 +1167,14 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 	isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 
+
 	if (pad_stream->status == 0)
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 
-	/* the camera_connect_ref_cnt if >0 implies that submodules/filter configuration
-	 * is done and allows the ISP/ input subdev streamon
-	 */
-	if (pad_stream->status == 1 && isp_dev->isp_ports[port].camera_connect_ref_cnt) {
+	if (pad_stream->status == 1) {
+
+		visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
+
 		/* ENTER PORT Level CRITICAL SECTION */
 		mutex_lock(&isp_dev->rpu->rpu_lock);
 		/*

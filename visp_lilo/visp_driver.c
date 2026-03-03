@@ -924,9 +924,13 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	//chn=%d\n",__func__,__LINE__,pad_stream->pad,pad_stream->status,port,chn);
 	isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 
+
 	if (pad_stream->status == 0)
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 	if (pad_stream->status == 1) {// streamon
+
+		visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
+
 		/*ENTER PORT Level CRITICAL SECITON*/
 		mutex_lock(&isp_dev->rpu->rpu_lock);
 
