@@ -98,7 +98,7 @@ struct visp_event_pkg_head {
 	uint32_t pad;
 	uint8_t dev;
 	uint32_t eid;
-	uint64_t shm_addr;
+	int32_t shm_fd;
 	uint32_t shm_size;
 	uint32_t data_size;
 };

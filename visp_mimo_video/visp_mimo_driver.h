@@ -50,7 +50,7 @@
 #include <media/v4l2-subdev.h>
 #include <linux/miscdevice.h>
 
-#define MAX_SUPPORTED_DEVICE_COUNT 1
+#define MAX_SUPPORTED_DEVICE_COUNT 6
 #define MEM2MEM_NAME "isp_m2m"
 
 #define FORMAT_OUT_BAYER8 V4L2_PIX_FMT_SRGGB8
@@ -81,9 +81,12 @@
 
 struct visp_video_event_shm {
 	struct mutex event_lock;
-	uint64_t phy_addr;
 	void *virt_addr;
 	uint32_t size;
+	dma_addr_t dma_handle;
+	struct dma_buf *dmabuf;
+	int dmabuf_fd;
+	struct device *dev;
 };
 
 struct visp_video_reserve_mem {
@@ -103,7 +106,6 @@ struct visp_mimo_device {
 	struct visp_video_reserve_mem reserve_mem;
 	struct visp_video_event_shm event_shm;
 	struct work_struct event_work;
-	struct miscdevice event_misc;
 };
 
 struct visp_mimo_ctx {

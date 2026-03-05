@@ -58,6 +58,7 @@
 #define VISP_VIDEO_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 1000)
 
 #define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
+#define VISP_GET_EVENT_SHM_FD _IOR('V', BASE_VIDIOC_PRIVATE + 150, int32_t)
 
 struct isp_rpu {
 	uint32_t rpu;
@@ -74,7 +75,7 @@ enum visp_video_event_id {
 
 struct visp_video_event_pkg_head {
 	uint32_t eid;
-	uint64_t shm_addr;
+	int32_t shm_fd;
 	uint32_t shm_size;
 	uint32_t data_size;
 };

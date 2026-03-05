@@ -31,6 +31,8 @@
 #include <linux/spinlock.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
+#include <linux/dma-buf.h>
+#include <linux/dma-mapping.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
@@ -72,6 +74,7 @@ MODULE_PARM_DESC(debug, "debug level (0-3)");
 struct visp_mimo_ctx;
 
 int xlnx_link_mbox(struct visp_dev *isp_dev);
+static int visp_export_dmabuf(struct device *dev, struct visp_video_event_shm *event_shm);
 
 struct visp_format visp_mp_fmts[] = {
 	{
@@ -1957,10 +1960,56 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 			    void *arg)
 {
 	int ret = -EINVAL;
+	struct visp_mimo_device *device;
 
 	switch (cmd) {
 	case VISP_GET_RPU_ID:
 		ret = visp_return_rpu_id(sd, arg);
+		break;
+	case VISP_GET_EVENT_SHM_FD:
+		device = v4l2_get_subdevdata(sd);
+		if (!device) {
+			dev_err(device->event_shm.dev, "VISP_GET_EVENT_SHM_FD: device is NULL\n");
+			ret = -EINVAL;
+			break;
+		}
+		/* Check if memory is allocated */
+		if (!device->event_shm.virt_addr) {
+			dev_err(device->event_shm.dev,
+				"VISP_GET_EVENT_SHM_FD: event_shm memory not allocated\n");
+			ret = -EINVAL;
+			break;
+		}
+		/* Lazy creation: export DMA-BUF on first FD request */
+		if (!device->event_shm.dmabuf) {
+			if (!device->event_shm.virt_addr) {
+				dev_err(device->event_shm.dev,
+					"VISP_GET_EVENT_SHM_FD: event_shm not allocated\n");
+				ret = -EINVAL;
+				break;
+			}
+			ret = visp_export_dmabuf(device->event_shm.dev, &device->event_shm);
+			if (ret) {
+				dev_err(device->event_shm.dev,
+					"VISP_GET_EVENT_SHM_FD: dmabuf export failed: %d\n",
+					ret);
+				break;
+			}
+			dev_info(device->event_shm.dev, "DMA-BUF exported on first use\n");
+		}
+		/* Create per-process fd - dma_buf_fd() takes the reference from export */
+		*(int *)arg = dma_buf_fd(device->event_shm.dmabuf, O_RDWR | O_CLOEXEC);
+		if (*(int *)arg < 0) {
+			dev_err(device->event_shm.dev,
+				"VISP_GET_EVENT_SHM_FD: dma_buf_fd failed: %d\n",
+				*(int *)arg);
+			ret = *(int *)arg;
+		} else {
+			dev_info(device->event_shm.dev,
+				 "VISP_GET_EVENT_SHM_FD: created fd=%d\n",
+				 *(int *)arg);
+			ret = 0;
+		}
 		break;
 	default:
 		break;
@@ -1978,39 +2027,63 @@ static const struct v4l2_subdev_ops subdev_ops = {
 	.core = &subdev_core_ops,
 };
 
-static int event_mmap(struct file *filp, struct vm_area_struct *vma)
+/* DMA-BUF attachment structure to track per-attachment state */
+struct visp_dmabuf_attachment {
+	struct sg_table *sgt;
+	enum dma_data_direction dir;
+};
+
+static void visp_dmabuf_release(struct dma_buf *dmabuf)
 {
-	// struct isp_mimo *device = video_drvdata(filp);
-	struct visp_mimo_device *device = filp->private_data;
+	struct visp_video_event_shm *event_shm = dmabuf->priv;
 
-	unsigned long pfn = device->event_shm.phy_addr >> PAGE_SHIFT;
-	size_t size = vma->vm_end - vma->vm_start;
+	/* Clear dmabuf pointer so it can be re-created on next use */
+	if (event_shm) {
+		event_shm->dmabuf = NULL;
+		dev_info(event_shm->dev, "DMA-BUF released, will re-export on next use\n");
+	}
 
-	if (size > device->event_shm.size)
-		return -EINVAL;
-
-	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
-
-	return remap_pfn_range(vma, vma->vm_start, pfn, size,
-			       vma->vm_page_prot);
+	/* Note: DMA memory is NOT freed here - it persists for re-use */
+	/* DMA memory will be freed in visp_mimo_remove() when module unloads */
 }
 
-static int event_open(struct inode *inode, struct file *file)
+static int visp_dmabuf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 {
-	//   struct miscdevice *misc = container_of(file->f_inode->i_cdev,
-	//   struct miscdevice, this_device->dev);
-	struct miscdevice *misc = file->private_data;
-	struct visp_mimo_device *device =
-	    container_of(misc, struct visp_mimo_device, event_misc);
-	file->private_data = device;
+	struct visp_video_event_shm *event_shm = dmabuf->priv;
+
+	return dma_mmap_coherent(event_shm->dev, vma, event_shm->virt_addr,
+				  event_shm->dma_handle, event_shm->size);
+}
+
+static const struct dma_buf_ops visp_dmabuf_ops = {
+	.release = visp_dmabuf_release,
+	.mmap = visp_dmabuf_mmap,
+};
+
+static int visp_export_dmabuf(struct device *dev, struct visp_video_event_shm *event_shm)
+{
+	DEFINE_DMA_BUF_EXPORT_INFO(exp_info);
+	struct dma_buf *dmabuf;
+
+	exp_info.ops = &visp_dmabuf_ops;
+	exp_info.size = event_shm->size;
+	exp_info.flags = O_RDWR | O_CLOEXEC;
+	exp_info.priv = event_shm;
+
+	dmabuf = dma_buf_export(&exp_info);
+	if (IS_ERR(dmabuf)) {
+		dev_err(dev, "Failed to export DMA-BUF: %ld\n", PTR_ERR(dmabuf));
+		return PTR_ERR(dmabuf);
+	}
+
+	event_shm->dmabuf = dmabuf;
+	event_shm->dmabuf_fd = -1; /* fd created per-process via ioctl */
+
+	dev_info(dev, "DMA-BUF exported successfully: virt=%p dma=%pad size=%d\n",
+		 event_shm->virt_addr, &event_shm->dma_handle, event_shm->size);
+
 	return 0;
 }
-
-static const struct file_operations event_fops = {
-	.owner = THIS_MODULE,
-	.open = event_open,
-	.mmap = event_mmap,
-};
 
 static const struct v4l2_file_operations visp_mimo_fops = {
 	.owner = THIS_MODULE,
@@ -2285,11 +2358,12 @@ int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
 	return 0;
 }
 
+/* Module-level probe counter */
+static int probe_cnt;
+
 //
 int visp_mimo_probe(struct platform_device *pdev)
 {
-	static int probe_cnt;
-
 	struct visp_mimo_device *device;
 	struct device *dev = &pdev->dev;
 	struct resource *res;
@@ -2407,34 +2481,42 @@ int visp_mimo_probe(struct platform_device *pdev)
 		goto err_m2m;
 	}
 
-	device->event_shm.virt_addr = (void *)__get_free_pages(GFP_KERNEL, 0);
-	device->event_shm.size = PAGE_SIZE;
-	memset(device->event_shm.virt_addr, 9, device->event_shm.size);
-	device->event_shm.phy_addr = virt_to_phys(device->event_shm.virt_addr);
-	mutex_init(&device->event_shm.event_lock);
-	device->reserve_mem.va =
-	    ioremap_wc(device->reserve_mem.pa, device->reserve_mem.size);
-
-	device->event_misc.minor = MISC_DYNAMIC_MINOR;
-	device->event_misc.name = "event_shm";
-	device->event_misc.fops = &event_fops;
-	device->event_misc.mode = 0666;
-	device->event_misc.parent = &pdev->dev;
-
+	/* Set DMA mask BEFORE any DMA allocations */
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
 	if (ret) {
 		dev_err(&pdev->dev, "dma_set_mask_and_coherent: %d\n", ret);
-		return -ENOMEM;
-		//goto error;
+		goto err_alloc_event_shm;
 	}
 
-	ret = misc_register(&device->event_misc);
-	if (ret)
-		return ret;
+	/* Allocate DMA coherent memory for event shared memory */
+	device->event_shm.size = PAGE_SIZE;  /* 4KB (one page) */
+	device->event_shm.dev = dev;
+	device->event_shm.virt_addr = dma_alloc_coherent(dev,
+							 device->event_shm.size,
+							 &device->event_shm.dma_handle,
+							 GFP_KERNEL);
+	if (!device->event_shm.virt_addr) {
+		dev_err(dev, "Failed to allocate DMA coherent memory for event_shm\n");
+		ret = -ENOMEM;
+		goto err_alloc_event_shm;
+	}
+
+	memset(device->event_shm.virt_addr, 0, device->event_shm.size);
+	mutex_init(&device->event_shm.event_lock);
+
+	/* DMA-BUF will be exported lazily on first VISP_GET_EVENT_SHM_FD ioctl */
+	device->event_shm.dmabuf = NULL;
+	device->event_shm.dmabuf_fd = -1;
+
+	device->reserve_mem.va =
+	    ioremap_wc(device->reserve_mem.pa, device->reserve_mem.size);
 
 	probe_cnt += 1;
 
 	return 0;
+
+err_alloc_event_shm:
+	video_unregister_device(&device->video_dev);
 
 err_m2m:
 	v4l2_m2m_release(device->m2m_dev);
@@ -2448,9 +2530,41 @@ void visp_mimo_remove(struct platform_device *pdev)
 {
 	struct visp_mimo_device *device = platform_get_drvdata(pdev);
 
-	// Only deregister if it was registered
-	if (device && device->event_misc.this_device) {
-		misc_deregister(&device->event_misc);
+	if (!device)
+		return;
+
+	/* Unregister subdev */
+	if (pdev->id >= 0) {
+		v4l2_async_unregister_subdev(&device->subdev);
+		media_entity_cleanup(&device->subdev.entity);
+	}
+
+	/* Cleanup mutexes */
+	mutex_destroy(&device->lock);
+	mutex_destroy(&device->event_shm.event_lock);
+
+	/* Unmap reserved memory */
+	if (device->reserve_mem.va) {
+		iounmap(device->reserve_mem.va);
+		device->reserve_mem.va = NULL;
+	}
+
+	/* Free DMA coherent memory for event_shm */
+	if (device->event_shm.virt_addr) {
+		/* If dmabuf still exists (fds still open), release it first */
+		if (device->event_shm.dmabuf) {
+			pr_warn("### Dmabuf still active during remove - this shouldn't happen!\\n");
+			dma_buf_put(device->event_shm.dmabuf);
+			device->event_shm.dmabuf = NULL;
+			/* visp_dmabuf_release() will be called, but it won't free memory anymore */
+		}
+		/* Free the underlying DMA memory */
+		dma_free_coherent(device->event_shm.dev, device->event_shm.size,
+				  device->event_shm.virt_addr,
+				  device->event_shm.dma_handle);
+		dev_info(device->event_shm.dev, "Freed DMA coherent memory: %u bytes\\n",
+			 device->event_shm.size);
+		device->event_shm.virt_addr = NULL;
 	}
 
 	if (pdev->id >= 0) {
@@ -2458,6 +2572,8 @@ void visp_mimo_remove(struct platform_device *pdev)
 		v4l2_m2m_release(device->m2m_dev);
 		v4l2_device_unregister(&device->v4l2_dev);
 	}
+
+	probe_cnt--;
 }
 
 static const struct of_device_id visp_mimo_dt_ids[] = {
@@ -2482,3 +2598,4 @@ module_platform_driver(visp_mimo_driver);
 MODULE_DESCRIPTION("AMD ISP MIMO driver");
 MODULE_AUTHOR("AMD ISP SW Team");
 MODULE_LICENSE("GPL");
+MODULE_INFO(import_ns, "DMA_BUF");

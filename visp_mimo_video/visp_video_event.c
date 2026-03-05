@@ -98,7 +98,7 @@ int visp_video_post_event(struct visp_mimo_device *visp_vdev,
 			  struct visp_event_pkg *event_pkg)
 {
 	struct v4l2_event event;
-	int timeout_ms = 4000000;
+	int timeout_ms = 400000;
 	unsigned int i = 0;
 
 	memset(&event, 0, sizeof(event));
@@ -145,7 +145,7 @@ int visp_video_create_pipeline_event(struct visp_mimo_device *visp_vdev)
 	mutex_lock(&visp_vdev->event_shm.event_lock);
 
 	event_pkg->head.eid = VISP_VEVENT_CREATE_PIPELINE;
-	event_pkg->head.shm_addr = visp_vdev->event_shm.phy_addr;
+	event_pkg->head.shm_fd = -1;
 	event_pkg->head.shm_size = visp_vdev->event_shm.size;
 	event_pkg->head.data_size = 0;
 	event_pkg->ack = 0;
@@ -167,7 +167,7 @@ int visp_video_destroy_pipeline_event(struct visp_mimo_device *visp_vdev)
 	mutex_lock(&visp_vdev->event_shm.event_lock);
 
 	event_pkg->head.eid = VISP_VEVENT_DESTROY_PIPELINE;
-	event_pkg->head.shm_addr = visp_vdev->event_shm.phy_addr;
+	event_pkg->head.shm_fd = -1;
 	event_pkg->head.shm_size = visp_vdev->event_shm.size;
 	event_pkg->head.data_size = 0;
 	event_pkg->ack = 0;
@@ -191,7 +191,7 @@ int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event)
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 	event_pkg->head.eid = event;
-	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
+	event_pkg->head.shm_fd = -1;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
 	event_pkg->head.data_size = 0;
 	event_pkg->ack = 0;
