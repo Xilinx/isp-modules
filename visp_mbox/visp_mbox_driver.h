@@ -142,6 +142,9 @@ struct rpu_dev {
 	DECLARE_KFIFO(app_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
 	DECLARE_KFIFO(ack_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
 	DECLARE_KFIFO(data_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
+	/* Remoteproc for automatic firmware loading */
+	struct rproc *rproc;
+	struct platform_device *rproc_pdev;
 };
 
 #endif

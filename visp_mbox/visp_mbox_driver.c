@@ -54,10 +54,13 @@
 
 #include <linux/module.h>
 #include <linux/of_address.h>
+#include <linux/of_platform.h>
 #include <linux/kernel.h>
+#include <linux/remoteproc.h>
 #include "visp_mbox_driver.h"
 #include "mbox_cmd.h"
 #include "mbox_api.h"
+#include <linux/delay.h>
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
@@ -677,6 +680,133 @@ ERROR:
 }
 EXPORT_SYMBOL(xlnx_mbox_apu_wait_for_ack);
 
+/* Helper function to find rproc device among children */
+static int find_rproc_child(struct device *dev, void *data)
+{
+	struct rproc **rp = (struct rproc **)data;
+
+	/* Try to get rproc from this device's driver data */
+	*rp = dev_get_drvdata(dev);
+	if (*rp)
+		return 1; /* Found it, stop iteration */
+	return 0; /* Continue searching */
+}
+
+/**
+ * visp_mbox_firmware_load - Load and boot firmware via remoteproc
+ * @rpu: pointer to the RPU device structure
+ *
+ * Discovers the remoteproc instance via device tree phandle, sets the
+ * firmware name (isp-r52-<rpu_id>-firmware.elf), boots the remote
+ * processor, and triggers an IPI sync after a settling delay.
+ *
+ * Return: 0 on success or if remoteproc is unavailable/already running,
+ *         negative errno on IPI failure.
+ */
+static int visp_mbox_firmware_load(struct rpu_dev *rpu)
+{
+	struct device_node *node, *rproc_node;
+	struct device *dev;
+	int rpu_id;
+	int ret;
+	char fw_name[64];
+
+	node = rpu->dev->of_node;
+	dev = rpu->dev;
+	rpu_id = rpu->rpu_id;
+
+	/* Get remoteproc node using phandle */
+	rproc_node = of_parse_phandle(node, "rproc", 0);
+	if (!rproc_node) {
+		dev_warn(dev,
+			 "No rproc phandle for RPU %d, skipping remoteproc\n",
+			 rpu_id);
+		return 0;
+	}
+
+	dev_info(dev, "Found remoteproc node: %s\n", rproc_node->full_name);
+
+	/* Find the remoteproc platform device */
+	rpu->rproc_pdev = of_find_device_by_node(rproc_node);
+	of_node_put(rproc_node);
+
+	if (!rpu->rproc_pdev) {
+		dev_err(dev,
+			"Remoteproc platform device not found for RPU %d\n",
+			rpu_id);
+		return 0;
+	}
+
+	/* Search for the remoteproc device by looking
+	 * at the platform device's children
+	 */
+	device_for_each_child(&rpu->rproc_pdev->dev, &rpu->rproc,
+			      find_rproc_child);
+
+	if (!rpu->rproc) {
+		dev_err(dev, "Remoteproc not initialized yet for RPU %d\n",
+			rpu_id);
+		put_device(&rpu->rproc_pdev->dev);
+		return 0;
+	}
+
+	dev_info(dev, "Found remoteproc instance for RPU %d\n", rpu_id);
+
+	/* Check if remoteproc is already running */
+	if (rpu->rproc->state == RPROC_RUNNING) {
+		dev_info(dev,
+			 "Remoteproc already running for RPU %d, skipping boot\n",
+			rpu_id);
+		return 0;
+	}
+
+	/* Generate and set firmware name */
+	snprintf(fw_name, sizeof(fw_name), "isp-r52-%d-firmware.elf",
+		 rpu_id);
+	dev_info(dev, "Using firmware: %s for RPU %d\n", fw_name, rpu_id);
+
+	ret = rproc_set_firmware(rpu->rproc, fw_name);
+	if (ret) {
+		dev_err(dev, "Failed to set firmware name: %d\n", ret);
+		rpu->rproc = NULL;
+		put_device(&rpu->rproc_pdev->dev);
+		return 0;
+	}
+
+	/* Automatically boot the remoteproc (firmware loading) */
+	dev_info(dev, "Booting remoteproc for RPU %d\n", rpu_id);
+	ret = rproc_boot(rpu->rproc);
+	if (ret) {
+		dev_err(dev, "Failed to boot remoteproc for RPU %d: %d\n",
+			rpu_id, ret);
+		dev_err(dev, "Ensure firmware exists in /lib/firmware/\n");
+		rpu->rproc = NULL;
+		put_device(&rpu->rproc_pdev->dev);
+		return 0;
+	}
+
+	dev_info(dev, "Successfully booted remoteproc for RPU %d\n", rpu_id);
+
+	/* TODO: Add a dummy command to receive ack from the RPU for removing
+	 * 250ms delay. Currenlty we are adding 5x delay required for isp
+	 * firmware loading.
+	 */
+	msleep(250);
+
+	/* Trigger an inter-processor interrupt (IPI) after firmware boot */
+	if (rpu->rproc->state == RPROC_RUNNING) {
+		ret = mbox_send_message(rpu->tx_chan, NULL);
+		if (ret < 0) {
+			dev_err(rpu->dev,
+				"Failed to trigger IPI. Error: %d\n", ret);
+			return ret;
+		}
+		dev_info(dev, "Sent IPI triggered for RPU_id %d\n", rpu_id);
+	}
+
+	return 0;
+}
+
 static int visp_mbox_mailbox_initialization(struct rpu_dev *rpu)
 {
 	int ret;
@@ -691,12 +821,10 @@ static int visp_mbox_mailbox_initialization(struct rpu_dev *rpu)
 			       (uintptr_t)reserved_memory.virt_addr,
 			       (uintptr_t)reserved_memory.phys_addr);
 
-	/* Trigger an inter-processor interrupt (IPI) */
-	ret = mbox_send_message(rpu->tx_chan, NULL);
-	if (ret < 0) {
-		dev_err(rpu->dev, "Failed to trigger IPI. Error: %d\n", ret);
+	/* Load firmware via remoteproc and trigger IPI */
+	ret = visp_mbox_firmware_load(rpu);
+	if (ret < 0)
 		return ret;
-	}
 
 	return 0;
 }
@@ -921,6 +1049,24 @@ static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 		tasklet_kill(&rpu->mbox_tasklet);
 		rpu->tasklet_initialized = false;
 	}
+
+	/* Shutdown and release remoteproc if it was booted and running */
+	if (rpu->rproc) {
+		if (rpu->rproc->state == RPROC_RUNNING) {
+			dev_info(rpu->dev,
+				 "Shutting down remoteproc for RPU %d\n",
+				 rpu->rpu_id);
+			rproc_shutdown(rpu->rproc);
+		}
+		rpu->rproc = NULL;
+	}
+
+	/* Release platform device reference */
+	if (rpu->rproc_pdev) {
+		put_device(&rpu->rproc_pdev->dev);
+		rpu->rproc_pdev = NULL;
+	}
+
 	/* Debug log the current RPU's reference count */
 	ref_count = atomic_read(&rpu->refcount.refcount.refs);
 
