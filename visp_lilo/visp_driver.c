@@ -832,15 +832,12 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev)
 				     .isp_chns[info.path]
 				     .bufs[output_buffer->index]));
 	if (ret != 0) {
-		dev_dbg(isp_dev->dev,
-			"handle_frameout_buffer: MediaIspHalBufDone failed "
-			"with error %d\n",
-			ret);
 		dev_dbg(
-			isp_dev->dev,
-			"Skip buf: ret=%d, ISP=%d, port=%d, chn=%d, BUF=0x%x\n",
-			ret, isp_dev->id, info.vt_id, info.path,
-			output_buffer ? output_buffer->base_address : 0);
+		    isp_dev->dev,
+		    "Skip buf: ISP=%d, port=%d, chn=%d, BUF index=%d\n",
+		    isp_dev->id, info.vt_id, info.path,
+		    output_buffer ? output_buffer->index : 0);
+
 		goto error_free_buf;
 	}
 
@@ -920,15 +917,11 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 	struct v4l2_subdev *subdev;
-	//	dev_info(isp_dev->dev ,"ISPDRV %s %d pad=%d Status=%d port  =%d
-	//chn=%d\n",__func__,__LINE__,pad_stream->pad,pad_stream->status,port,chn);
-	isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 
 
-	if (pad_stream->status == 0)
-		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 	if (pad_stream->status == 1) {// streamon
 
+		isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 		ret = visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
 		if (ret)
 			return ret;
@@ -980,6 +973,11 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			v4l2_subdev_call(subdev, video, s_stream, 0);
 		}
 		isp_dev->streamon[pad_stream->pad] = 0;
+		isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
+
+		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
+		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 	}
 
 	return ret;
@@ -988,6 +986,7 @@ ERR_TO_CAMERA_DISCONNECT:
 	visp_stream_off(isp_dev);
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
 	isp_dev->streamon[pad_stream->pad] = 0;
+	isp_dev->pad_data[pad_stream->pad].stream = 0;
 	return ret;
 }
 static int visp_s_stream(struct v4l2_subdev *sd, int enable)
@@ -1012,16 +1011,29 @@ int visp_buf_done(struct v4l2_subdev *sd, void *arg)
 	memcpy(&ubuf, arg, sizeof(struct visp_buf));
 	cur_pad = &isp_dev->pad_data[ubuf.pad];
 
-	if (list_empty(&cur_pad->queue)) {
-		dev_dbg(isp_dev->dev, "Empty list\n");
-		return -EINVAL;
-	}
-	if ((cur_pad->stream == 0)) {
-		dev_dbg(isp_dev->dev, "Streamoff\n");
+	spin_lock_irqsave(&cur_pad->qlock, flags);
+
+	if (cur_pad->stream == 0) {
+		int chn = (ubuf.pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+		dev_dbg(isp_dev->dev,
+			"ISP : %d Chn : %d Pipeline in Streamoff state, buffer will be dropped\n",
+			isp_dev->id, chn);
+		spin_unlock_irqrestore(&cur_pad->qlock, flags);
 		return -EINVAL;
 	}
 
-	spin_lock_irqsave(&cur_pad->qlock, flags);
+	if (list_empty(&cur_pad->queue)) {
+		int chn = (ubuf.pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+		dev_dbg(isp_dev->dev,
+			"ISP : %d Chn : %d buffer queue is empty, buffer will be dropped\n",
+			isp_dev->id, chn);
+		spin_unlock_irqrestore(&cur_pad->qlock, flags);
+		return -EINVAL;
+	}
+
+
 	list_for_each_entry_safe(pos, next, &cur_pad->queue, list) {
 		if (pos && (pos->sequence == ubuf.index)) {
 			buf = pos;

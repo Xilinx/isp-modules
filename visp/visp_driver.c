@@ -860,20 +860,13 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev)
 					 .isp_chns[info.path]
 					 .bufs[output_buffer->index]));
 	if (ret_val != 0) {
-		dev_dbg(isp_dev->dev,
-			"handle_frameout_buffer: MediaIspHalBufDone failed "
-			"with error %d\n",
-			ret_val);
 		dev_dbg(
 		    isp_dev->dev,
-		    "Skip buf: ret_val=%d, ISP=%d, port=%d, chn=%d, BUF=0x%x\n",
-		    ret_val, isp_dev->id, info.vt_id, info.path,
-		    output_buffer ? output_buffer->base_address : 0);
+		    "Skip buf: ISP=%d, port=%d, chn=%d, BUF index=%d\n",
+		    isp_dev->id, info.vt_id, info.path,
+		    output_buffer ? output_buffer->index : 0);
 		goto error_free_buf;
 	}
-	// dev_err(isp_dev->dev,"[ISPDRV] Received DQ BUFF : Isp : %d port : %d
-	// Path : %d BufAddr : 0x%x\n",info.hw_id,info.vt_id, info.path,
-	// output_buffer->base_address);
 
 	/* Free allocated buffer after successful processing*/
 	kfree(packet_from_rpu);
@@ -1165,13 +1158,9 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
-	isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
-
-	if (pad_stream->status == 0)
-		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
-
 	if (pad_stream->status == 1) {
 
+		isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 		ret = visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
 		if (ret)
 			return ret;
@@ -1243,6 +1232,11 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			}
 		}
 		isp_dev->streamon[pad_stream->pad] = 0;
+		isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
+
+		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
+		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 	}
 
 	return ret;
@@ -1250,6 +1244,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 ERR_TO_RPU_LOCK:
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
 	isp_dev->streamon[pad_stream->pad] = 0;
+	isp_dev->pad_data[pad_stream->pad].stream = 0;
 	return ret;
 }
 
@@ -1267,16 +1262,31 @@ int visp_buf_done(struct v4l2_subdev *sd, void *arg)
 	memcpy(&ubuf, arg, sizeof(struct visp_buf));
 	cur_pad = &isp_dev->pad_data[ubuf.pad];
 
-	if (list_empty(&cur_pad->queue)) {
-		dev_dbg(isp_dev->dev, "Empty list\n");
-		return -EINVAL;
-	}
-	if ((cur_pad->stream == 0)) {
-		dev_dbg(isp_dev->dev, "Streamoff\n");
+	spin_lock_irqsave(&cur_pad->qlock, flags);
+
+	if (cur_pad->stream == 0) {
+		int port = ubuf.pad / MEDIA_ISP_PORT_PAD_COUNT;
+		int chn = (ubuf.pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+		dev_dbg(isp_dev->dev,
+			"ISP : %d Port : %d Chn : %d Pipeline in Streamoff state, buffer will be dropped\n",
+			isp_dev->id, port, chn);
+		spin_unlock_irqrestore(&cur_pad->qlock, flags);
 		return -EINVAL;
 	}
 
-	spin_lock_irqsave(&cur_pad->qlock, flags);
+	if (list_empty(&cur_pad->queue)) {
+		int port = ubuf.pad / MEDIA_ISP_PORT_PAD_COUNT;
+		int chn = (ubuf.pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+		dev_dbg(isp_dev->dev,
+			"ISP : %d Port : %d Chn : %d buffer queue is empty, buffer will be dropped\n",
+			isp_dev->id, port, chn);
+		spin_unlock_irqrestore(&cur_pad->qlock, flags);
+		return -EINVAL;
+	}
+
+
 	list_for_each_entry_safe(pos, next, &cur_pad->queue, list) {
 		if (pos && (pos->sequence == ubuf.index)) {
 			buf = pos;
