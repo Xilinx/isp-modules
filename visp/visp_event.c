@@ -257,7 +257,9 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
-	visp_setup_isp_pipeline(isp_dev, pad);
+	ret = visp_setup_isp_pipeline(isp_dev, pad);
+	if (ret)
+		return ret;
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 
@@ -311,7 +313,9 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
-	visp_setup_isp_pipeline(isp_dev, pad);
+	ret = visp_setup_isp_pipeline(isp_dev, pad);
+	if (ret)
+		return ret;
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 
@@ -370,7 +374,9 @@ int visp_s_interval_event(struct visp_dev *isp_dev, int pad,
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
 	int ret;
 
-	visp_setup_isp_pipeline(isp_dev, pad);
+	ret = visp_setup_isp_pipeline(isp_dev, pad);
+	if (ret)
+		return ret;
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 	event_pkg->head.pad = pad;

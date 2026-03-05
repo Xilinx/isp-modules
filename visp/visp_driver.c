@@ -1167,14 +1167,14 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 	isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 
-
 	if (pad_stream->status == 0)
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 
 	if (pad_stream->status == 1) {
 
-		visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
-
+		ret = visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
+		if (ret)
+			return ret;
 		/* ENTER PORT Level CRITICAL SECTION */
 		mutex_lock(&isp_dev->rpu->rpu_lock);
 		/*
@@ -1821,7 +1821,9 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	struct media_pad *mediapad_t;
 	uint32_t fourcc_code = 0;
 
-	visp_setup_isp_pipeline(isp_dev, format->pad);
+	ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+	if (ret)
+		return ret;
 
 	sink_pad_index = format->pad - (format->pad % VISP_PORT_PAD_NR);
 	sink_pad = &isp_dev->pad_data[sink_pad_index];

@@ -929,7 +929,9 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 	if (pad_stream->status == 1) {// streamon
 
-		visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
+		ret = visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
+		if (ret)
+			return ret;
 
 		/*ENTER PORT Level CRITICAL SECITON*/
 		mutex_lock(&isp_dev->rpu->rpu_lock);
@@ -1530,7 +1532,9 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 		return 0;
 	}
 
-	visp_setup_isp_pipeline(isp_dev, format->pad);
+	ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+	if (ret)
+		return ret;
 
 	w = ALIGN(format->format.width, VISP_WIDTH_ALIGN);
 	h = ALIGN(format->format.height, VISP_HEIGHT_ALIGN);
@@ -1726,8 +1730,11 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_data *pad_data = &isp_dev->pad_data[format->pad];
+	int ret;
 
-	visp_setup_isp_pipeline(isp_dev, format->pad);
+	ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+	if (ret)
+		return ret;
 	format->format = pad_data->format;
 	dev_info(isp_dev->dev, "%s %d GET_FMT pad=:%d format->format.code=:%x\n",
 		 __func__, __LINE__, format->pad, format->format.code);

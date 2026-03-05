@@ -1630,7 +1630,6 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev,
 			"CamDevice camera connect failed, ret is %d", ret_val);
-		ret_val = VSI_ERR_ILLEGAL_PARAM;
 		goto ERR_TO_TERMINATE_MCM;
 	}
 	isp_dev->isp_ports[port].camera_connect_ref_cnt++;
@@ -1641,17 +1640,15 @@ ERR_TO_TERMINATE_MCM:
 	if (isp_dev->ports_mask != 0x01)
 		media_isp_device_mcm_terminate(isp_dev, port);
 ERR_TO_CLOSE_SENSOR:
-	ret_val =
-	    vsi_cam_device_sensor_close(isp_dev, isp_port->cam_device_handle);
+	vsi_cam_device_sensor_close(isp_dev, isp_port->cam_device_handle);
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev,
 			"CamDevice close sensor failed, ret is %d", ret_val);
-		ret_val = VSI_ERR_TIMEOUT;
 	}
 
 ERR_TO_RELEASE_CAMCOMMON:
 	//    vsi_cam_common_destroy(&CamCommon);
-	return ret_val;
+	return  -EINVAL;
 }
 
 int visp_buf_done(struct v4l2_subdev *sd, void *arg);
@@ -2017,7 +2014,6 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 			"CamDevice Creat Isp Device Handle Failed, ret is %d",
 			ret_val);
 		isp_port->cam_device_handle = VSI_NULL;
-		ret_val = VSI_ERR_TIMEOUT;
 		return ret_val;
 	}
 
@@ -2028,7 +2024,6 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	ret_val = hal_i2c_init(isp_dev, isp_port->cam_device_handle, &hal_i2c_config);
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev, "I2C init Failed, ret is %d", ret_val);
-		ret_val = VSI_ERR_TIMEOUT;
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
 
@@ -2050,7 +2045,6 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 		dev_err(isp_dev->dev,
 			"CamDevice sensor mapping %s Failed ret is %d",
 			sensor_name, ret_val);
-		ret_val = VSI_ERR_TIMEOUT;
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
 
@@ -2067,7 +2061,6 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 		dev_err(isp_dev->dev,
 			"CamDevice register sensor %s driver Failed, ret is %d",
 			sensor_name, ret_val);
-		ret_val = VSI_ERR_TIMEOUT;
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
 
@@ -2137,10 +2130,10 @@ ERR_TO_DESTROY_CAMDEVICE_HANDLE:
 	dev_err(isp_dev->dev, "Error %s %d\n ", __func__, __LINE__);
 	vsi_cam_device_destroy(isp_dev, isp_port->cam_device_handle);
 	isp_port->cam_device_handle = VSI_NULL;
-	return ret_val;
+	return -EINVAL;
 }
 
-void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
+int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 {
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
@@ -2153,11 +2146,10 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 		if (ret) {
 			/* If device creation fails, continue with basic enumeration */
 			dev_err(isp_dev->dev,
-				"enum_mbus_code: device creation failed with %d\n",
+				"isp device creation failed : %d\n",
 				ret);
-
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
-			return;
+			return ret;
 		}
 	}
 	/*perform camera or filter configuration if not already done*/
@@ -2168,11 +2160,12 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 				__func__, __LINE__, isp_dev->id, port);
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
-			return;
+			return ret;
 		}
 		if (ret == -EPIPE) {
 			dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
 				isp_dev->id, port);
+			ret = 0;
 		}
 #endif
 
@@ -2182,7 +2175,7 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 				"%s %d FAiled camera connect\n",
 				__func__, __LINE__);
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
-			return;
+			return ret;
 		}
 
 #ifdef LOAD_CALIB_ENABLE
@@ -2193,13 +2186,16 @@ void visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			ret = -ENOMEM;
 			media_isp_device_camera_dis_connect(isp_dev, port, chn);
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
-			return;
+			return ret;
 		}
 		if (ret == -EPIPE) {
 			dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
 				isp_dev->id, port);
+			ret = 0;
 		}
 #endif
 		}
 		mutex_unlock(&isp_dev->rpu->rpu_lock);
+
+		return ret;
 }
