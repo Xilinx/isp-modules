@@ -141,6 +141,7 @@ struct visp_pad_data {
 	spinlock_t qlock;
 	uint32_t stream;
 	struct v4l2_fract timeperframe;
+	uint32_t sequence; /* Frame sequence counter for this pad */
 };
 
 struct visp_event_shm {

@@ -1154,6 +1154,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	struct visp_pad_stream_status *pad_stream =
 	    (struct visp_pad_stream_status *)arg;
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+	unsigned long flags;
 	int ret = 0;
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
@@ -1164,6 +1165,12 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		ret = visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
 		if (ret)
 			return ret;
+
+		/* Reset sequence counter on streamon */
+		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+		isp_dev->pad_data[pad_stream->pad].sequence = 0;
+		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+
 		/* ENTER PORT Level CRITICAL SECTION */
 		mutex_lock(&isp_dev->rpu->rpu_lock);
 		/*
@@ -1183,8 +1190,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		} else {
 			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
 		}
-
-		/* EXIT PORT Level CRITICAL SECTION */
 
 		ret = media_isp_device_set_frame_rate(isp_dev, port,
 				&isp_dev->isp_ports[port].sensor_info.frame_rate);
@@ -1212,6 +1217,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			goto ERR_TO_RPU_LOCK;
 		}
 		mutex_unlock(&isp_dev->rpu->rpu_lock);
+		/* EXIT PORT Level CRITICAL SECTION */
 	} else {
 		if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]) {
 			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]--;
@@ -1236,6 +1242,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
+		/* Reset sequence counter on streamoff */
+		isp_dev->pad_data[pad_stream->pad].sequence = 0;
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 	}
 
@@ -1307,6 +1315,13 @@ int visp_buf_done(struct v4l2_subdev *sd, void *arg)
 		video = media_entity_to_video_device(pad->entity);
 		if (buf->sequence < video->queue->max_num_buffers) {
 			if (buf->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE) {
+				/* Set timestamp and sequence before marking done */
+				buf->vb.vb2_buf.timestamp = ktime_get_ns();
+
+				spin_lock_irqsave(&cur_pad->qlock, flags);
+				buf->vb.sequence = cur_pad->sequence++;
+				spin_unlock_irqrestore(&cur_pad->qlock, flags);
+
 				vb2_buffer_done(&buf->vb.vb2_buf,
 						VB2_BUF_STATE_DONE);
 			}
