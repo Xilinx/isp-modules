@@ -2384,6 +2384,8 @@ int visp_mimo_probe(struct platform_device *pdev)
 	strscpy(device->subdev.name, "visp-mimo-video-subdev",
 		sizeof(device->subdev.name));
 
+	mutex_init(&device->lock);
+
 	device->subdev.owner = THIS_MODULE;
 	device->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	device->subdev.flags |= V4L2_SUBDEV_FL_HAS_EVENTS;
