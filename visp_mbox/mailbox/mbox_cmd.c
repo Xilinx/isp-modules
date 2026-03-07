@@ -88,20 +88,6 @@ struct response_packet {
 	u32 error_subcode;
 };
 
-void apu_postmsg(mbox_core_id receiver_id)
-{
-/*
- * if (MBOX_CORE_RPU0 == receiver_id) {
- *		// Status = trigger_ipi(&IpiInst_apu_rpu,MBOX_CORE_RPU0);
- *	}
- *
- *	if (MBOX_CORE_RPU1 == receiver_id) {
- *		//		Status =
- *		// trigger_ipi(&IpiInst_apu_rpu,MBOX_CORE_RPU1);
- *	}
- */
-}
-
 uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 		       mbox_core_id receiver_id, mbox_core_id core_id)
 {
@@ -131,7 +117,7 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 	if (core_id != MBOX_CORE_APU)
 		core_id = MBOX_CORE_APU;
 
-	ret = vpi_mbox_post(rpu->apu_tx_ctrl, msg, receiver_id, apu_postmsg);
+	ret = vpi_mbox_post(rpu->apu_tx_ctrl, msg, receiver_id, NULL);
 
 	kfree(msg);
 
@@ -272,81 +258,6 @@ int visp_mbox_send_command(mb_cmd_id_e cmd, void *data, uint32_t size,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(visp_mbox_send_command);
-
-volatile void *enque_buff_g;
-volatile int dq_buf_available;
-
-EXPORT_SYMBOL_GPL(enque_buff_g);
-EXPORT_SYMBOL_GPL(dq_buf_available);
-
-struct Chn_info_l {
-	int hw_id;
-	int mode;
-	int vt_id;
-	int path;
-};
-
-int read_dq_buf_info_l(void *data, media_buffer_t *Enque_Buff_L,
-		      struct Chn_info_l *info);
-
-int read_dq_buf_info_l(void *data, media_buffer_t *Enque_Buff_L,
-		      struct Chn_info_l *info)
-{
-	media_buffer_t Display_Mediabuff_G;
-	payload_packet *packet = data;
-	uint8_t *p_data; // = packet->payload;
-
-	if (!packet) {
-		kfree(packet);
-		return -ENOMEM;
-	}
-
-	p_data = packet->payload;
-
-	// struct Chn_info info;
-	memcpy(info, p_data, sizeof(struct Chn_info_l));
-	p_data += sizeof(struct Chn_info_l);
-
-	memcpy(Display_Mediabuff_G.p_meta_data, p_data,
-	       sizeof(pic_buf_meta_data_t));
-	p_data += sizeof(pic_buf_meta_data_t);
-
-	memcpy(&(Display_Mediabuff_G.base_address), p_data, sizeof(uint32_t));
-	p_data += sizeof(uint32_t);
-
-	memcpy(&(Display_Mediabuff_G.base_size), p_data, sizeof(uint32_t));
-	p_data += sizeof(uint32_t);
-
-	memcpy(&(Display_Mediabuff_G.lock_count), p_data, sizeof(uint32_t));
-	p_data += sizeof(uint32_t);
-
-	memcpy(&(Display_Mediabuff_G.is_full), p_data, sizeof(bool_t));
-	p_data += sizeof(bool_t);
-
-	memcpy(&(Display_Mediabuff_G.index), p_data, sizeof(uint8_t));
-	p_data += sizeof(uint8_t);
-
-	memcpy(&(Display_Mediabuff_G.buf_mode), p_data, sizeof(buff_mode));
-	p_data += sizeof(buff_mode);
-
-	memcpy(&(Display_Mediabuff_G.p_ipl_address), p_data, sizeof(uint32_t));
-	p_data += sizeof(uint32_t);
-
-	memcpy(&(Display_Mediabuff_G.p_owner), p_data, sizeof(uint32_t));
-
-	Enque_Buff_L->base_address = Display_Mediabuff_G.base_address;
-	Enque_Buff_L->base_size = Display_Mediabuff_G.base_size;
-	Enque_Buff_L->buf = Display_Mediabuff_G.buf;
-	Enque_Buff_L->buf_mode = Display_Mediabuff_G.buf_mode;
-	Enque_Buff_L->index = Display_Mediabuff_G.index;
-	Enque_Buff_L->is_full = Display_Mediabuff_G.is_full;
-	Enque_Buff_L->lock_count = Display_Mediabuff_G.lock_count;
-	Enque_Buff_L->p_ipl_address = Display_Mediabuff_G.p_ipl_address;
-	Enque_Buff_L->p_meta_data = Display_Mediabuff_G.p_meta_data;
-	Enque_Buff_L->p_owner = Display_Mediabuff_G.p_owner;
-
-	return 0;
-}
 
 MODULE_AUTHOR("anandam");
 MODULE_DESCRIPTION("MBOX_CMD");
