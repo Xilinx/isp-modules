@@ -97,6 +97,7 @@ typedef struct payload_user_template {
 	mb_cmd_id_e cmd_id;
 	__u32 cookie;
 	__u32 payload_size;
+	__u32 reserved[1];
 	response_field_t resp_field;
 	uint8_t payload[MAX_ITEM];
 

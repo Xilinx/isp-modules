@@ -56,12 +56,22 @@
 #define _MBOX_FIFO_H_
 #include <linux/types.h>
 
+/* Maximum payload size in mbox_post_msg structure */
+#define MAX_PAYLOAD_SIZE 16424
+
 /**
  * @brief Structure of fifo control
+ * NOTE: This structure is shared with RPU firmware - do not modify layout
+ * without updating firmware!
+ *
+ * read_offset and write_offset MUST be volatile because:
+ * 1. APU reads write_offset written by RPU (RX direction)
+ * 2. RPU reads write_offset written by APU (TX direction)
+ * 3. Compiler must not cache these in registers across function calls
  */
 typedef struct fifo_control {
 	uint64_t *buffer_phy;
-	uint64_t *buffer_virt;
+	void *buffer_virt;
 	uint32_t item_size;
 	uint32_t item_total;
 	uint32_t buffer_size;
@@ -86,12 +96,13 @@ typedef struct fifo_init_data {
  * @brief Structure of Mbox post message
  */
 typedef struct mbox_post_msg {
-	uint8_t group_id;
-	uint8_t ack : 1;
-	uint8_t flags : 7;
-	uint16_t msg_id;
+	uint32_t media_server_flags;
+	/* to meet the 8 byte alignment requirement */
+	uint32_t reserved[3];
+	uint32_t msg_id;
 	uint32_t size;
-	uint8_t payload[16420];
+	/* Cast to payload_packet* when needed */
+	uint8_t payload[MAX_PAYLOAD_SIZE];
 } __attribute((aligned(8))) mbox_post_msg;
 
 /**

@@ -533,6 +533,7 @@ typedef struct payload_template_enq {
 	payload_type type;
 	uint32_t cookie;
 	uint32_t payload_size;
+	uint32_t reserved[1];
 	response_field_t resp_field;
 	uint8_t payload[ENQ_CUSTOM_PAYLOAD_SIZE];
 } payload_packet_enq;

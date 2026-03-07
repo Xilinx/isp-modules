@@ -177,9 +177,11 @@ int vpi_mbox_post(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
 
 	if (ret != VPI_SUCCESS)
 		return ret;
-	if (!mbox_driver_cb)
-		return VPI_ERR_INVALID;
-	mbox_driver_cb(receiver_id);
+
+	/* Callback is optional - IPI may be handled by framework */
+	if (mbox_driver_cb)
+		mbox_driver_cb(receiver_id);
+
 	return VPI_SUCCESS;
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_post);
