@@ -120,12 +120,11 @@ struct rpu_dev {
 	struct mutex rpu_lock;
 	struct mutex write_lock;
 	struct mutex userapp_lock;
-	mbox_post_msg *msg;
 	mbox_fifo_ctrl *apu_rx_ctrl;
 	mbox_fifo_ctrl *apu_tx_ctrl;
+	struct kmem_cache *tx_msg_cache;
+	struct kmem_cache *rx_msg_cache;
 	struct response_user_packet *visp_mbox_intr_data;
-	struct response_user_packet *visp_mbox_app_data;
-	struct response_user_packet *visp_mbox_apu_data;
 	struct list_head node;
 	struct kref refcount;
 	struct visp_dev *isp_dev[MAX_NO_ISP];

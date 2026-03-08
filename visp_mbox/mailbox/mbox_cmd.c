@@ -94,13 +94,16 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 	int ret;
 	mbox_post_msg *msg = NULL;
 	struct rpu_dev *rpu;
+	rpu = visp_mbox_get_rpu_dev(receiver_id + VISP_MBOX_RPU6);
+	if (!rpu)
+		return -EINVAL;
 
-	msg = (mbox_post_msg *)kzalloc(sizeof(mbox_post_msg), GFP_KERNEL);
-	if (msg == NULL) {
-		pr_err("%s %d Failed to allocate memory\n", __func__, __LINE__);
-		return VPI_ERR_NOMEM;
-	}
+	if (!rpu->tx_msg_cache)
+		return -EINVAL;
 
+	msg = kmem_cache_zalloc(rpu->tx_msg_cache, GFP_KERNEL);
+	if (!msg)
+		return -ENOMEM;
 	if (size == 0) {
 		msg->msg_id = cmd_id;
 	} else {
@@ -110,19 +113,12 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 			    ((payload_packet *)struct_msg)->payload_size;
 		memcpy(msg->payload, struct_msg, ALIGN(msg->size, 8));
 	}
-
-	rpu = visp_mbox_get_rpu_dev(receiver_id + VISP_MBOX_RPU6);
-	if (!rpu) {
-		kfree(msg);
-		return -EINVAL;
-	}
-
 	if (core_id != MBOX_CORE_APU)
 		core_id = MBOX_CORE_APU;
 
 	ret = vpi_mbox_post(rpu->apu_tx_ctrl, msg, receiver_id, NULL);
 
-	kfree(msg);
+	kmem_cache_free(rpu->tx_msg_cache, msg);
 
 	if (ret)
 		return ret;
@@ -136,6 +132,11 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	struct visp_dev *isp_dev;
 	uint32_t cmd, isp_id;
 	int ret = 0;
+	mbox_post_msg *msg = NULL;
+	bool msg_enqueued = false;
+
+	if (!rpu || !rpu->rx_msg_cache)
+		return -EINVAL;
 
 	if (vpi_mbox_is_empty(rpu->apu_rx_ctrl, rpu->core_id, MBOX_CORE_APU)) {
 		if (mutex_is_locked(&rpu->write_lock)) {
@@ -146,10 +147,14 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		return -ENOMSG;
 	}
 
-	mutex_lock(&rpu->read_lock);
-	vpi_mbox_read(rpu->apu_rx_ctrl, rpu->msg, rpu->core_id);
+	msg = kmem_cache_zalloc(rpu->rx_msg_cache, GFP_ATOMIC);
+	if (!msg)
+		return -ENOMEM;
 
-	memcpy(&isp_id, ((payload_packet *)rpu->msg->payload)->payload, sizeof(uint32_t));
+	mutex_lock(&rpu->read_lock);
+	vpi_mbox_read(rpu->apu_rx_ctrl, msg, rpu->core_id);
+
+	memcpy(&isp_id, ((payload_packet *)msg->payload)->payload, sizeof(uint32_t));
 
 	/* Normalize ISP instance ID; clarify why divided by 15 */
 	isp_id = isp_id / 15;
@@ -167,15 +172,16 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		goto ERROR;
 	}
 
-	cmd = rpu->msg->msg_id;
+	cmd = msg->msg_id;
 	/* Handle specific commands */
-	if (rpu->msg->media_server_flags == 1) {
+	if (msg->media_server_flags == 1) {
 		if (cmd == MB_CMD_RES_SUCCESS) {
-			if (!kfifo_in(&rpu->app_fifo, &rpu->msg, 1)) {
+			if (!kfifo_in(&rpu->app_fifo, &msg, 1)) {
 				pr_err("Failed to queue into kfifo\n");
 				ret = -ENOMEM;
 				goto ERROR;
 			}
+			msg_enqueued = true;
 			complete(&rpu->mailbox_completion);
 			goto DONE;
 		} else {
@@ -186,28 +192,31 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		}
 	} else {
 		if (cmd == MB_CMD_RES_SUCCESS) {
-			if (!kfifo_in(&rpu->ack_fifo, &rpu->msg, 1)) {
+			if (!kfifo_in(&rpu->ack_fifo, &msg, 1)) {
 				pr_err("Failed to queue into apu ack kfifo\n");
 				ret = -ENOMEM;
 				goto ERROR;
 			}
+			msg_enqueued = true;
 			complete(&isp_dev->apu_wait_for_ack);
 			goto DONE;
 		} else if (cmd == MB_CMD_GET_SUCCESS) {
-			if (!kfifo_in(&rpu->data_fifo, &rpu->msg, 1)) {
+			if (!kfifo_in(&rpu->data_fifo, &msg, 1)) {
 				pr_err("Failed to queue into apu data kfifo\n");
 				ret = -ENOMEM;
 				goto ERROR;
 			}
+			msg_enqueued = true;
 			complete(&isp_dev->apu_wait_for_data);
 			goto DONE;
 		} else if (cmd == RPU_2_APU_CMD_DISPLAY_BUFFER) {
 			if (isp_dev->frameout_cb) {
-				if (!kfifo_in(&isp_dev->display_fifo, &rpu->msg, 1)) {
+				if (!kfifo_in(&isp_dev->display_fifo, &msg, 1)) {
 					pr_err("Failed to queue into display kfifo\n");
 					ret = -ENOMEM;
 					goto ERROR;
 				}
+				msg_enqueued = true;
 			(void)mbox_send_message(rpu->rx_chan, NULL);
 			mutex_unlock(&rpu->read_lock);
 			isp_dev->frameout_cb(isp_dev);
@@ -227,6 +236,8 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	/* Send a message to the RX mailbox channel */
 ERROR:
 DONE:
+	if (!msg_enqueued && msg)
+		kmem_cache_free(rpu->rx_msg_cache, msg);
 	(void)mbox_send_message(rpu->rx_chan, NULL);
 	mutex_unlock(&rpu->read_lock);
 DISP_DONE:

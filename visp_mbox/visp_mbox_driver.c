@@ -272,7 +272,6 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 	struct rpu_dev *rpu = file->private_data;
 	ssize_t bytes_copied = sizeof(struct response_user_packet);
 	mbox_post_msg *msg;
-	size_t size;
 	int result;
 
 	if (!rpu) {
@@ -296,18 +295,31 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 		goto ERROR;
 	}
 
-	rpu->visp_mbox_app_data->cmdid = msg->msg_id;
-	rpu->visp_mbox_app_data->data = msg->payload;
-	size = msg->size;
-	memcpy(&rpu->visp_mbox_app_data->res_payload_pkt, msg->payload,
-	       ALIGN(size, 8));
+	/* Use heap allocation for large packet structure */
+	struct response_user_packet *user_pkt = kmalloc(sizeof(*user_pkt), GFP_KERNEL);
 
-	/* Copy data to user space */
-	if (copy_to_user(buf, rpu->visp_mbox_app_data, bytes_copied)) {
-		pr_err("%s: Failed to copy data to user space\n", __func__);
-		bytes_copied = -EFAULT; // Handle the copy_to_user error
+	if (!user_pkt) {
+		bytes_copied = -ENOMEM;
+		kmem_cache_free(rpu->rx_msg_cache, msg);
 		goto ERROR;
 	}
+
+	user_pkt->cmdid = msg->msg_id;
+	user_pkt->data = msg->payload;
+	size_t size = msg->size;
+
+	memcpy(&user_pkt->res_payload_pkt, msg->payload, ALIGN(size, 8));
+
+	/* Copy data to user space */
+	if (copy_to_user(buf, user_pkt, bytes_copied)) {
+		pr_err("%s: Failed to copy data to user space\n", __func__);
+		bytes_copied = -EFAULT;
+		kfree(user_pkt);
+		kmem_cache_free(rpu->rx_msg_cache, msg);
+		goto ERROR;
+	}
+	kfree(user_pkt);
+	kmem_cache_free(rpu->rx_msg_cache, msg);
 ERROR:
 	return bytes_copied; // Return the size of data copied on success
 }
@@ -407,10 +419,8 @@ static void visp_mbox_reserved_memory_exit(void)
 
 uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 {
-	//struct response_user_packet *visp_mbox_intr_data;
 	struct rpu_dev *rpu = NULL;
 	mbox_post_msg *msg;
-	size_t size;
 	long result = 0;
 	int ret;
 
@@ -457,16 +467,13 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 		goto ERROR;
 	}
 
-	size = msg->size;
-	rpu->visp_mbox_apu_data->cmdid = msg->msg_id;
-	rpu->visp_mbox_apu_data->data = msg->payload;
-	memcpy(&rpu->visp_mbox_apu_data->res_payload_pkt, msg->payload,
-	       ALIGN(size, 8) /*sizeof(payload_packet)*/);
-	/* Copy the received data */
-	memcpy(data, &rpu->visp_mbox_apu_data->res_payload_pkt.payload,
-	       sizeof(rpu->visp_mbox_apu_data->res_payload_pkt.payload));
+	/* Directly extract data from message payload */
+	payload_packet *pkt = (payload_packet *)msg->payload;
 
-	ret = rpu->visp_mbox_apu_data->res_payload_pkt.resp_field.error_subcode_t;
+	memcpy(data, pkt->payload, sizeof(pkt->payload));
+	ret = pkt->resp_field.error_subcode_t;
+
+	kmem_cache_free(rpu->rx_msg_cache, msg);
 ERROR:
 	/* Return the error code from the interrupt's response payload */
 	return ret;
@@ -667,8 +674,14 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 	memcpy(&rpu->visp_mbox_intr_data->res_payload_pkt, msg->payload,
 	       ALIGN(size, 8));
 
-	return rpu->visp_mbox_intr_data->res_payload_pkt.resp_field.error_subcode_t;
+	ret = rpu->visp_mbox_intr_data->res_payload_pkt.resp_field.error_subcode_t;
+	if (rpu->rx_msg_cache && msg)
+		kmem_cache_free(rpu->rx_msg_cache, msg);
+
+	return ret;
 ERROR:
+	if (rpu && rpu->rx_msg_cache && msg)
+		kmem_cache_free(rpu->rx_msg_cache, msg);
 	return ret;
 
 }
@@ -876,6 +889,43 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 
 	snprintf(dev_name, sizeof(dev_name), "%s_%d", CHAR_DEV_NAME, rpu_id);
 
+	/*
+	 * Create separate TX and RX kmem_caches for complete isolation.
+	 * TX path: Short-lived buffers (alloc → FIFO write → immediate free)
+	 * RX path: Longer-lived buffers (alloc → kfifo → consumer free)
+	 * Benefits:
+	 *   - TX stale data never contaminates RX path
+	 *   - Cross-RPU isolation (RPU6 TX never allocated to RPU8 RX)
+	 *   - Better CPU cache locality per path
+	 */
+	char cache_name[32];
+
+	/* TX cache: for outgoing messages (write_mboxcmd) */
+	snprintf(cache_name, sizeof(cache_name), "visp_mbox_rpu%d_tx", rpu_id);
+	rpu->tx_msg_cache = kmem_cache_create(cache_name,
+					      sizeof(mbox_post_msg),
+					      0,
+					      SLAB_HWCACHE_ALIGN,
+					      NULL);
+	if (!rpu->tx_msg_cache) {
+		dev_err(&pdev->dev, "Failed to create TX cache for RPU%d\n", rpu_id);
+		goto cleanup;
+	}
+
+	/* RX cache: for incoming messages (visp_mbox_apu_read) */
+	snprintf(cache_name, sizeof(cache_name), "visp_mbox_rpu%d_rx", rpu_id);
+	rpu->rx_msg_cache = kmem_cache_create(cache_name,
+					      sizeof(mbox_post_msg),
+					      0,
+					      SLAB_HWCACHE_ALIGN,
+					      NULL);
+	if (!rpu->rx_msg_cache) {
+		dev_err(&pdev->dev, "Failed to create RX cache for RPU%d\n", rpu_id);
+		kmem_cache_destroy(rpu->tx_msg_cache);
+		rpu->tx_msg_cache = NULL;
+		goto cleanup;
+	}
+
 	mutex_init(&rpu->rpu_lock);
 	mutex_init(&rpu->read_lock);
 	mutex_init(&rpu->write_lock);
@@ -893,24 +943,6 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	rpu->visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
 	if (!rpu->visp_mbox_intr_data) {
 		dev_err(&pdev->dev, "Failed to allocate visp_mbox_intr_data memory\n");
-		goto cleanup;
-	}
-
-	rpu->msg = kzalloc(sizeof(mbox_post_msg), GFP_KERNEL);
-	if (!rpu->msg) {
-		dev_err(&pdev->dev, "Failed to allocate msg memory\n");
-		goto cleanup;
-	}
-
-	rpu->visp_mbox_app_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
-	if (!rpu->visp_mbox_app_data) {
-		dev_err(&pdev->dev, "Failed to allocate visp_mbox_app_data memory\n");
-		goto cleanup;
-	}
-
-	rpu->visp_mbox_apu_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
-	if (!rpu->visp_mbox_apu_data) {
-		dev_err(&pdev->dev, "Failed to allocate visp_mbox_apu_data memory\n");
 		goto cleanup;
 	}
 
@@ -984,10 +1016,15 @@ cleanup:
 			tasklet_kill(&rpu->mbox_tasklet);
 			rpu->tasklet_initialized = false;
 		}
-		kfree(rpu->visp_mbox_apu_data);
-		kfree(rpu->visp_mbox_app_data);
-		kfree(rpu->msg);
 		kfree(rpu->visp_mbox_intr_data);
+		if (rpu->tx_msg_cache) {
+			kmem_cache_destroy(rpu->tx_msg_cache);
+			rpu->tx_msg_cache = NULL;
+		}
+		if (rpu->rx_msg_cache) {
+			kmem_cache_destroy(rpu->rx_msg_cache);
+			rpu->rx_msg_cache = NULL;
+		}
 		cdev_del(&rpu->cdev);
 		if (rpu->devno)
 			unregister_chrdev_region(rpu->devno, 1);
@@ -1086,9 +1123,10 @@ static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 	if (ref_count == 1) {
 		/* Perform cleanup and removal */
 		kfree(rpu->visp_mbox_intr_data);
-		kfree(rpu->msg);
-		kfree(rpu->visp_mbox_app_data);
-		kfree(rpu->visp_mbox_apu_data);
+		if (rpu->tx_msg_cache)
+			kmem_cache_destroy(rpu->tx_msg_cache);
+		if (rpu->rx_msg_cache)
+			kmem_cache_destroy(rpu->rx_msg_cache);
 
 		device_destroy(mailbox_class, rpu->devno);
 		cdev_del(&rpu->cdev);

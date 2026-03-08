@@ -870,9 +870,14 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev)
 
 	/* Free allocated buffer after successful processing*/
 	kfree(packet_from_rpu);
+	if (isp_dev->rpu && isp_dev->rpu->rx_msg_cache && msg)
+		kmem_cache_free(isp_dev->rpu->rx_msg_cache, msg);
 	return 0;
 
 error_free_buf:
+	kfree(packet_from_rpu);
+	if (isp_dev->rpu && isp_dev->rpu->rx_msg_cache && msg)
+		kmem_cache_free(isp_dev->rpu->rx_msg_cache, msg);
 	/* Free buffer in case of any error*/
 	return ret_val;
 }

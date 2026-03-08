@@ -479,6 +479,8 @@ void visp_mimo_device_run(void *priv)
 	}
 	src_vb->sequence = dst_vb->sequence = curr_ctx->sequence++;
 skip_isp_dequeue:
+	if (device->isp_dev->rpu && device->isp_dev->rpu->rx_msg_cache && msg)
+		kmem_cache_free(device->isp_dev->rpu->rx_msg_cache, msg);
 	v4l2_m2m_job_finish(device->m2m_dev, curr_ctx->fh.m2m_ctx);
 }
 

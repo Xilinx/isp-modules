@@ -773,7 +773,7 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev)
 {
 	output_buffer_t *output_buffer = NULL;
 	struct Chn_info info;
-	mbox_post_msg *msg;
+	mbox_post_msg *msg = NULL;
 	void *packet_from_rpu;
 	size_t size;
 	uint8_t buf_index;
@@ -844,6 +844,8 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev)
 error_free_buf:
 	if (packet_from_rpu)
 		kfree(packet_from_rpu);
+	if (isp_dev->rpu && isp_dev->rpu->rx_msg_cache && msg)
+		kmem_cache_free(isp_dev->rpu->rx_msg_cache, msg);
 	/* Free buffer in case of any error*/
 	return ret;
 }
