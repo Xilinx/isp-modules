@@ -403,7 +403,7 @@ RESULT vsi_cam_device_sensor_query(struct visp_dev *isp_dev,
 	mutex_lock(&isp_dev->mlock);
 	result = visp_mbox_send_command(APU_2_RPU_MB_CMD_SENSOR_QUERY,
 					packet,
-			      packet->payload_size + payload_extra_size,
+			      packet->payload_size + payload_extra_size, 0,
 			      isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != 0) {
 		kfree(packet);
@@ -470,7 +470,7 @@ RESULT vsi_cam_device_sensor_set_test_pattern(
 	result = visp_mbox_send_command(APU_2_RPU_MB_CMD_SENSOR_SET_TP,
 					packet,
 					packet->payload_size + payload_extra_size,
-					isp_dev->isp_rpu, MBOX_CORE_APU);
+					0, isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != 0) {
 		mutex_unlock(&isp_dev->mlock);
 		kfree(packet);
@@ -531,7 +531,7 @@ RESULT vsi_cam_device_sensor_set_frame_rate(struct visp_dev *isp_dev,
 	result = visp_mbox_send_command(APU_2_RPU_MB_CMD_SENSOR_SET_FRAMERATE,
 					packet,
 					packet->payload_size + payload_extra_size,
-					isp_dev->isp_rpu, MBOX_CORE_APU);
+					0, isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != 0) {
 		kfree(packet);
 		return result;
@@ -601,7 +601,7 @@ RESULT vsi_cam_device_sensor_get_connect_port_info(
 	result = visp_mbox_send_command(cmd, packet,
 					packet->payload_size +
 					payload_extra_size,
-					isp_dev->isp_rpu, MBOX_CORE_APU);
+					0, isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != 0) {
 		kfree(packet);
 		return result;

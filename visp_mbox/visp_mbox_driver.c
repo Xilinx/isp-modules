@@ -188,17 +188,18 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 	payload_user_packet *user_packet = NULL;
 	uint32_t instance_id = 0x99;
 	uint8_t *p_data;
+	uint32_t flag = 1;
 	int ret = 0;
+
 	/* Validate input buffer size */
 	if (lbuf < sizeof(payload_user_packet)) {
 		pr_err("%s: Insufficient input buffer size\n", __func__);
 		return -EINVAL;
 	}
+
 	/* Validate RPU instance */
 	if (!rpu) {
 		pr_err("%s: RPU instance is NULL\n", __func__);
-		kfree(packet);
-		kfree(user_packet);
 		return -EINVAL;
 	}
 
@@ -209,11 +210,11 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 		       __func__);
 		return -ENOMEM;
 	}
+
 	/* Allocate memory for packet */
 	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
 	if (!packet) {
 		pr_err("%s: Failed to allocate memory for packet\n", __func__);
-		kfree(packet);
 		kfree(user_packet);
 		return -ENOMEM;
 	}
@@ -240,12 +241,12 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 	mutex_lock(&rpu->write_lock); // Replaced spinlock with mutex
 	/* Send command and message */
 	ret = visp_mbox_send_command(user_packet->cmd_id, packet,
-				     sizeof(payload_packet), rpu->core_id,
+				     sizeof(payload_packet), flag, rpu->core_id,
 				     MBOX_CORE_APU);
-
 	if (ret < 0) {
 		pr_err("%s: send_command failed with error: %d\n", __func__,
 		       ret);
+		mutex_unlock(&rpu->write_lock);
 		kfree(packet);
 		kfree(user_packet);
 		return -EIO;
@@ -254,10 +255,12 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 	ret = mbox_send_message(rpu->tx_chan, NULL); // Trigger irq
 	if (ret < 0) {
 		pr_err("%s: mbox_send_message() failed: %d\n", __func__, ret);
+		mutex_unlock(&rpu->write_lock);
 		kfree(packet);
 		kfree(user_packet);
 		return -EIO;
 	}
+	mutex_unlock(&rpu->write_lock);
 	kfree(packet);
 	kfree(user_packet);
 	return lbuf; // Return the number of bytes written
@@ -277,8 +280,6 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 		return -EINVAL;
 	}
 
-
-	rpu->app_wait_flag = 1;
 	/* Acquire lock to protect RPU structure */
 	/* Wait for completion interruptibly */
 	result = wait_for_completion_interruptible(&rpu->mailbox_completion);
@@ -289,9 +290,6 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 				     // interruption
 		goto ERROR;
 	}
-	mutex_lock(&rpu->ack_lock);
-	mutex_unlock(&rpu->write_lock);
-
 	if (!kfifo_out(&rpu->app_fifo, &msg, 1)) {
 		pr_err("Failed to queue into kfifo\n");
 		bytes_copied = -ENOMSG;
@@ -311,7 +309,6 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 		goto ERROR;
 	}
 ERROR:
-	mutex_unlock(&rpu->ack_lock);
 	return bytes_copied; // Return the size of data copied on success
 }
 
@@ -482,6 +479,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 {
 	int result;
 	struct rpu_dev *rpu;
+	uint32_t flag = 0;
 
 	if (!isp_dev || !isp_dev->rpu || !data) {
 		pr_err("%s: Invalid input parameters\n", __func__);
@@ -492,7 +490,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = visp_mbox_send_command(cmd, data, size, rpu->core_id,
+	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
 					src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
@@ -500,9 +498,6 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 			__func__, __LINE__);
 		goto unlock_and_exit;
 	}
-
-	/* Set the data flag */
-	isp_dev->k_apu_data_flag = 1;
 
 	result = mbox_send_message(isp_dev->tx_chan, NULL);
 	if (result < 0) {
@@ -538,6 +533,7 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 {
 	int result;
 	struct rpu_dev *rpu;
+	uint32_t flag = 0;
 
 	if (!isp_dev || !isp_dev->rpu) {
 		pr_err("%s: Invalid ISP device\n", __func__);
@@ -545,7 +541,7 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	}
 	rpu = isp_dev->rpu;
 	mutex_lock(&rpu->write_lock);
-	result = visp_mbox_send_command(cmd, data, size, rpu->core_id,
+	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
 					src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
@@ -573,6 +569,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 {
 	int result;
 	struct rpu_dev *rpu;
+	uint32_t flag = 0;
 
 	if (!isp_dev || !isp_dev->rpu) {
 		pr_err("%s: Invalid ISP device\n", __func__);
@@ -583,7 +580,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 	mutex_lock(&rpu->write_lock);
 
-	result = visp_mbox_send_command(cmd, data, size, rpu->core_id,
+	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
 					src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
@@ -594,9 +591,6 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	}
 	// Prepare for ACK
 	reinit_completion(&isp_dev->apu_wait_for_ack);
-
-	/* Set acknowledgment flag */
-	isp_dev->k_apu_ack_flag = 1;
 
 	// result = mbox_send_message(isp_dev->tx_chan, NULL);
 	result = mbox_send_message(rpu->tx_chan, NULL);
@@ -866,7 +860,6 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	snprintf(dev_name, sizeof(dev_name), "%s_%d", CHAR_DEV_NAME, rpu_id);
 
 	mutex_init(&rpu->rpu_lock);
-	mutex_init(&rpu->ack_lock);
 	mutex_init(&rpu->read_lock);
 	mutex_init(&rpu->write_lock);
 	cdev_init(&rpu->cdev, &visp_mbox_rpudev_fops);

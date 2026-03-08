@@ -116,7 +116,6 @@ struct rpu_dev {
 	int core_id;
 	dev_t devno;
 	struct cdev cdev;
-	struct mutex ack_lock;
 	struct mutex read_lock;
 	struct mutex rpu_lock;
 	struct mutex write_lock;
@@ -127,7 +126,6 @@ struct rpu_dev {
 	struct response_user_packet *visp_mbox_intr_data;
 	struct response_user_packet *visp_mbox_app_data;
 	struct response_user_packet *visp_mbox_apu_data;
-	int app_wait_flag;
 	struct list_head node;
 	struct kref refcount;
 	struct visp_dev *isp_dev[MAX_NO_ISP];

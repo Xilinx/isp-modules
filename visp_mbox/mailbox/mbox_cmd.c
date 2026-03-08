@@ -79,7 +79,6 @@
 #define SMC_IPI_MAILBOX_ENABLE_IRQ 0x82001005U
 #define SMC_IPI_MAILBOX_DISABLE_IRQ 0x82001006U
 
-uint32_t flag;
 #define DEBUG_ENABLE_LOG
 
 struct response_packet {
@@ -89,7 +88,8 @@ struct response_packet {
 };
 
 uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
-		       mbox_core_id receiver_id, mbox_core_id core_id)
+		       uint32_t flag, mbox_core_id receiver_id,
+		       mbox_core_id core_id)
 {
 	int ret;
 	mbox_post_msg *msg = NULL;
@@ -105,14 +105,17 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 		msg->msg_id = cmd_id;
 	} else {
 		msg->msg_id = cmd_id;
+		msg->media_server_flags = flag;
 		msg->size = sizeof(payload_packet) - MAX_ITEM +
 			    ((payload_packet *)struct_msg)->payload_size;
 		memcpy(msg->payload, struct_msg, ALIGN(msg->size, 8));
 	}
 
 	rpu = visp_mbox_get_rpu_dev(receiver_id + VISP_MBOX_RPU6);
-	if (!rpu)
+	if (!rpu) {
+		kfree(msg);
 		return -EINVAL;
+	}
 
 	if (core_id != MBOX_CORE_APU)
 		core_id = MBOX_CORE_APU;
@@ -166,57 +169,61 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 
 	cmd = rpu->msg->msg_id;
 	/* Handle specific commands */
-	if (isp_dev->k_apu_ack_flag && cmd == MB_CMD_RES_SUCCESS) {
-		if (!kfifo_in(&rpu->ack_fifo, &rpu->msg, 1)) {
-			pr_err("Failed to queue into apu ack kfifo\n");
-			ret = -ENOMEM;
-			goto ERROR;
-		}
-		isp_dev->k_apu_ack_flag = 0;
-		complete(&isp_dev->apu_wait_for_ack);
-		goto DONE;
-	} else if (isp_dev->k_apu_data_flag && cmd == MB_CMD_GET_SUCCESS) {
-		if (!kfifo_in(&rpu->data_fifo, &rpu->msg, 1)) {
-			pr_err("Failed to queue into apu data kfifo\n");
-			ret = -ENOMEM;
-			goto ERROR;
-		}
-		isp_dev->k_apu_data_flag = 0;
-		complete(&isp_dev->apu_wait_for_data);
-		goto DONE;
-	} else if ((rpu->app_wait_flag && cmd == MB_CMD_RES_SUCCESS) ||
-		   (rpu->app_wait_flag && cmd == MB_CMD_GET_SUCCESS)) {
-		if (!kfifo_in(&rpu->app_fifo, &rpu->msg, 1)) {
-			pr_err("Failed to queue into kfifo\n");
-			ret = -ENOMEM;
-			goto ERROR;
-		}
-		rpu->app_wait_flag = 0;
-		complete(&rpu->mailbox_completion);
-		goto DONE;
-	} else if (cmd == RPU_2_APU_CMD_DISPLAY_BUFFER) {
-		if (isp_dev->frameout_cb) {
-			if (!kfifo_in(&isp_dev->display_fifo, &rpu->msg, 1)) {
-				pr_err("Failed to queue into display kfifo\n");
+	if (rpu->msg->media_server_flags == 1) {
+		if (cmd == MB_CMD_RES_SUCCESS) {
+			if (!kfifo_in(&rpu->app_fifo, &rpu->msg, 1)) {
+				pr_err("Failed to queue into kfifo\n");
 				ret = -ENOMEM;
 				goto ERROR;
 			}
-			(void)mbox_send_message(rpu->rx_chan, NULL);
-			mutex_unlock(&rpu->read_lock);
-			isp_dev->frameout_cb(isp_dev);
-			goto DISP_DONE;
+			complete(&rpu->mailbox_completion);
+			goto DONE;
 		} else {
-			pr_err("%s %d CALLBACK IS NULL\n", __func__, __LINE__);
+			dev_err(rpu->dev, "%s: Unexpected command id %d received\n",
+				__func__, cmd);
 			ret = -EINVAL;
 			goto ERROR;
 		}
 	} else {
-		dev_err(rpu->dev, "%s: Unexpected command id %d received\n",
-			__func__, cmd);
-		ret = -EINVAL;
-		goto ERROR;
+		if (cmd == MB_CMD_RES_SUCCESS) {
+			if (!kfifo_in(&rpu->ack_fifo, &rpu->msg, 1)) {
+				pr_err("Failed to queue into apu ack kfifo\n");
+				ret = -ENOMEM;
+				goto ERROR;
+			}
+			complete(&isp_dev->apu_wait_for_ack);
+			goto DONE;
+		} else if (cmd == MB_CMD_GET_SUCCESS) {
+			if (!kfifo_in(&rpu->data_fifo, &rpu->msg, 1)) {
+				pr_err("Failed to queue into apu data kfifo\n");
+				ret = -ENOMEM;
+				goto ERROR;
+			}
+			complete(&isp_dev->apu_wait_for_data);
+			goto DONE;
+		} else if (cmd == RPU_2_APU_CMD_DISPLAY_BUFFER) {
+			if (isp_dev->frameout_cb) {
+				if (!kfifo_in(&isp_dev->display_fifo, &rpu->msg, 1)) {
+					pr_err("Failed to queue into display kfifo\n");
+					ret = -ENOMEM;
+					goto ERROR;
+				}
+			(void)mbox_send_message(rpu->rx_chan, NULL);
+			mutex_unlock(&rpu->read_lock);
+			isp_dev->frameout_cb(isp_dev);
+			goto DISP_DONE;
+			} else {
+				pr_err("%s %d CALLBACK IS NULL\n", __func__, __LINE__);
+				ret = -EINVAL;
+				goto ERROR;
+			}
+		} else {
+			dev_err(rpu->dev, "%s: Unexpected command id %d received\n",
+				__func__, cmd);
+			ret = -EINVAL;
+			goto ERROR;
+		}
 	}
-
 	/* Send a message to the RX mailbox channel */
 ERROR:
 DONE:
@@ -246,15 +253,15 @@ EXPORT_SYMBOL_GPL(visp_mbox_mailbox_init);
 void mailbox_close(struct rpu_dev *rpu)
 {
 	kfree(rpu->apu_tx_ctrl);
-	kfree(rpu->apu_tx_ctrl);
+	kfree(rpu->apu_rx_ctrl);
 }
 
 int visp_mbox_send_command(mb_cmd_id_e cmd, void *data, uint32_t size,
-			   uint8_t dest_cpu, uint8_t src_cpu)
+			   uint32_t flag, uint8_t dest_cpu, uint8_t src_cpu)
 {
 	int ret = 0;
 
-	ret = write_mboxcmd(cmd, data, size, dest_cpu, src_cpu);
+	ret = write_mboxcmd(cmd, data, size, flag, dest_cpu, src_cpu);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(visp_mbox_send_command);

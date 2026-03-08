@@ -66,7 +66,7 @@
 #include "sensor_cmd.h"
 #include "visp_mbox_driver.h"
 
-#define MAX_MSGS_PER_BOX 12
+#define MAX_MSGS_PER_BOX 30
 #define MBOX_FIFO_BLOCK_SIZE                                                   \
 	(sizeof(fifo_control) + sizeof(mbox_post_msg) * MAX_MSGS_PER_BOX)
 // #define MBOX_FIFO_START_ADDR 0x4ed08000
@@ -103,10 +103,11 @@
 void visp_mbox_mailbox_init(struct rpu_dev *rpu, u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
 			    uint64_t mbox_fifo_start_addr_phy);
 uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
-		       mbox_core_id receiver_id, mbox_core_id core_id);
+		       uint32_t flag, mbox_core_id receiver_id,
+		       mbox_core_id core_id);
 
 int visp_mbox_send_command(mb_cmd_id_e cmd, void *data, uint32_t size,
-			   uint8_t dest_cpu, uint8_t src_cpu);
+			   uint32_t flag, uint8_t dest_cpu, uint8_t src_cpu);
 
 struct response_user_packet {
 	/*Define your data fields*/

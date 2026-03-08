@@ -322,9 +322,6 @@ struct visp_dev {
 	struct atm_prop atm;
 	wait_queue_head_t wq_frame_done_finished;
 	bool apu_wait_for_isp_frame_done;
-	int k_apu_ack_flag;
-	int k_apu_data_flag;
-	int app_wait_flag;
 	frameout_cb_t frameout_cb;
 	dma_addr_t ip_a[2];
 	dma_addr_t op_a[4];
