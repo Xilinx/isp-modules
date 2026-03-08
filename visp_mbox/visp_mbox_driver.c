@@ -806,14 +806,31 @@ static int visp_mbox_mailbox_initialization(struct rpu_dev *rpu)
 	int ret;
 
 	if (!rpu) {
-		pr_err("%s: Invalid RPU device NULLpointer).\n", __func__);
+		pr_err("%s: Invalid RPU device (NULL pointer).\n", __func__);
 		return -EINVAL;
 	}
 
+	/* Verify reserved memory is initialized */
+	if (!reserved_memory.virt_addr) {
+		dev_err(rpu->dev, "%s: Reserved memory not initialized (virt_addr is NULL).\n",
+			__func__);
+		return -ENOMEM;
+	}
+
+	if (!reserved_memory.phys_addr) {
+		dev_err(rpu->dev, "%s: Reserved memory not initialized (phys_addr is NULL).\n",
+			__func__);
+		return -ENOMEM;
+	}
+
 	/* Initialize mailbox with reserved memory */
-	visp_mbox_mailbox_init(rpu, MBOX_CORE_APU,
-			       (uintptr_t)reserved_memory.virt_addr,
-			       (uintptr_t)reserved_memory.phys_addr);
+	ret = visp_mbox_mailbox_init(rpu, MBOX_CORE_APU,
+				     (uintptr_t)reserved_memory.virt_addr,
+				     (uintptr_t)reserved_memory.phys_addr);
+	if (ret < 0) {
+		dev_err(rpu->dev, "Failed to initialize mailbox structures. Error: %d\n", ret);
+		return ret;
+	}
 
 	/* Load firmware via remoteproc and trigger IPI */
 	ret = visp_mbox_firmware_load(rpu);
@@ -1197,7 +1214,8 @@ static int __init visp_mbox_init_module(void)
 	mailbox_class = class_create("mailbox-class");
 	if (IS_ERR(mailbox_class)) {
 		pr_err("Failed to create mailbox class.\n");
-		return PTR_ERR(mailbox_class);
+		ret = PTR_ERR(mailbox_class);
+		return ret;
 	}
 
 	/* Initialize reserved memory */
@@ -1205,19 +1223,25 @@ static int __init visp_mbox_init_module(void)
 	if (ret) {
 		pr_err("Failed to initialize reserved memory. Error: %d\n",
 		       ret);
-		return ret;
+		goto err_cleanup_class;
 	}
 
 	/* Register the platform driver */
 	ret = platform_driver_register(&visp_mbox_driver);
 	if (ret) {
 		pr_err("Failed to register AMD MBox driver. Error: %d\n", ret);
-		class_destroy(mailbox_class);
-		return ret;
+		goto err_cleanup_reserved_mem;
 	}
 
 	pr_info("AMD MBox driver registered successfully.\n");
 	return 0;
+
+err_cleanup_reserved_mem:
+	visp_mbox_reserved_memory_exit();
+err_cleanup_class:
+	class_destroy(mailbox_class);
+	mailbox_class = NULL;
+	return ret;
 }
 
 static void __exit visp_mbox_exit_module(void)

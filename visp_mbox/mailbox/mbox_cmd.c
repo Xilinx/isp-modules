@@ -234,19 +234,46 @@ DISP_DONE:
 }
 EXPORT_SYMBOL_GPL(visp_mbox_apu_read);
 
-void visp_mbox_mailbox_init(struct rpu_dev *rpu, u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
-			    uint64_t mbox_fifo_start_addr_phy)
+int visp_mbox_mailbox_init(struct rpu_dev *rpu, u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
+			   uint64_t mbox_fifo_start_addr_phy)
 {
-		rpu->apu_rx_ctrl = visp_mbox_init(rpu->core_id,
-						  MBOX_CORE_APU,
-						  MBOX_FIFO_START_ADDR,
-						  mbox_fifo_start_addr_phy,
-						  MBOX_FIFO_BLOCK_SIZE);
+	if (!rpu) {
+		pr_err("%s: Invalid RPU device (NULL pointer).\n", __func__);
+		return -EINVAL;
+	}
 
-		rpu->apu_tx_ctrl = visp_mbox_init(MBOX_CORE_APU, rpu->core_id,
-						  MBOX_FIFO_START_ADDR,
-						  mbox_fifo_start_addr_phy,
-						  MBOX_FIFO_BLOCK_SIZE);
+	if (MBOX_FIFO_START_ADDR == 0) {
+		pr_err("%s: Invalid virtual address (NULL).\n", __func__);
+		return -EINVAL;
+	}
+
+	if (mbox_fifo_start_addr_phy == 0) {
+		pr_err("%s: Invalid physical address (NULL).\n", __func__);
+		return -EINVAL;
+	}
+
+	rpu->apu_rx_ctrl = visp_mbox_init(rpu->core_id,
+					  MBOX_CORE_APU,
+					  MBOX_FIFO_START_ADDR,
+					  mbox_fifo_start_addr_phy,
+					  MBOX_FIFO_BLOCK_SIZE);
+	if (!rpu->apu_rx_ctrl) {
+		pr_err("%s: Failed to initialize APU RX control.\n", __func__);
+		return -ENOMEM;
+	}
+
+	rpu->apu_tx_ctrl = visp_mbox_init(MBOX_CORE_APU, rpu->core_id,
+					  MBOX_FIFO_START_ADDR,
+					  mbox_fifo_start_addr_phy,
+					  MBOX_FIFO_BLOCK_SIZE);
+	if (!rpu->apu_tx_ctrl) {
+		pr_err("%s: Failed to initialize APU TX control.\n", __func__);
+		kfree(rpu->apu_rx_ctrl);
+		rpu->apu_rx_ctrl = NULL;
+		return -ENOMEM;
+	}
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(visp_mbox_mailbox_init);
 
