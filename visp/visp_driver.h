@@ -74,6 +74,7 @@
 #include <linux/mailbox_controller.h>
 #include <linux/skbuff.h>
 #include <linux/kfifo.h>
+#include <linux/workqueue.h>
 #define VISP_NAME "visp-isp-subdev"
 #define VISP_SUBDEV_NAME_SIZE 52
 
@@ -92,6 +93,10 @@
 #define MAX_BANKS 4U
 #define MAX_PORTS 4 // Number of ports to parse
 #define MAX_NO_ISP 6
+/* Allow MP+SP on the same port to enqueue in parallel */
+#define ENQ_WQ_MAX_ACTIVE 1
+/* Per-port per-chain enqueue workqueues (MP/SP1 only) */
+#define ENQ_WQ_CHAIN_MAX 2
 
 enum visp_port_pad_e {
 	VISP_PORT_PAD_SINK = 0,
@@ -337,6 +342,10 @@ struct visp_dev {
 	/* Direct error code storage - eliminates FIFO overhead for ENQUE_BUFFER */
 	int enq_ack_error[4][4][32];  /* [port][path][buffer_index] */
 	int cmd_ack_error[4];  /* [port] */
+	/* Per-port enqueue workqueues (parallel up to ENQ_WQ_MAX_ACTIVE) */
+	struct workqueue_struct *enq_wq[MAX_PORTS];
+	/* Per-port, per-chain enqueue workqueues for MP/SP1 (chains 0/1) */
+	struct workqueue_struct *enq_wq_chain[MAX_PORTS][ENQ_WQ_CHAIN_MAX];
 	struct atm_prop atm;
 	wait_queue_head_t wq_frame_done_finished;
 	bool apu_wait_for_isp_frame_done;

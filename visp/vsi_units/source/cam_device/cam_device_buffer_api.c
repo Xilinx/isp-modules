@@ -67,6 +67,7 @@ extern uint32_t cookie;
 #include <linux/ktime.h>
 #include <linux/time.h>
 #include <linux/timekeeping.h>
+#include <linux/workqueue.h>
 
 RESULT vsi_cam_device_init_buf_chain(struct visp_dev *isp_dev,
 				     cam_device_handle_t h_cam_device,
@@ -404,6 +405,124 @@ RESULT vsi_cam_device_release_buf_mgmt(struct visp_dev *isp_dev,
 }
 
 int drv_dq_cnt;
+int drv_enq_cnt;
+
+#define ENQ_CUSTOM_PAYLOAD_SIZE 48
+typedef struct payload_template_enq {
+	payload_type type;
+	uint32_t cookie;
+	uint32_t payload_size;
+	uint32_t reserved[1]; //to meet the 8 byte alignment requirement
+	response_field_t resp_field;
+	uint8_t payload[ENQ_CUSTOM_PAYLOAD_SIZE];
+} payload_packet_enq;
+
+struct visp_enq_work_ctx {
+	struct work_struct work;
+	struct visp_dev *isp_dev;
+	cam_device_context_t *cam_ctx;
+	cam_device_buf_chain_id_t buf_id;
+	output_buffer_t *p_media_buf;
+};
+
+static struct workqueue_struct *visp_get_enq_wq(struct visp_dev *isp_dev,
+					    int port,
+					    cam_device_buf_chain_id_t buf_id)
+{
+	struct workqueue_struct *wq = NULL;
+
+	if (!isp_dev || port < 0 || port >= MAX_PORTS)
+		return NULL;
+
+	/* Prefer per-chain queues: chain 0 = MP, chain 1 = SP1 */
+	if (buf_id < ENQ_WQ_CHAIN_MAX)
+		wq = isp_dev->enq_wq_chain[port][buf_id];
+
+	/* Fallback: use MP queue when chain-specific queue is unavailable */
+	if (!wq)
+		wq = isp_dev->enq_wq_chain[port][CAMDEV_BUFCHAIN_MP];
+
+	return wq;
+}
+
+static int visp_send_enq_cmd(struct visp_dev *isp_dev,
+			      cam_device_context_t *p_cam_dev_ctx,
+			      cam_device_buf_chain_id_t buf_id,
+			      output_buffer_t *p_media_buf)
+{
+	RESULT result = RET_SUCCESS;
+	uint8_t *p_data = NULL;
+	int port;
+	payload_packet_enq packet = {0};
+	media_isp_chn_attr *isp_chns;
+
+	if (!isp_dev || !p_cam_dev_ctx || !p_media_buf)
+		return RET_NULL_POINTER;
+
+	/* Use vt_id to select port (MP/SP share the same port) */
+	port = p_cam_dev_ctx->isp_vt_id;
+	if (port < 0 || port >= MAX_PORTS) {
+		dev_warn(isp_dev->dev,
+			 "ENQ clamp vt_id=%d to port=0 (max=%d)\n",
+			 p_cam_dev_ctx->isp_vt_id, MAX_PORTS);
+		port = 0;
+	}
+
+	drv_enq_cnt++;
+	p_cam_dev_ctx->cookie++;
+
+	packet.cookie = p_cam_dev_ctx->cookie;
+	packet.type = CMD;
+	packet.payload_size = 0;
+
+	p_data = packet.payload;
+	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
+	packet.payload_size += sizeof(uint32_t);
+	p_data += sizeof(uint32_t);
+	memcpy(p_data, &buf_id, sizeof(cam_device_buf_chain_id_t));
+	packet.payload_size += sizeof(cam_device_buf_chain_id_t);
+	p_data += sizeof(cam_device_buf_chain_id_t);
+	memcpy(p_data, &(p_media_buf->index), sizeof(uint8_t));
+	packet.payload_size += sizeof(uint8_t);
+	p_data += sizeof(uint8_t);
+
+	/* Lock to read p_owner - protects against concurrent p_owner writes from dequeue path */
+	isp_chns = &isp_dev->isp_ports[port].isp_chns[buf_id];
+	mutex_lock(&isp_chns->cam_device_bufs_lock);
+	memcpy(p_data, &((p_media_buf)->p_owner), sizeof(uint32_t));
+	mutex_unlock(&isp_chns->cam_device_bufs_lock);
+	packet.payload_size += sizeof(uint32_t);
+	p_data += sizeof(uint32_t);
+
+	if (packet.payload_size > MAX_ITEM)
+		result = RET_OUTOFRANGE;
+
+	result = xlnx_send_mbox_acked_cmd(
+	    isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
+	    packet.payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
+	if (result != RET_SUCCESS)
+		result = RET_FAILURE;
+
+	return result;
+}
+
+static void visp_enq_work_handler(struct work_struct *work)
+{
+	struct visp_enq_work_ctx *ctx =
+	    container_of(work, struct visp_enq_work_ctx, work);
+	int ret;
+
+	ret = visp_send_enq_cmd(ctx->isp_dev, ctx->cam_ctx,
+			       ctx->buf_id, ctx->p_media_buf);
+	if (ret != RET_SUCCESS && ctx->isp_dev)
+		dev_err(ctx->isp_dev->dev,
+			"Async ENQUE_BUFFER failed (port=%d, idx=%u, ret=%d)\n",
+			ctx->cam_ctx ? ctx->cam_ctx->instance_id % MAX_PORTS : -1,
+			ctx->p_media_buf ? ctx->p_media_buf->index : 0, ret);
+
+	kfree(ctx);
+}
 RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 				    cam_device_handle_t h_cam_device,
 				    cam_device_buf_chain_id_t buf_id,
@@ -526,31 +645,15 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 	return result;
 }
 
-int drv_enq_cnt;
-
-#define ENQ_CUSTOM_PAYLOAD_SIZE 48
-typedef struct payload_template_enq {
-	payload_type type;
-	uint32_t cookie;
-	uint32_t payload_size;
-	uint32_t reserved[1];
-	response_field_t resp_field;
-	uint8_t payload[ENQ_CUSTOM_PAYLOAD_SIZE];
-} payload_packet_enq;
-
 RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 				    cam_device_handle_t h_cam_device,
 				    cam_device_buf_chain_id_t buf_id,
 				    output_buffer_t *p_media_buf)
 {
-	RESULT result = RET_SUCCESS;
-	uint8_t *p_data = NULL;
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
-
-	payload_packet_enq packet = {0};
-
-	drv_enq_cnt++;
+	int port;
+	struct visp_enq_work_ctx *ctx;
 
 	if (p_cam_dev_ctx == NULL) {
 		dev_err(isp_dev->dev, "Null Pcamdevctx\n");
@@ -561,42 +664,45 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 		return RET_NULL_POINTER;
 	}
 
-	p_cam_dev_ctx->cookie++;
+	/* Use vt_id to select port (MP/SP share the same port) */
+	port = p_cam_dev_ctx->isp_vt_id;
+	if (port < 0 || port >= MAX_PORTS) {
+		dev_warn(isp_dev->dev,
+			 "ENQ clamp vt_id=%d to port=0 (max=%d)\n",
+			 p_cam_dev_ctx->isp_vt_id, MAX_PORTS);
+		port = 0;
+	}
 
-	packet.cookie = p_cam_dev_ctx->cookie;
-	packet.type = CMD;
-	packet.payload_size = 0;
+	/* Pick per-chain queue if available; else fall back */
+	{
+		struct workqueue_struct *wq =
+			visp_get_enq_wq(isp_dev, port, buf_id);
 
-	p_data = packet.payload;
-	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
-	memcpy(p_data, &buf_id, sizeof(cam_device_buf_chain_id_t));
-	packet.payload_size += sizeof(cam_device_buf_chain_id_t);
-	p_data += sizeof(cam_device_buf_chain_id_t);
-	memcpy(p_data, &(p_media_buf->index), sizeof(uint8_t));
-	packet.payload_size += sizeof(uint8_t);
-	p_data += sizeof(uint8_t);
+		if (!wq) {
+			dev_warn(isp_dev->dev,
+				 "ENQ async fallback: vt_id=%d port=%d buf_id=%d wq=NULL\n",
+				 p_cam_dev_ctx->isp_vt_id, port, buf_id);
+			return visp_send_enq_cmd(isp_dev, p_cam_dev_ctx, buf_id,
+					p_media_buf);
+		}
 
-	memcpy(p_data, &((p_media_buf)->p_owner), sizeof(uint32_t));
-	packet.payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
+		ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+		if (!ctx)
+			return RET_OUTOFMEM;
 
-	if (packet.payload_size > MAX_ITEM)
-		return RET_OUTOFRANGE;
+		ctx->isp_dev = isp_dev;
+		ctx->cam_ctx = p_cam_dev_ctx;
+		ctx->buf_id = buf_id;
+		ctx->p_media_buf = p_media_buf;
+		INIT_WORK(&ctx->work, visp_enq_work_handler);
 
-	mutex_lock(&isp_dev->rpu->rpu_lock);
+		if (!queue_work(wq, &ctx->work)) {
+			kfree(ctx);
+			return RET_FAILURE;
+		}
+	}
 
-	result = xlnx_send_mbox_acked_cmd(
-	    isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
-	    packet.payload_size + payload_extra_size, isp_dev->isp_rpu,
-	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
-		return RET_FAILURE;
-
-	mutex_unlock(&isp_dev->rpu->rpu_lock);
-
-	return result;
+	return RET_SUCCESS;
 }
 
 RESULT vsi_cam_device_get_buffer_size(struct visp_dev *isp_dev,

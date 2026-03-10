@@ -71,6 +71,7 @@
 #include <media/v4l2-mediabus.h>
 #include <media/videobuf2-dma-contig.h>
 #include <linux/version.h>
+#include <linux/workqueue.h>
 
 #include "visp_ctrl.h"
 #include "visp_driver.h"
@@ -2659,6 +2660,27 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 
 	return 0;
 }
+
+static void visp_destroy_enq_wqs(struct visp_dev *isp_dev)
+{
+	int port, chain;
+
+	if (!isp_dev)
+		return;
+
+	for (port = 0; port < MAX_PORTS; port++) {
+		for (chain = 0; chain < ENQ_WQ_CHAIN_MAX; chain++) {
+			if (isp_dev->enq_wq_chain[port][chain]) {
+				destroy_workqueue(isp_dev->enq_wq_chain[port][chain]);
+				isp_dev->enq_wq_chain[port][chain] = NULL;
+			}
+		}
+		if (isp_dev->enq_wq[port]) {
+			destroy_workqueue(isp_dev->enq_wq[port]);
+			isp_dev->enq_wq[port] = NULL;
+		}
+	}
+}
 static int visp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -2766,6 +2788,25 @@ static int visp_probe(struct platform_device *pdev)
 		INIT_LIST_HEAD(&isp_dev->mcm_input[port]);
 	}
 
+	for (port = 0; port < MAX_PORTS; port++) {
+		char wq_name[16];
+
+		/* Per-port MP/SP workqueues: chain 0 = MP, chain 1 = SP */
+		for (int chain = 0; chain < ENQ_WQ_CHAIN_MAX; chain++) {
+			snprintf(wq_name, sizeof(wq_name), "visp-enq-%d-%d",
+				 port, chain);
+			isp_dev->enq_wq_chain[port][chain] = alloc_workqueue(
+				wq_name, WQ_UNBOUND | WQ_HIGHPRI, ENQ_WQ_MAX_ACTIVE);
+			if (!isp_dev->enq_wq_chain[port][chain]) {
+				dev_err(dev,
+					"Failed to create enqueue workqueue for port %d chain %d\n",
+					port, chain);
+				ret = -ENOMEM;
+				goto err_destroy_enq_wq;
+			}
+		}
+	}
+
 	isp_dev->ports_mask = isp_dev->num_streams;
 
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
@@ -2781,6 +2822,9 @@ static int visp_probe(struct platform_device *pdev)
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
 
 	return 0;
+
+err_destroy_enq_wq:
+	visp_destroy_enq_wqs(isp_dev);
 
 err_register_procfs:
 	v4l2_async_unregister_subdev(&isp_dev->sd);
@@ -2804,6 +2848,8 @@ static void visp_remove(struct platform_device *pdev)
 	struct visp_dev *isp_dev;
 
 	isp_dev = platform_get_drvdata(pdev);
+
+	visp_destroy_enq_wqs(isp_dev);
 
 	visp_procfs_unregister(isp_dev->pde);
 	v4l2_async_unregister_subdev(&isp_dev->sd);
