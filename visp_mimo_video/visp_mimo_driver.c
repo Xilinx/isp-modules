@@ -2033,6 +2033,87 @@ struct visp_dmabuf_attachment {
 	enum dma_data_direction dir;
 };
 
+static int visp_dmabuf_attach(struct dma_buf *dmabuf,
+			      struct dma_buf_attachment *attachment)
+{
+	struct visp_dmabuf_attachment *visp_attach;
+
+	/* Prevent module unload while dmabuf is attached/mapped */
+	if (!try_module_get(THIS_MODULE))
+		return -ENODEV;
+
+	visp_attach = kzalloc(sizeof(*visp_attach), GFP_KERNEL);
+	if (!visp_attach) {
+		module_put(THIS_MODULE);
+		return -ENOMEM;
+	}
+
+	visp_attach->dir = DMA_NONE;
+	attachment->priv = visp_attach;
+	return 0;
+}
+
+static void visp_dmabuf_detach(struct dma_buf *dmabuf,
+			       struct dma_buf_attachment *attachment)
+{
+	struct visp_dmabuf_attachment *visp_attach = attachment->priv;
+
+	if (visp_attach) {
+		/* If mapped, unmap first */
+		if (visp_attach->sgt && visp_attach->dir != DMA_NONE)
+			dma_buf_unmap_attachment(attachment, visp_attach->sgt, visp_attach->dir);
+
+		if (visp_attach->sgt) {
+			sg_free_table(visp_attach->sgt);
+			kfree(visp_attach->sgt);
+		}
+		kfree(visp_attach);
+		attachment->priv = NULL;
+	}
+
+	/* Allow module unload after detach */
+	module_put(THIS_MODULE);
+}
+
+static struct sg_table *visp_dmabuf_map(struct dma_buf_attachment *attachment,
+					enum dma_data_direction dir)
+{
+	struct visp_video_event_shm *event_shm = attachment->dmabuf->priv;
+	struct visp_dmabuf_attachment *visp_attach = attachment->priv;
+	struct sg_table *sgt;
+	struct page *page;
+	int ret;
+
+	if (!visp_attach)
+		return ERR_PTR(-EINVAL);
+
+	sgt = kzalloc(sizeof(*sgt), GFP_KERNEL);
+	if (!sgt)
+		return ERR_PTR(-ENOMEM);
+
+	ret = sg_alloc_table(sgt, 1, GFP_KERNEL);
+	if (ret) {
+		kfree(sgt);
+		return ERR_PTR(ret);
+	}
+
+	page = virt_to_page(event_shm->virt_addr);
+	sg_set_page(sgt->sgl, page, event_shm->size, 0);
+	sg_dma_address(sgt->sgl) = event_shm->dma_handle;
+	sg_dma_len(sgt->sgl) = event_shm->size;
+
+	visp_attach->sgt = sgt;
+	visp_attach->dir = dir;
+	return sgt;
+}
+
+static void visp_dmabuf_unmap(struct dma_buf_attachment *attachment,
+			      struct sg_table *sgt,
+			      enum dma_data_direction dir)
+{
+	/* No-op: memory is DMA coherent, no sync needed */
+}
+
 static void visp_dmabuf_release(struct dma_buf *dmabuf)
 {
 	struct visp_video_event_shm *event_shm = dmabuf->priv;
@@ -2056,6 +2137,10 @@ static int visp_dmabuf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 }
 
 static const struct dma_buf_ops visp_dmabuf_ops = {
+	.attach = visp_dmabuf_attach,
+	.detach = visp_dmabuf_detach,
+	.map_dma_buf = visp_dmabuf_map,
+	.unmap_dma_buf = visp_dmabuf_unmap,
 	.release = visp_dmabuf_release,
 	.mmap = visp_dmabuf_mmap,
 };
