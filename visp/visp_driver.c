@@ -795,13 +795,10 @@ int media_isp_device_dqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 			   media_buf *buf, void *enque_buff_g,
 			   output_buffer_t *output_buffer);
 
-static int handle_frameout_buffer(struct visp_dev *isp_dev)
+static int handle_frameout_buffer(struct visp_dev *isp_dev, int port, mbox_post_msg *msg)
 {
 	output_buffer_t *output_buffer = NULL;
 	struct Chn_info info;
-	mbox_post_msg *msg;
-	size_t size;
-	void *packet_from_rpu;
 	uint8_t buf_index;
 	int pad = -1;
 	int ret_val = 0;
@@ -813,43 +810,59 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev)
 		return -EINVAL;
 	}
 
-	if (!kfifo_out(&isp_dev->display_fifo, &msg, 1)) {
-		pr_err("Failed to queue into kfifo\n");
-		return -ENOMEM;
+	if (port < 0 || port >= MAX_PORTS) {
+		dev_err(isp_dev->dev,
+			"%s: Invalid port %d (must be 0-%d)\n",
+			__func__, port, MAX_PORTS - 1);
+		return -EINVAL;
 	}
 
 	if (!msg) {
-		dev_err(isp_dev->dev, "%s: invalid msg or payload\n", __func__);
+		dev_err(isp_dev->dev,
+			"%s: msg is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	/* Dequeue buffer from the ISP device - pass payload directly */
+	read_dq_buf_info(msg->payload, isp_dev, &info, &buf_index);
+
+	/* Validate buffer index to detect RPU reusing stale indices */
+	if (buf_index >= 32) {
+		dev_err(isp_dev->dev,
+			"%s: Invalid buf_index %u (max 31) - RPU may be reusing stale buffer\n",
+			__func__,
+			buf_index);
 		ret_val = -EINVAL;
 		goto error_free_buf;
 	}
 
-	size = msg->size;
-	packet_from_rpu = kzalloc(size, GFP_KERNEL);
-	if (!packet_from_rpu) {
-		dev_err(isp_dev->dev, "Failed to allocate packet_from_rpu\n");
-		return -ENOMEM;
-	}
-
-	memcpy(packet_from_rpu, msg->payload, size);
-
-	/* Dequeue buffer from the ISP device*/
-	read_dq_buf_info(packet_from_rpu, isp_dev, &info, &buf_index);
-
+	/* Lock to read cam_device_bufs - protects against concurrent p_owner
+	 * writes
+	 */
+	mutex_lock(&isp_dev->isp_ports[info.vt_id]
+		   .isp_chns[info.path]
+		   .cam_device_bufs_lock);
 	output_buffer = isp_dev->isp_ports[info.vt_id]
 			    .isp_chns[info.path]
 			    .cam_device_bufs[buf_index];
+	mutex_unlock(&isp_dev->isp_ports[info.vt_id]
+		     .isp_chns[info.path]
+		     .cam_device_bufs_lock);
 	if (!output_buffer) {
-		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: Outputbuffer is NULL...!\n");
-		return -EINVAL;
+		dev_warn(isp_dev->dev,
+			 "%s: Outputbuffer is NULL for buf_index %u - RPU likely using "
+			 "stale index due to missed enqueue\n",
+			 __func__,
+			buf_index);
+		ret_val = -EINVAL;
+		goto error_free_buf;
 	}
 
 	/* Calculate the pad index */
 	pad = (info.vt_id * MEDIA_ISP_PORT_PAD_COUNT) + (info.path + 1);
 	if (pad <= 0) {
 		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: Invalid pad value %d\n", pad);
+			"%s: Invalid pad value %d\n", __func__, pad);
 		ret_val = -EINVAL;
 		goto error_free_buf;
 	}
@@ -860,25 +873,24 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev)
 					 .isp_chns[info.path]
 					 .bufs[output_buffer->index]));
 	if (ret_val != 0) {
+		dev_dbg(isp_dev->dev,
+			"%s: MediaIspHalBufDone failed with error %d\n",
+			__func__, ret_val);
 		dev_dbg(
 		    isp_dev->dev,
-		    "Skip buf: ISP=%d, port=%d, chn=%d, BUF index=%d\n",
-		    isp_dev->id, info.vt_id, info.path,
-		    output_buffer ? output_buffer->index : 0);
+		    "Skip buf: ret_val=%d, ISP=%d, port=%d, chn=%d, BUF=0x%x\n",
+		    ret_val, isp_dev->id, info.vt_id, info.path,
+		    output_buffer ? output_buffer->base_address : 0);
 		goto error_free_buf;
 	}
 
-	/* Free allocated buffer after successful processing*/
-	kfree(packet_from_rpu);
-	if (isp_dev->rpu && isp_dev->rpu->rx_msg_cache && msg)
-		kmem_cache_free(isp_dev->rpu->rx_msg_cache, msg);
+	/* Free message after successful processing */
+	kmem_cache_free(isp_dev->rpu->rx_msg_cache, msg);
 	return 0;
 
 error_free_buf:
-	kfree(packet_from_rpu);
-	if (isp_dev->rpu && isp_dev->rpu->rx_msg_cache && msg)
-		kmem_cache_free(isp_dev->rpu->rx_msg_cache, msg);
-	/* Free buffer in case of any error*/
+	/* Free message in case of any error */
+	kmem_cache_free(isp_dev->rpu->rx_msg_cache, msg);
 	return ret_val;
 }
 
@@ -2613,7 +2625,22 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 		return -ENOMEM;
 	}
 	/* initialise completion used in while waiting for ack & data*/
-	init_completion(&isp_dev->apu_wait_for_ack);
+	/* Initialize 3D completion array for ENQUE_BUFFER */
+	for (int inst = 0; inst < 4; inst++)
+		for (int path = 0; path < 4; path++)
+			for (int buf = 0; buf < 32; buf++)
+				init_completion(&isp_dev->apu_wait_for_enq_ack[inst][path][buf]);
+
+	/* Initialize port-level completions for other commands */
+	for (int port = 0; port < 4; port++) {
+		init_completion(&isp_dev->apu_wait_for_cmd_ack[port]);
+		mutex_init(&isp_dev->cmd_ack_fifo_lock[port]);
+		/* Allocate port-level FIFO (128 entries) */
+		if (kfifo_alloc(&isp_dev->cmd_ack_fifo[port], 128, GFP_KERNEL)) {
+			dev_err(isp_dev->dev, "Failed to allocate cmd_ack_fifo[%d]\n", port);
+			return -ENOMEM;
+		}
+	}
 	init_completion(&isp_dev->apu_wait_for_data);
 
 	if (!isp_dev->rpu->tx_chan || !isp_dev->rpu->rx_chan) {
@@ -2665,7 +2692,12 @@ static int visp_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	INIT_KFIFO(isp_dev->display_fifo);
+	/* Initialize mutexes for cam_device_bufs arrays (4 ports × 4 channels) */
+	for (int port = 0; port < MAX_PORTS; port++)
+		for (int chn = 0; chn < 4; chn++)
+			mutex_init(&isp_dev->isp_ports[port]
+				       .isp_chns[chn]
+				       .cam_device_bufs_lock);
 
 	v4l2_subdev_init(&isp_dev->sd, &visp_subdev_ops);
 	snprintf(isp_dev->sd.name, VISP_SUBDEV_NAME_SIZE, "%s.%d", VISP_NAME,

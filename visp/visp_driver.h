@@ -109,7 +109,11 @@ static inline int visp_get_num_pads(u32 num_streams)
 {
 	return num_streams * VISP_PORT_PAD_NR;
 }
-typedef int (*frameout_cb_t)(struct visp_dev *dev);
+
+/* Forward declaration for mailbox message structure */
+struct mbox_post_msg;
+
+typedef int (*frameout_cb_t)(struct visp_dev *dev, int port, struct mbox_post_msg *msg);
 enum visp_path_out_type_e {
 	VISP_PATH_OUT_TYPE_MEMORY = 0, /**< path out in memory type*/
 	VISP_PATH_OUT_TYPE_STREAM = 1, /**< path out in stream type */
@@ -245,8 +249,12 @@ struct oba_info {
 	const char *data_format;
 };
 
-//
-#define VISP_KFIFO_SIZE 16
+/*
+ * Increased from 16 to 64 to prevent frame drops at 30fps.
+ * Old: 16 frames = 533ms buffer @ 30fps → tight for bursty processing.
+ * New: 64 frames = 2133ms buffer → absorbs RPU processing delays.
+ */
+#define VISP_KFIFO_SIZE 64
 struct visp_dev {
 	phys_addr_t paddr;
 	struct rpu_dev *rpu;
@@ -316,9 +324,19 @@ struct visp_dev {
 	int streamon[VISP_PORT_PAD_NR * MAX_PORTS];
 	// Pipeline subdevices storage
 	// flags
-	struct completion apu_wait_for_ack;
+	/* 3D array for ENQUE_BUFFER: [MAX_PORTS][path][buffer_index] */
+	/* Support 4 instances, 4 paths, 32 buffer slots per path */
+	struct completion apu_wait_for_enq_ack[4][4][32];
+	/* Port-level completions for other commands */
+	struct completion apu_wait_for_cmd_ack[4];  /* 4 ports */
 	struct completion apu_wait_for_data;
 	struct completion mailbox_completion;
+	/* Port-level FIFOs for other commands */
+	DECLARE_KFIFO_PTR(cmd_ack_fifo[4], struct mbox_post_msg *);
+	struct mutex cmd_ack_fifo_lock[4];  /* One mutex per port */
+	/* Direct error code storage - eliminates FIFO overhead for ENQUE_BUFFER */
+	int enq_ack_error[4][4][32];  /* [port][path][buffer_index] */
+	int cmd_ack_error[4];  /* [port] */
 	struct atm_prop atm;
 	wait_queue_head_t wq_frame_done_finished;
 	bool apu_wait_for_isp_frame_done;
@@ -334,7 +352,6 @@ struct visp_dev {
 	unsigned int out_fmt;
 	unsigned int cap_fmt;
 	unsigned int isp_dq_out_index;
-	DECLARE_KFIFO(display_fifo, struct mbox_post_msg *, VISP_KFIFO_SIZE);
 	void *extended_struct;
 };
 

@@ -773,9 +773,10 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 				   uint8_t chn);
 int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn);
 int isp_device_create(struct visp_dev *isp_dev, uint8_t port);
-
+#if 0
 int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
 					int *frame_rate);
+#endif
 int media_isp_set_frame_rate(struct visp_dev *isp_dev, int pad,
 				 int *frame_rate);
 
@@ -838,7 +839,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 		/*EXIT PORT Level CRITICAL SECITON*/
 		mutex_unlock(&isp_dev->port_lock[port]);
-
+#if 0
 		/*Set Frame Rate */
 		ret = media_isp_device_set_frame_rate(
 			isp_dev, port,
@@ -850,7 +851,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				port, chn, ret);
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
-
+#endif
 		dev_info(isp_dev->dev, "%s %d Camerrefcnt  =%d\n", __func__,
 			 __LINE__,
 			 isp_dev->isp_ports[port].camera_connect_ref_cnt);

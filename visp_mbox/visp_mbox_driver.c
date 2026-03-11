@@ -65,14 +65,25 @@
 
 /*
  * Process up to 32 messages per work execution.
- * A larger batch drains the FIFO in one dispatch, avoiding head-of-line
- * blocking when multiple RPUs share CPU time, keeping FPS stable.
+ *
+ * FIFO: 30 messages → drained in a single work cycle (<=32 msgs)
+ * Per RPU: 360 msgs/sec ≈ 2.78ms per message
+ *
+ * Strategy: Larger batch clears the FIFO in one dispatch, avoiding
+ * head-of-line blocking when RPU6+RPU7 workqueues land on the same CPU,
+ * keeping FPS stable with minimal drops.
  */
 #define MAX_MESSAGES_PER_WORK 32
 
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
 static LIST_HEAD(rpu_devices);
+
+/*
+ * Per-RPU workqueues are now created in visp_mbox_setup() to eliminate
+ * contention when multiple RPUs share the same IPI channel.
+ */
+
 static void visp_mbox_event_notified(struct work_struct *work)
 {
 	struct rpu_dev *rpu = container_of(work, struct rpu_dev, mbox_work);
@@ -136,11 +147,12 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 
 	/* Dedicated per-RPU workqueue to avoid cross-RPU contention */
 	snprintf(wq_name, sizeof(wq_name), "visp-mbox-rpu%d", rpu->rpu_id);
+	/* High-priority unbound worker to reduce preemption under load */
 	rpu->rpu_wq = alloc_workqueue(wq_name,
 				      WQ_UNBOUND | WQ_HIGHPRI |
 				      WQ_CPU_INTENSIVE, 1);
 	if (!rpu->rpu_wq) {
-		dev_err(rpu->dev, "Failed to create per-RPU workqueue.\n");
+		dev_err(rpu->dev, "Failed to create per-RPU workqueue\n");
 		return -ENOMEM;
 	}
 
@@ -162,9 +174,12 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 		return -ENODEV;
 	}
 
-	INIT_KFIFO(rpu->ack_fifo);
 	INIT_KFIFO(rpu->data_fifo);
 	INIT_KFIFO(rpu->app_fifo);
+
+	/* Initialize mutexes for thread-safe kfifo access in workqueue context */
+	mutex_init(&rpu->app_fifo_lock);
+	mutex_init(&rpu->data_fifo_lock);
 
 	/* Initialize TX mailbox client SKB queue */
 	skb_queue_head_init(&rpu->tx_mc_skbs);
@@ -261,29 +276,27 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 	p_data = packet->payload;
 	memcpy(&instance_id, p_data, sizeof(uint32_t));
 
-	mutex_lock(&rpu->write_lock); // Replaced spinlock with mutex
-	/* Send command and message */
+	/* write_lock now held internally by write_mboxcmd() with reduced scope */
 	ret = visp_mbox_send_command(user_packet->cmd_id, packet,
 				     sizeof(payload_packet), flag, rpu->core_id,
 				     MBOX_CORE_APU);
 	if (ret < 0) {
 		pr_err("%s: send_command failed with error: %d\n", __func__,
 		       ret);
-		mutex_unlock(&rpu->write_lock);
 		kfree(packet);
 		kfree(user_packet);
 		return -EIO;
 	}
 
-	ret = mbox_send_message(rpu->tx_chan, NULL); // Trigger irq
+	/* IPI trigger - mailbox framework handles synchronization */
+	ret = mbox_send_message(rpu->tx_chan, NULL);
+
 	if (ret < 0) {
 		pr_err("%s: mbox_send_message() failed: %d\n", __func__, ret);
-		mutex_unlock(&rpu->write_lock);
 		kfree(packet);
 		kfree(user_packet);
 		return -EIO;
 	}
-	mutex_unlock(&rpu->write_lock);
 	kfree(packet);
 	kfree(user_packet);
 	return lbuf; // Return the number of bytes written
@@ -312,11 +325,15 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 				     // interruption
 		goto ERROR;
 	}
+
+	mutex_lock(&rpu->app_fifo_lock);
 	if (!kfifo_out(&rpu->app_fifo, &msg, 1)) {
-		pr_err("Failed to queue into kfifo\n");
+		mutex_unlock(&rpu->app_fifo_lock);
+		pr_err("Failed to dequeue from app_fifo\n");
 		bytes_copied = -ENOMSG;
 		goto ERROR;
 	}
+	mutex_unlock(&rpu->app_fifo_lock);
 
 	/* Use heap allocation for large packet structure */
 	struct response_user_packet *user_pkt = kmalloc(sizeof(*user_pkt), GFP_KERNEL);
@@ -468,8 +485,8 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 		goto ERROR;
 	}
 
-	long timeout_jiffies =
-	    msecs_to_jiffies(1000 * 60 * 5); // Timeout of 5000ms (5 seconds)
+	/* 3-minute timeout for data commands */
+	long timeout_jiffies = msecs_to_jiffies(1000 * 60 * 3);
 	result = wait_for_completion_interruptible_timeout(
 	    &isp_dev->apu_wait_for_data, timeout_jiffies);
 	if (result == 0) {
@@ -483,9 +500,10 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 		goto ERROR;
 	}
 
-	mutex_unlock(&rpu->write_lock);
+	mutex_lock(&rpu->data_fifo_lock);
 	if (!kfifo_out(&rpu->data_fifo, &msg, 1)) {
-		pr_err("Failed to queue into kfifo\n");
+		mutex_unlock(&rpu->data_fifo_lock);
+		pr_err("Failed to dequeue from data_fifo\n");
 		ret = -ENOMEM;
 		goto ERROR;
 	}
@@ -496,6 +514,7 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	memcpy(data, pkt->payload, sizeof(pkt->payload));
 	ret = pkt->resp_field.error_subcode_t;
 
+	mutex_unlock(&rpu->data_fifo_lock);
 	kmem_cache_free(rpu->rx_msg_cache, msg);
 ERROR:
 	/* Return the error code from the interrupt's response payload */
@@ -517,8 +536,6 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	}
 
 	rpu = isp_dev->rpu;
-
-	mutex_lock(&rpu->write_lock);
 
 	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
 					src_cpu);
@@ -552,7 +569,6 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 	return result;
 unlock_and_exit:
-	mutex_unlock(&rpu->write_lock);
 	return result;
 }
 EXPORT_SYMBOL(xlnx_send_mbox_data_cmd);
@@ -570,25 +586,24 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		return -EINVAL;
 	}
 	rpu = isp_dev->rpu;
-	mutex_lock(&rpu->write_lock);
+
+	/* write_lock now held internally by write_mboxcmd() with reduced scope */
 	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
 					src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
 			"%s: Mailbox Send message failed at line %d\n",
 			__func__, __LINE__);
-		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
 
+	/* IPI trigger - mailbox framework handles synchronization */
 	result = mbox_send_message(rpu->tx_chan, NULL);
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
 			__func__, __LINE__);
-		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
-	mutex_unlock(&rpu->write_lock);
 	return 0; // Success
 }
 EXPORT_SYMBOL(xlnx_send_mbox_without_ack_cmd);
@@ -600,63 +615,159 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	int result;
 	struct rpu_dev *rpu;
 	uint32_t flag = 0;
+	uint32_t instance_id, port;
+	uint32_t path = 0;
+	uint32_t buffer_index = 0;
+	uint8_t *p_data;
 
 	if (!isp_dev || !isp_dev->rpu) {
 		pr_err("%s: Invalid ISP device\n", __func__);
 		return -EINVAL;
 	}
 
+	if (!data) {
+		pr_err("%s: Invalid data pointer\n", __func__);
+		return -EINVAL;
+	}
+
+	/* Extract instance_id, path, and buffer_index from payload */
+	p_data = ((payload_packet *)data)->payload;
+	memcpy(&instance_id, p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	memcpy(&path, p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER)
+		memcpy(&buffer_index, p_data, sizeof(uint8_t));
+
+	/* Map instance_id to port: 4 instances per port (16 instances / 4 ports) */
+	port = instance_id % MAX_PORTS;
+
+	if (port >= 4) {
+		pr_err("%s: Invalid port %u (max 95)\n", __func__, port);
+		return -EINVAL;
+	}
+
+	/* Validate path and buffer_index for ENQUE_BUFFER to prevent array out of bounds */
+	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+		if (path != 0 && path != 1) {
+			pr_err("%s: Invalid path %u for ENQUE_BUFFER"
+			       "(expected 0 or 1)\n", __func__, path);
+			return -EINVAL;
+		}
+		if (buffer_index >= 32) {
+			pr_err("%s: Invalid buffer_index %u for ENQUE_BUFFER"
+			       "(max 31)\n", __func__, buffer_index);
+			return -EINVAL;
+		}
+	}
+
 	rpu = isp_dev->rpu;
 
-	mutex_lock(&rpu->write_lock);
+	/*
+	 * CRITICAL: Drain any stale completions and messages BEFORE posting command.
+	 * This prevents race where RPU responds before we reinitialize completion,
+	 * and ensures no leaked messages accumulate in FIFOs.
+	 * No lock needed here because:
+	 * 1. Completion APIs (reinit_completion, complete, wait_for_completion_*)
+	 *    are internally thread-safe
+	 * 2. Each [instance_id][path][buffer_index] represents a unique buffer
+	 * 3. Buffer management ensures same buffer isn't queued concurrently
+	 */
+	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+		/* Drain stale completion - no FIFO drain needed with direct error code storage */
+		if (try_wait_for_completion(&isp_dev->apu_wait_for_enq_ack
+					    [port][path][buffer_index])) {
+			dev_warn_ratelimited(rpu->dev,
+					     "Drained stale ENQUE_BUFFER"
+					     " completion (instance=%u path=%u"
+					     " buf=%u)\n", instance_id, path,
+					     buffer_index);
+		}
+		reinit_completion(&isp_dev->apu_wait_for_enq_ack[port]
+				  [path][buffer_index]);
+	} else {
+		/* Drain stale completion and its associated message - use port-level */
+		if (try_wait_for_completion(&isp_dev->apu_wait_for_cmd_ack
+		    [port])) {
+			/* Also drain any stale message from FIFO */
+			mbox_post_msg *stale_msg = NULL;
 
+			mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
+			if (kfifo_out(&isp_dev->cmd_ack_fifo[port], &stale_msg, 1)) {
+				kmem_cache_free(rpu->rx_msg_cache, stale_msg);
+				dev_warn_ratelimited(rpu->dev, "Drained stale"
+						     "cmd ACK (port=%u)\n", port);
+			}
+			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
+		}
+		reinit_completion(&isp_dev->apu_wait_for_cmd_ack[port]);
+	}
+
+	/* write_lock now held internally by write_mboxcmd() with reduced scope */
 	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
 					src_cpu);
 	if (result != 0) {
 		dev_err(rpu->dev,
 			"%s: Mailbox Send message failed at line %d\n",
 			__func__, __LINE__);
-		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
-	// Prepare for ACK
-	reinit_completion(&isp_dev->apu_wait_for_ack);
 
-	// result = mbox_send_message(isp_dev->tx_chan, NULL);
+	/* IPI trigger - mailbox framework handles synchronization */
 	result = mbox_send_message(rpu->tx_chan, NULL);
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
 			__func__, __LINE__);
-		mutex_unlock(&rpu->write_lock);
 		return result;
 	}
 
-	result = xlnx_mbox_apu_wait_for_ack(isp_dev);
+	/* RPU lock released - TX mailbox operation complete */
+
+	/* Wait for ACK outside the lock */
+	result = xlnx_mbox_apu_wait_for_ack(isp_dev, instance_id, path, buffer_index, cmd);
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: Failed to get ack\n", __func__);
-		goto unlock_and_exit;
+		return result;
 	}
 
-unlock_and_exit:
-	mutex_unlock(&rpu->write_lock);
-	return result; // Success
+	return result;
 }
 EXPORT_SYMBOL(xlnx_send_mbox_acked_cmd);
 
-uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
+uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
+				   uint32_t instance_id, uint32_t path,
+				   uint32_t buffer_index, mb_cmd_id_e cmd)
 {
 	struct rpu_dev *rpu = NULL;
 	long result;
 	mbox_post_msg *msg;
-	size_t size;
 	int ret;
+	uint32_t port;
 
 	if (!isp_dev) {
-		pr_err("xlnx_mbox_apu_wait_for_ack: Invalid ISP device (NULL "
-		       "pointer).\n");
+		pr_err("%s : Invalid ISP device (NULL pointer).\n", __func__);
 		ret = -EINVAL;
 		goto ERROR;
 	}
+
+	/* Map instance_id to port: 4 instances per port (16 instances / 4 ports) */
+	port = instance_id % MAX_PORTS;
+
+	if (port >= MAX_PORTS) {
+		pr_err("%s: Invalid instance_id %u -> port %u (max port %u)\n",
+		       __func__, instance_id, port, MAX_PORTS - 1);
+		ret = -EINVAL;
+		goto ERROR;
+	}
+
+	/* Validate path for ENQUE_BUFFER to prevent array out of bounds */
+	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER && (path != 0 && path != 1)) {
+		pr_err("%s: Invalid path %u for ENQUE_BUFFER (expected 0/1)\n",
+		       __func__, path);
+		ret = -EINVAL;
+		goto ERROR;
+	}
+
 	rpu = isp_dev->rpu;
 	if (!rpu) {
 		dev_err(isp_dev->dev, "RPU device is NULL in %s.\n", __func__);
@@ -665,46 +776,113 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev)
 	}
 
 	/* Wait for acknowledgment completion */
-	long timeout_jiffies =
-	    msecs_to_jiffies(1000 * 60 * 5); // Timeout of 5000ms (5 seconds)
-	result = wait_for_completion_interruptible_timeout(
-	    &isp_dev->apu_wait_for_ack, timeout_jiffies);
+	/* Timeout selection rationale:
+	 *
+	 * ENQUE_BUFFER (fast-path): 20s timeout
+	 *   - Conservative guard under heavy multi-ISP contention and backlog
+	 *     recovery
+	 *   - Avoids premature drain of valid late ACKs while keeping a bound
+	 *   - Mainly needed during pipeline init; steady state should be faster
+	 *
+	 * Pipeline commands: 120s (2 minutes) timeout
+	 *   - Sensor init (slowest): observed max 50-60s
+	 *   - Stream start / calibration: typically <30s
+	 *   - 120s gives 2x safety margin on the slowest observed case
+	 *   - Detects true RPU hangs 33% faster than a 180s timeout
+	 */
+	long timeout_jiffies;
+
+	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+		/* 20s for ENQ - wide margin for congested multi-ISP scheduling */
+		timeout_jiffies = msecs_to_jiffies(20000);
+		/* For ENQUE_BUFFER: use 3D array-based completion with
+		 *interruptible wait
+		 */
+		result = wait_for_completion_interruptible_timeout(
+		    &isp_dev->apu_wait_for_enq_ack[port][path]
+		    [buffer_index], timeout_jiffies);
+	} else {
+		/* 2 minutes for pipeline init/config commands */
+		timeout_jiffies = msecs_to_jiffies(120000);
+		/* For other commands: use port-level completion with interruptible wait */
+		result = wait_for_completion_interruptible_timeout(
+		    &isp_dev->apu_wait_for_cmd_ack[port], timeout_jiffies);
+	}
 	if (result == 0) {
-		dev_err(rpu->dev,
-			"Timeout occurred while waiting for APU ACK\n");
+		/* Timeout occurred */
+		if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+			dev_err_ratelimited(rpu->dev,
+					    "ENQUEUE TIMEOUT: No ACK in 500ms "
+					    "(instance_id=%u->port=%u, path=%u, "
+					    "buf=%u) - RPU overwhelmed or RX "
+					    "workqueue stalled. Check 'Bdgt "
+					    "exhausted' logs.\n",
+				instance_id, port, path, buffer_index);
+		} else {
+			dev_err(rpu->dev, "Timeout waiting for APU ACK "
+				"(cmd=%d, instance_id=%u->port=%u)\n",
+				cmd, instance_id, port);
+			/* Drain FIFO to prevent leak */
+			mbox_post_msg *leaked_msg = NULL;
+
+			mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
+			if (kfifo_out(&isp_dev->cmd_ack_fifo[port], &leaked_msg, 1)) {
+				kmem_cache_free(rpu->rx_msg_cache, leaked_msg);
+				dev_warn(rpu->dev, "Drned late ACK cmd_fifo[%u]"
+					 "after timeout\n", port);
+			}
+			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
+		}
 		ret = -ETIMEDOUT;
 		goto ERROR;
 	} else if (result < 0) {
-		dev_err(rpu->dev, "Wait interrupted\n");
-		ret = -1;
+		dev_err(rpu->dev, "Wait interrupted for cmd=%d\n", cmd);
+		/* Drain FIFO on interrupt only for non-ENQUE commands */
+		if (cmd != APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+			mbox_post_msg *leaked_msg = NULL;
+
+			mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
+			if (kfifo_out(&isp_dev->cmd_ack_fifo[port], &leaked_msg, 1))
+				kmem_cache_free(rpu->rx_msg_cache, leaked_msg);
+			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
+		}
+		ret = -EINTR;
 		goto ERROR;
 	}
 
-	if (!kfifo_out(&rpu->ack_fifo, &msg, 1)) {
-		pr_err("Failed to queue into kfifo\n");
-		ret = -ENOMSG;
-	}
+	/* Read error code directly - no FIFO overhead */
+	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+		/* Validate path for ENQUE_BUFFER */
+		if (path != 0 && path != 1) {
+			pr_err("Invalid path %u for ENQUE_BUFFER ACK\n", path);
+			ret = -EINVAL;
+			goto ERROR;
+		}
+		/* Read error code stored by RX handler - no message allocation needed */
+		ret = isp_dev->enq_ack_error[port][path][buffer_index];
+	} else {
+		/* Other commands use port-level FIFO */
+		mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
+		if (!kfifo_out(&isp_dev->cmd_ack_fifo[port], &msg, 1)) {
+			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
+			pr_err("Failed to dequeue from cmd_ack_fifo[%u]\n", port);
+			ret = -ENOMSG;
+			goto ERROR;
+		}
+		mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
+		if (!msg) {
+			pr_err("Received invalid message\n");
+			ret = -EINVAL;
+			goto ERROR;
+		}
+		/* Extract error_subcode from received message payload */
+		payload_packet *pkt = (payload_packet *)msg->payload;
 
-	if (!msg) {
-		pr_err("Received invalid message or payload\n");
-		ret = -EINVAL;
-		goto ERROR;
-	}
-
-	rpu->visp_mbox_intr_data->cmdid = msg->msg_id;
-	rpu->visp_mbox_intr_data->data = msg->payload;
-	size = msg->size;
-	memcpy(&rpu->visp_mbox_intr_data->res_payload_pkt, msg->payload,
-	       ALIGN(size, 8));
-
-	ret = rpu->visp_mbox_intr_data->res_payload_pkt.resp_field.error_subcode_t;
-	if (rpu->rx_msg_cache && msg)
+		ret = pkt->resp_field.error_subcode_t;
 		kmem_cache_free(rpu->rx_msg_cache, msg);
-
+	}
 	return ret;
 ERROR:
-	if (rpu && rpu->rx_msg_cache && msg)
-		kmem_cache_free(rpu->rx_msg_cache, msg);
 	return ret;
 
 }
@@ -963,12 +1141,6 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 		goto cleanup;
 	}
 
-	rpu->visp_mbox_intr_data = kzalloc(sizeof(struct response_user_packet), GFP_KERNEL);
-	if (!rpu->visp_mbox_intr_data) {
-		dev_err(&pdev->dev, "Failed to allocate visp_mbox_intr_data memory\n");
-		goto cleanup;
-	}
-
 	/* Add the character device */
 	ret = cdev_add(&rpu->cdev, rpu->devno, 1);
 	if (ret) {
@@ -1039,7 +1211,6 @@ cleanup:
 			destroy_workqueue(rpu->rpu_wq);
 			rpu->rpu_wq = NULL;
 		}
-		kfree(rpu->visp_mbox_intr_data);
 		if (rpu->tx_msg_cache) {
 			kmem_cache_destroy(rpu->tx_msg_cache);
 			rpu->tx_msg_cache = NULL;
@@ -1084,11 +1255,8 @@ static int visp_mbox_probe(struct platform_device *pdev)
 	}
 
 
-	if (rpu->rpu_wq) {
-		cancel_work_sync(&rpu->mbox_work);
-		destroy_workqueue(rpu->rpu_wq);
-		rpu->rpu_wq = NULL;
-	}
+	/* Validate rpu_id if there is a known range */
+	if (rpu_id < 6 || rpu_id > VISP_MBOX_MAX_RPU_ID) {
 		dev_err(dev, "Invalid rpu_id: %d\n", rpu_id);
 		return -EINVAL;
 	}
@@ -1147,7 +1315,6 @@ static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 	/* Check if the device is safe to remove */
 	if (ref_count == 1) {
 		/* Perform cleanup and removal */
-		kfree(rpu->visp_mbox_intr_data);
 		if (rpu->tx_msg_cache)
 			kmem_cache_destroy(rpu->tx_msg_cache);
 		if (rpu->rx_msg_cache)

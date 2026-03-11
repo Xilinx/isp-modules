@@ -103,6 +103,8 @@ typedef struct media_isp_chn_s {
 	uint8_t num_bufs;
 	media_buf bufs[MEDIA_ISP_BUF_FRAME_MAX];
 	void *cam_device_bufs[MEDIA_ISP_BUF_FRAME_MAX];
+	/* Protects cam_device_bufs array access */
+	struct mutex cam_device_bufs_lock;
 } media_isp_chn_attr;
 
 typedef struct media_isp_mcm_s {

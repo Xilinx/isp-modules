@@ -576,7 +576,7 @@ RESULT vsi_cam_device_sensor_drv_handle_register(
 RESULT
 vsi_cam_device_sensor_drv_handle_un_register(struct visp_dev *isp_dev,
 						 cam_device_handle_t h_cam_device);
-
+#if 0
 /****************************************************************************/
 /**
  * @brief   Changes the sensor output from a live image to a test pattern.
@@ -592,7 +592,7 @@ vsi_cam_device_sensor_drv_handle_un_register(struct visp_dev *isp_dev,
 RESULT vsi_cam_device_sensor_set_test_pattern(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
 	const cam_device_sensor_test_pattern_t *p_test_pattern);
-
+#endif
 /****************************************************************************/
 /**
  * @brief   Mapping the sensor driver.

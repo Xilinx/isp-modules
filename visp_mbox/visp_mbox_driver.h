@@ -72,11 +72,23 @@
 #define VISP_MBOX_RPU8_2 2
 #define VISP_MBOX_RPU9_3 3
 
+/*
+ * ISP instance and path definitions:
+ *   MAX_ISP_INSTANCES: 6 ISP devices (0-5)
+ *   INSTANCES_PER_ISP: 16 instances per ISP (0-15 for each ISP)
+ *   MAX_INSTANCE_ID: 95 (6 ISPs × 16 instances - 1)
+ *   Path 0-3: Valid paths for video/sensor pipelines
+ *   Path >=4: Invalid, redirected to path 1 in some contexts
+ */
 #define MAX_ISP_INSTANCES 6
+#define INSTANCES_PER_ISP 16
+#define MAX_INSTANCE_ID 95
+#define MAX_PATH_ID 3
 #define VISP_MBOX_MAX_RPU_ID 9
 
 struct rpu_dev *visp_mbox_get_rpu_dev(int rpu_id);
-uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev);
+uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev, uint32_t instance_id,
+				   uint32_t path, uint32_t buffer_index, mb_cmd_id_e cmd);
 int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 			    void *data, uint32_t size, uint8_t dest_cpu,
 			    uint8_t src_cpu);
@@ -108,7 +120,12 @@ struct reserved_memory {
 	void __iomem *virt_addr;
 };
 
-#define RPU_CMD_KFIFO_SIZE 8
+/*
+ * Increased from 8 to 32 to handle burst traffic from 6 ISPs at frame start.
+ * Old: 8 slots shared across all ISPs → overflow with 6+ simultaneous sends.
+ * New: 32 slots provides 5× headroom for burst absorption.
+ */
+#define RPU_CMD_KFIFO_SIZE 32
 
 /* Structures to hold the rpu_device specific information */
 struct rpu_dev {
@@ -121,11 +138,14 @@ struct rpu_dev {
 	struct mutex rpu_lock;
 	struct mutex write_lock;
 	struct mutex userapp_lock;
+	/* Protects app_fifo from concurrent access */
+	struct mutex app_fifo_lock;
+	/* Protects data_fifo from concurrent access */
+	struct mutex data_fifo_lock;
 	mbox_fifo_ctrl *apu_rx_ctrl;
 	mbox_fifo_ctrl *apu_tx_ctrl;
 	struct kmem_cache *tx_msg_cache;
 	struct kmem_cache *rx_msg_cache;
-	struct response_user_packet *visp_mbox_intr_data;
 	struct list_head node;
 	struct kref refcount;
 	struct visp_dev *isp_dev[MAX_NO_ISP];
@@ -139,7 +159,6 @@ struct rpu_dev {
 	struct sk_buff_head tx_mc_skbs;
 	struct completion mailbox_completion;
 	DECLARE_KFIFO(app_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
-	DECLARE_KFIFO(ack_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
 	DECLARE_KFIFO(data_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
 	/* Remoteproc for automatic firmware loading */
 	struct rproc *rproc;

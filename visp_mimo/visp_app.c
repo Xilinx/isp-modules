@@ -81,7 +81,7 @@ int visp_set_fmt_public(struct visp_dev *isp_dev,
 int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index);
 int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 				uint8_t chn);
-
+#if 0
 int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
 					uint32_t *frame_rate)
 {
@@ -98,7 +98,7 @@ int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
 
 	return ret_val;
 }
-
+#endif
 int visp_buffer_alloc_public(struct visp_dev *isp_dev,
 				 struct visp_ext_buf_info *ext_buf_info);
 

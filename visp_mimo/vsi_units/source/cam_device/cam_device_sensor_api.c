@@ -423,7 +423,7 @@ RESULT vsi_cam_device_sensor_query(struct visp_dev *isp_dev,
 	kfree(packet);
 	return result;
 }
-
+#if 0
 RESULT vsi_cam_device_sensor_set_test_pattern(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
 	const cam_device_sensor_test_pattern_t *p_test_pattern)
@@ -546,7 +546,7 @@ RESULT vsi_cam_device_sensor_set_frame_rate(struct visp_dev *isp_dev,
 
 	return result;
 }
-
+#endif
 RESULT vsi_cam_device_sensor_get_connect_port_info(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
 	cam_device_mcm_port_id_t port_id,
