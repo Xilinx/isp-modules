@@ -2369,7 +2369,7 @@ static int visp_video_queue_init(struct visp_video_dev *visp_vdev)
 	queue->lock = &visp_vdev->video_lock;
 	queue->dev = visp_vdev->visp_mdev->dev;
 
-	queue->min_queued_buffers = 3;
+	queue->min_queued_buffers = 5;
 
 	ret = vb2_queue_init(queue);
 	if (ret) {
