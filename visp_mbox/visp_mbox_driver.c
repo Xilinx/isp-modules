@@ -56,29 +56,36 @@
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/kernel.h>
+#include <linux/workqueue.h>
 #include <linux/remoteproc.h>
 #include "visp_mbox_driver.h"
 #include "mbox_cmd.h"
 #include "mbox_api.h"
 #include <linux/delay.h>
 
+/*
+ * Process up to 32 messages per work execution.
+ * A larger batch drains the FIFO in one dispatch, avoiding head-of-line
+ * blocking when multiple RPUs share CPU time, keeping FPS stable.
+ */
+#define MAX_MESSAGES_PER_WORK 32
+
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
 static LIST_HEAD(rpu_devices);
-
-typedef int (*frameout_cb_t)(struct visp_dev *dev);
-
-static void visp_mbox_event_notified(unsigned long data)
+static void visp_mbox_event_notified(struct work_struct *work)
 {
-	struct rpu_dev *rpu = (struct rpu_dev *)data;
+	struct rpu_dev *rpu = container_of(work, struct rpu_dev, mbox_work);
 	int ret;
+	int msg_count = 0;
 
-	/* Read command from mailbox */
-	ret = visp_mbox_apu_read(rpu);
-	if (ret != 0) {
-		dev_err(rpu->dev, "Failed to read mailbox command:%d\n",
-			rpu->rpu_id);
-		return;
+	while (!vpi_mbox_is_empty(rpu->apu_rx_ctrl, rpu->core_id, MBOX_CORE_APU) &&
+	       msg_count < MAX_MESSAGES_PER_WORK) {
+		ret = visp_mbox_apu_read(rpu);
+		if (ret != 0)
+			dev_err(rpu->dev, "Failed to read mailbox command:%d\n",
+				rpu->rpu_id);
+		msg_count++;
 	}
 }
 
@@ -90,15 +97,21 @@ static void visp_mbox_rx_cb(struct mbox_client *cl, void *msg)
 {
 	/* Get RPU id from the received message */
 	struct rpu_dev *rpu = dev_get_drvdata(cl->dev);
-	if (rpu)
-		tasklet_schedule(&rpu->mbox_tasklet);
-	else
+	if (rpu) {
+		/* Skip scheduling when shared IPI fired with empty FIFO */
+		if (!vpi_mbox_is_empty(rpu->apu_rx_ctrl, rpu->core_id, MBOX_CORE_APU))
+			queue_work(rpu->rpu_wq, &rpu->mbox_work);
+		/* Always ACK the IPI so firmware does not stall */
+		(void)mbox_send_message(rpu->rx_chan, NULL);
+	} else {
 		pr_info("%s: Invalid RPU Device structure\n", __func__);
+	}
 }
 
 static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 {
 	struct mbox_client *mclient;
+	char wq_name[32];
 
 	if (!rpu || !rpu->dev) {
 		dev_err(rpu->dev,
@@ -118,10 +131,20 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 	mclient->dev = rpu->dev;
 	mclient->rx_callback = visp_mbox_rx_cb; // Set the RX callback
 
-	tasklet_init(&rpu->mbox_tasklet, visp_mbox_event_notified, (unsigned long)rpu);
-	rpu->tasklet_initialized = true;
+	/* Initialize work item for RX handling */
+	INIT_WORK(&rpu->mbox_work, visp_mbox_event_notified);
 
-	dev_dbg(rpu->dev, "Mailbox work handler initialized.\n");
+	/* Dedicated per-RPU workqueue to avoid cross-RPU contention */
+	snprintf(wq_name, sizeof(wq_name), "visp-mbox-rpu%d", rpu->rpu_id);
+	rpu->rpu_wq = alloc_workqueue(wq_name,
+				      WQ_UNBOUND | WQ_HIGHPRI |
+				      WQ_CPU_INTENSIVE, 1);
+	if (!rpu->rpu_wq) {
+		dev_err(rpu->dev, "Failed to create per-RPU workqueue.\n");
+		return -ENOMEM;
+	}
+
+	dev_dbg(rpu->dev, "Per-RPU workqueue '%s' created.\n", wq_name);
 
 	/* Request TX channel */
 	rpu->tx_chan = mbox_request_channel_byname(&rpu->tx_mc, "tx");
@@ -962,6 +985,8 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	}
 
 	rpu->dev = &pdev->dev;
+	rpu->rpu_id = rpu_id;
+	rpu->core_id = rpu_id - VISP_MBOX_RPU6;
 
 	/* Setup mailbox if required */
 	if (of_property_read_bool(node, "mboxes")) {
@@ -979,9 +1004,6 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 
 	/* Store the RPU pointer in the platform device's driver data */
 	platform_set_drvdata(pdev, rpu);
-
-	rpu->rpu_id = rpu_id;
-	rpu->core_id = rpu_id - VISP_MBOX_RPU6;
 
 	/* Initialize the mailbox */
 	ret = visp_mbox_mailbox_initialization(rpu);
@@ -1012,9 +1034,10 @@ cleanup:
 			mbox_free_channel(rpu->tx_chan);
 		if (rpu->rx_chan)
 			mbox_free_channel(rpu->rx_chan);
-		if (rpu->tasklet_initialized) {
-			tasklet_kill(&rpu->mbox_tasklet);
-			rpu->tasklet_initialized = false;
+		if (rpu->rpu_wq) {
+			cancel_work_sync(&rpu->mbox_work);
+			destroy_workqueue(rpu->rpu_wq);
+			rpu->rpu_wq = NULL;
 		}
 		kfree(rpu->visp_mbox_intr_data);
 		if (rpu->tx_msg_cache) {
@@ -1060,11 +1083,12 @@ static int visp_mbox_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	/* Log rpu_id for debug purposes */
-	dev_dbg(dev, "rpu_id read from device tree: %u\n", rpu_id);
 
-	/* Validate rpu_id if there is a known range */
-	if (rpu_id < 6 || rpu_id > VISP_MBOX_MAX_RPU_ID) {
+	if (rpu->rpu_wq) {
+		cancel_work_sync(&rpu->mbox_work);
+		destroy_workqueue(rpu->rpu_wq);
+		rpu->rpu_wq = NULL;
+	}
 		dev_err(dev, "Invalid rpu_id: %d\n", rpu_id);
 		return -EINVAL;
 	}
@@ -1092,9 +1116,10 @@ static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 		return -ENODEV;
 	}
 
-	if (rpu->tasklet_initialized) {
-		tasklet_kill(&rpu->mbox_tasklet);
-		rpu->tasklet_initialized = false;
+	if (rpu->rpu_wq) {
+		cancel_work_sync(&rpu->mbox_work);
+		destroy_workqueue(rpu->rpu_wq);
+		rpu->rpu_wq = NULL;
 	}
 
 	/* Shutdown and release remoteproc if it was booted and running */

@@ -153,6 +153,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 
 	mutex_lock(&rpu->read_lock);
 	vpi_mbox_read(rpu->apu_rx_ctrl, msg, rpu->core_id);
+	mutex_unlock(&rpu->read_lock);
 
 	memcpy(&isp_id, ((payload_packet *)msg->payload)->payload, sizeof(uint32_t));
 
@@ -217,8 +218,6 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 					goto ERROR;
 				}
 				msg_enqueued = true;
-			(void)mbox_send_message(rpu->rx_chan, NULL);
-			mutex_unlock(&rpu->read_lock);
 			isp_dev->frameout_cb(isp_dev);
 			goto DISP_DONE;
 			} else {
@@ -238,8 +237,6 @@ ERROR:
 DONE:
 	if (!msg_enqueued && msg)
 		kmem_cache_free(rpu->rx_msg_cache, msg);
-	(void)mbox_send_message(rpu->rx_chan, NULL);
-	mutex_unlock(&rpu->read_lock);
 DISP_DONE:
 	return ret;
 }

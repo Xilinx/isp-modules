@@ -58,6 +58,7 @@
 #include "visp_driver.h"
 #include "sensor_cmd.h"
 #include <linux/kfifo.h>
+#include <linux/workqueue.h>
 #define CHAR_DEV_NAME "mailbox_dev"
 #define SUCCESS 0
 
@@ -133,8 +134,8 @@ struct rpu_dev {
 	struct mbox_client rx_mc;
 	struct mbox_chan *tx_chan;
 	struct mbox_chan *rx_chan;
-	struct tasklet_struct mbox_tasklet;
-	bool tasklet_initialized;
+	struct work_struct mbox_work;
+	struct workqueue_struct *rpu_wq;
 	struct sk_buff_head tx_mc_skbs;
 	struct completion mailbox_completion;
 	DECLARE_KFIFO(app_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
