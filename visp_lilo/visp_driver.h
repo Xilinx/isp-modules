@@ -95,6 +95,10 @@
 #define MAX_BANKS 4U
 #define MAX_PORTS 4 // Number of ports to parse
 #define MAX_NO_ISP 6
+/* Allow MP+SP on the same port to enqueue in parallel */
+#define ENQ_WQ_MAX_ACTIVE 1
+/* Per-port per-chain enqueue workqueues (MP/SP1 only) */
+#define ENQ_WQ_CHAIN_MAX 2
 
 enum visp_port_pad_e {
 	VISP_PORT_PAD_SINK = 0,
@@ -106,7 +110,10 @@ enum visp_port_pad_e {
 };
 
 #define VISP_PAD_NR (VISP_PORT_NR * VISP_PORT_PAD_NR)
-typedef int (*frameout_cb_t)(struct visp_dev *dev);
+/* Forward declaration for mailbox message structure */
+struct mbox_post_msg;
+
+typedef int (*frameout_cb_t)(struct visp_dev *dev, int port, struct mbox_post_msg *msg);
 enum visp_path_out_type_e {
 	VISP_PATH_OUT_TYPE_MEMORY = 0, /**< path out in memory type*/
 	VISP_PATH_OUT_TYPE_STREAM = 1, /**< path out in stream type */
@@ -247,7 +254,7 @@ static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
 
 #define VISP_DISPLAY_KFIFO_SIZE 16
 
-#define VISP_KFIFO_SIZE 16
+#define VISP_KFIFO_SIZE 64
 struct visp_dev {
 	phys_addr_t paddr;
 	struct rpu_dev *rpu;
@@ -315,10 +322,25 @@ struct visp_dev {
 	media_isp_port_attr isp_ports[MEDIA_ISP_PORT_MAX];
 	struct mutex port_lock[MEDIA_ISP_PORT_MAX];
 	int streamon[VISP_PORT_PAD_NR * MAX_PORTS];
+	// Pipeline subdevices storage
 	// flags
-	struct completion apu_wait_for_ack;
+	/* 3D array for ENQUE_BUFFER: [MAX_PORTS][path][buffer_index] */
+	/* Support 4 instances, 4 paths, 32 buffer slots per path */
+	struct completion apu_wait_for_enq_ack[4][4][32];
+	/* Port-level completions for other commands */
+	struct completion apu_wait_for_cmd_ack[4];  /* 4 ports */
 	struct completion apu_wait_for_data;
 	struct completion mailbox_completion;
+	/* Port-level FIFOs for other commands */
+	DECLARE_KFIFO_PTR(cmd_ack_fifo[4], struct mbox_post_msg *);
+	struct mutex cmd_ack_fifo_lock[4];  /* One mutex per port */
+	/* Direct error code storage - eliminates FIFO overhead for ENQUE_BUFFER */
+	int enq_ack_error[4][4][32];  /* [port][path][buffer_index] */
+	int cmd_ack_error[4];  /* [port] */
+	/* Per-port enqueue workqueues (parallel up to ENQ_WQ_MAX_ACTIVE) */
+	struct workqueue_struct *enq_wq[MAX_PORTS];
+	/* Per-port, per-chain enqueue workqueues for MP/SP1 (chains 0/1) */
+	struct workqueue_struct *enq_wq_chain[MAX_PORTS][ENQ_WQ_CHAIN_MAX];
 	struct atm_prop atm;
 	wait_queue_head_t wq_frame_done_finished;
 	bool apu_wait_for_isp_frame_done;
@@ -334,7 +356,6 @@ struct visp_dev {
 	unsigned int out_fmt;
 	unsigned int cap_fmt;
 	unsigned int isp_dq_out_index;
-	DECLARE_KFIFO(display_fifo, struct mbox_post_msg *, VISP_DISPLAY_KFIFO_SIZE);
 	void *extended_struct;
 };
 
