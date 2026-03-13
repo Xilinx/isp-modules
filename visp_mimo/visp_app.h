@@ -65,7 +65,10 @@ struct Chn_info {
 	uint32_t path;
 };
 
-int handle_frameout_buffer_mimo(struct visp_dev *isp_dev);
+struct mbox_post_msg;
+
+int handle_frameout_buffer_mimo(struct visp_dev *isp_dev, int port,
+				struct mbox_post_msg *msg);
 int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 					uint8_t chn);
 

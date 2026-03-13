@@ -2197,8 +2197,19 @@ int xlnx_link_mbox(struct visp_dev *isp_dev)
 			isp_dev->isp_rpu);
 		return -ENOMEM;
 	}
-	/* initialise completion used in while waiting for ack & data*/
-	init_completion(&isp_dev->apu_wait_for_ack);
+	/* Initialise completions/FIFOs used for ack/data handling */
+	for (int inst = 0; inst < MAX_PORTS; inst++) {
+		for (int path = 0; path < 4; path++)
+			for (int buf = 0; buf < 32; buf++)
+				init_completion(&isp_dev->apu_wait_for_enq_ack[inst][path][buf]);
+		init_completion(&isp_dev->apu_wait_for_cmd_ack[inst]);
+		mutex_init(&isp_dev->cmd_ack_fifo_lock[inst]);
+		if (kfifo_alloc(&isp_dev->cmd_ack_fifo[inst], 128, GFP_KERNEL)) {
+			dev_err(isp_dev->dev,
+				"Failed to allocate cmd_ack_fifo[%d]\n", inst);
+			return -ENOMEM;
+		}
+	}
 	init_completion(&isp_dev->apu_wait_for_data);
 
 	if (!isp_dev->rpu->tx_chan || !isp_dev->rpu->rx_chan) {

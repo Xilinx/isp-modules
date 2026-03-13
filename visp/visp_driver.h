@@ -74,6 +74,7 @@
 #include <linux/mailbox_controller.h>
 #include <linux/skbuff.h>
 #include <linux/kfifo.h>
+#include <linux/spinlock.h>
 #include <linux/workqueue.h>
 #define VISP_NAME "visp-isp-subdev"
 #define VISP_SUBDEV_NAME_SIZE 52
@@ -349,6 +350,9 @@ struct visp_dev {
 	struct atm_prop atm;
 	wait_queue_head_t wq_frame_done_finished;
 	bool apu_wait_for_isp_frame_done;
+	struct mbox_post_msg *pending_frameout_msg[MAX_PORTS];
+	/* required for visp_mimo */
+	spinlock_t frameout_lock[MAX_PORTS];
 	frameout_cb_t frameout_cb;
 	dma_addr_t ip_a[2];
 	dma_addr_t op_a[4];

@@ -617,6 +617,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	uint32_t flag = 0;
 	uint32_t instance_id, port;
 	uint32_t path = 0;
+	uint32_t path_idx = 0;
 	uint32_t buffer_index = 0;
 	uint8_t *p_data;
 
@@ -638,6 +639,10 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	p_data += sizeof(uint32_t);
 	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER)
 		memcpy(&buffer_index, p_data, sizeof(uint8_t));
+	path_idx = path;
+	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER && path == 6 &&
+	    isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0)
+		path_idx = 1; /* Firmware reports path 6 in MIMO; map to 1 */
 
 	/* Map instance_id to port: 4 instances per port (16 instances / 4 ports) */
 	port = instance_id % MAX_PORTS;
@@ -649,7 +654,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 	/* Validate path and buffer_index for ENQUE_BUFFER to prevent array out of bounds */
 	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
-		if (path != 0 && path != 1) {
+		if (path_idx != 0 && path_idx != 1) {
 			pr_err("%s: Invalid path %u for ENQUE_BUFFER"
 			       "(expected 0 or 1)\n", __func__, path);
 			return -EINVAL;
@@ -676,15 +681,15 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
 		/* Drain stale completion - no FIFO drain needed with direct error code storage */
 		if (try_wait_for_completion(&isp_dev->apu_wait_for_enq_ack
-					    [port][path][buffer_index])) {
+				    [port][path_idx][buffer_index])) {
 			dev_warn_ratelimited(rpu->dev,
 					     "Drained stale ENQUE_BUFFER"
 					     " completion (instance=%u path=%u"
-					     " buf=%u)\n", instance_id, path,
+					     " buf=%u)\n", instance_id, path_idx,
 					     buffer_index);
 		}
 		reinit_completion(&isp_dev->apu_wait_for_enq_ack[port]
-				  [path][buffer_index]);
+				  [path_idx][buffer_index]);
 	} else {
 		/* Drain stale completion and its associated message - use port-level */
 		if (try_wait_for_completion(&isp_dev->apu_wait_for_cmd_ack
@@ -724,7 +729,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	/* RPU lock released - TX mailbox operation complete */
 
 	/* Wait for ACK outside the lock */
-	result = xlnx_mbox_apu_wait_for_ack(isp_dev, instance_id, path, buffer_index, cmd);
+	result = xlnx_mbox_apu_wait_for_ack(isp_dev, instance_id, path_idx, buffer_index, cmd);
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: Failed to get ack\n", __func__);
 		return result;
@@ -743,6 +748,11 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 	mbox_post_msg *msg;
 	int ret;
 	uint32_t port;
+	uint32_t path_idx = path;
+
+	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER && path == 6 &&
+	    isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0)
+		path_idx = 1; /* Firmware reports path 6 in MIMO; map to 1 */
 
 	if (!isp_dev) {
 		pr_err("%s : Invalid ISP device (NULL pointer).\n", __func__);
@@ -761,11 +771,13 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 	}
 
 	/* Validate path for ENQUE_BUFFER to prevent array out of bounds */
-	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER && (path != 0 && path != 1)) {
-		pr_err("%s: Invalid path %u for ENQUE_BUFFER (expected 0/1)\n",
-		       __func__, path);
-		ret = -EINVAL;
-		goto ERROR;
+	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+		if (path_idx != 0 && path_idx != 1) {
+			pr_err("%s: Invalid path %u for ENQUE_BUFFER (expected 0/1)\n",
+			       __func__, path);
+			ret = -EINVAL;
+			goto ERROR;
+		}
 	}
 
 	rpu = isp_dev->rpu;
@@ -799,7 +811,7 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 		 *interruptible wait
 		 */
 		result = wait_for_completion_interruptible_timeout(
-		    &isp_dev->apu_wait_for_enq_ack[port][path]
+		    &isp_dev->apu_wait_for_enq_ack[port][path_idx]
 		    [buffer_index], timeout_jiffies);
 	} else {
 		/* 2 minutes for pipeline init/config commands */
@@ -853,13 +865,13 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 	/* Read error code directly - no FIFO overhead */
 	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
 		/* Validate path for ENQUE_BUFFER */
-		if (path != 0 && path != 1) {
+		if (path_idx != 0 && path_idx != 1) {
 			pr_err("Invalid path %u for ENQUE_BUFFER ACK\n", path);
 			ret = -EINVAL;
 			goto ERROR;
 		}
 		/* Read error code stored by RX handler - no message allocation needed */
-		ret = isp_dev->enq_ack_error[port][path][buffer_index];
+		ret = isp_dev->enq_ack_error[port][path_idx][buffer_index];
 	} else {
 		/* Other commands use port-level FIFO */
 		mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);

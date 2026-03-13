@@ -374,7 +374,9 @@ void visp_mimo_device_run(void *priv)
 	int s_cnt, d_cnt;
 	struct visp_mimo_ctx *curr_ctx = ctx;
 	media_buffer_t *p_media_buffer = NULL;
-	mbox_post_msg *msg;
+	mbox_post_msg *msg = NULL;
+	unsigned long flags;
+	const int port = 0;
 	struct Chn_info info;
 	int ret;
 
@@ -415,14 +417,12 @@ void visp_mimo_device_run(void *priv)
 	wait_event_interruptible(device->isp_dev->wq_frame_done_finished,
 				 !device->isp_dev->apu_wait_for_isp_frame_done);
 
-	if (!kfifo_out(&device->isp_dev->display_fifo, &msg, 1)) {
-		pr_err("Failed to queue into kfifo\n");
+	spin_lock_irqsave(&device->isp_dev->frameout_lock[port], flags);
+	msg = device->isp_dev->pending_frameout_msg[port];
+	device->isp_dev->pending_frameout_msg[port] = NULL;
+	spin_unlock_irqrestore(&device->isp_dev->frameout_lock[port], flags);
+	if (!msg)
 		goto skip_isp_dequeue;
-	}
-	if (!msg) {
-		dev_err(device->isp_dev->dev, "%s: invalid msg or payload\n", __func__);
-		goto skip_isp_dequeue;
-	}
 
 	/* Allocate memory for the buffer */
 	p_media_buffer = kzalloc(sizeof(media_buffer_t), GFP_KERNEL);
@@ -2428,17 +2428,31 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 
 //
 
-int handle_frameout_buffer_mimo(struct visp_dev *isp_dev)
+int handle_frameout_buffer_mimo(struct visp_dev *isp_dev, int port,
+				struct mbox_post_msg *msg)
 {
-	/* Validate inputs */
+	unsigned long flags;
+
 	if (!isp_dev) {
-		dev_err(isp_dev->dev,
-			"handle_frameout_buffer: isp_dev is NULL\n");
 		return -EINVAL;
 	}
 
-	// Message processing moved to visp_mimo_device_run
-	// Just wake up the waiting process
+	if (!msg) {
+		dev_err(isp_dev->dev, "%s: msg is NULL for port %d\n", __func__,
+			port);
+		return -EINVAL;
+	}
+
+	/* Store latest frame-out message for this port */
+	spin_lock_irqsave(&isp_dev->frameout_lock[port], flags);
+	if (isp_dev->pending_frameout_msg[port] && isp_dev->rpu &&
+	    isp_dev->rpu->rx_msg_cache)
+		kmem_cache_free(isp_dev->rpu->rx_msg_cache,
+				isp_dev->pending_frameout_msg[port]);
+	isp_dev->pending_frameout_msg[port] = msg;
+	spin_unlock_irqrestore(&isp_dev->frameout_lock[port], flags);
+
+	/* Wake up waiter in visp_mimo_device_run */
 	isp_dev->apu_wait_for_isp_frame_done = 0;
 	wake_up(&isp_dev->wq_frame_done_finished);
 
@@ -2525,8 +2539,10 @@ int visp_mimo_probe(struct platform_device *pdev)
 	mutex_init(&device->isp_dev->mlock);
 	mutex_init(&device->isp_dev->ctrl_lock);
 	device->isp_dev->dev = &pdev->dev;
-
-	INIT_KFIFO(device->isp_dev->display_fifo);
+	for (int port = 0; port < MAX_PORTS; port++) {
+		spin_lock_init(&device->isp_dev->frameout_lock[port]);
+		device->isp_dev->pending_frameout_msg[port] = NULL;
+	}
 
 	ret = visp_parse_params(device->isp_dev, pdev);
 	if (ret) {

@@ -241,6 +241,10 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		return -ENODEV;
 	}
 
+	if (resp_cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER && path == 6 &&
+	    isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0)
+		path = 1; /* Firmware reports path 6 in MIMO; map to 1 */
+
 	/* Handle application-specific messages (flags == 1) */
 	if (msg_copy->media_server_flags == 1) {
 		if (kfifo_is_full(&rpu->app_fifo)) {

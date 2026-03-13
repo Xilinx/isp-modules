@@ -117,7 +117,8 @@ int iba_init_send_command(struct visp_dev *isp_dev,
 	}
 
 	mbox_send_message(isp_dev->tx_chan, NULL);
-	xlnx_mbox_apu_wait_for_ack(isp_dev);
+	xlnx_mbox_apu_wait_for_ack(isp_dev, p_cam_dev_ctx->instance_id,
+				   0, 0, APU_2_RPU_MB_CMD_IBA_INIT);
 
 	dev_info(isp_dev->dev, "ACK received\n");
 

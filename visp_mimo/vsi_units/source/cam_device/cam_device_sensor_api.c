@@ -478,7 +478,8 @@ RESULT vsi_cam_device_sensor_set_test_pattern(
 	}
 	mbox_send_message(isp_dev->tx_chan, NULL);
 
-	xlnx_mbox_apu_wait_for_ack(isp_dev);
+	xlnx_mbox_apu_wait_for_ack(isp_dev, p_cam_dev_ctx->instance_id,
+				   0, 0, APU_2_RPU_MB_CMD_SENSOR_SET_TP);
 	mutex_unlock(&isp_dev->mlock);
 
 	kfree(packet);
@@ -539,7 +540,8 @@ RESULT vsi_cam_device_sensor_set_frame_rate(struct visp_dev *isp_dev,
 	mbox_send_message(isp_dev->tx_chan, NULL);
 
 
-	xlnx_mbox_apu_wait_for_ack(isp_dev);
+	xlnx_mbox_apu_wait_for_ack(isp_dev, p_cam_dev_ctx->instance_id,
+				   0, 0, APU_2_RPU_MB_CMD_SENSOR_SET_FRAMERATE);
 	mutex_unlock(&isp_dev->mlock);
 
 	kfree(packet);
