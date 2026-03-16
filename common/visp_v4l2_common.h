@@ -55,6 +55,15 @@
 #define __VISP_V4L2_COMMON_H__
 #include <linux/videodev2.h>
 
+#ifndef ALIGN_BYTES
+#define ALIGN_BYTES	16
+#endif
+
+struct format_reserved {
+	uint32_t fourcc;
+	uint32_t stride;
+};
+
 struct visp_video_plane {
 	uint64_t dma_addr;
 	uint32_t size;

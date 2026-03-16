@@ -227,6 +227,7 @@ typedef struct {
 	uint32_t pixel_format;
 	uint32_t color_space;
 	uint32_t quantization;
+	uint32_t stride;
 } media_fmt;
 
 typedef struct {

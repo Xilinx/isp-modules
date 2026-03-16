@@ -57,23 +57,23 @@
 
 #include "visp_driver.h"
 
-#if defined(ISP_AE_V3) || defined(ISP_AE_V4) || defined(ISP_AE_V4_1)
+#if defined(ISP_AE_V4)
 #include "visp_ae.h"
 #endif
 
-#if defined(ISP_AWB_V3) || defined(ISP_AWB_V4) || defined(ISP_AWB_V4_1)
+#if defined(ISP_AWB_V4)
 #include "visp_awb.h"
 #endif
 
-#if defined(ISP_GC_V1) || defined(ISP_GC_V2)
+#if defined(ISP_GC_V2)
 #include "visp_gc.h"
 #endif
 
-#if defined(ISP_2DNR_V3) || defined(ISP_2DNR_V5_2) || defined(ISP_2DNR_V6)
+#if defined(ISP_2DNR_V5_2)
 #include "visp_2dnr.h"
 #endif
 
-#if defined(ISP_EE_V1) || defined(ISP_EE_V2) || defined(ISP_EE_V3)
+#if defined(ISP_EE_V2)
 #include "visp_ee.h"
 #endif
 
@@ -81,9 +81,7 @@
 #include "visp_cproc.h"
 #endif
 
-#if defined(ISP_WDR_V3) || defined(ISP_WDR_V4) || defined(ISP_WDR_V5) || \
-	defined(ISP_WDR_V5_1) || defined(ISP_WDR_V5_2) ||                    \
-	defined(ISP_WDR_V5_2_1) || defined(ISP_WDR_V5_3)
+#if defined(ISP_WDR_V5_2)
 #include "visp_wdr.h"
 #endif
 
@@ -91,7 +89,7 @@
 #include "visp_bls.h"
 #endif
 
-#if defined(ISP_CCM)
+#if defined(ISP_CCM_V1_1)
 #include "visp_ccm.h"
 #endif
 
@@ -103,35 +101,15 @@
 #include "visp_ge.h"
 #endif
 
-#if defined(ISP_LSC_V1) || defined(ISP_LSC_V2) || defined(ISP_LSC_V3) || \
-	defined(ISP_LSC_V4)
+#if defined(ISP_LSC_V3)
 #include "visp_lsc.h"
 #endif
 
-#if defined(ISP_WB_V1) || defined(ISP_WB_V1_1)
+#if defined(ISP_WB_V1_1)
 #include "visp_wb.h"
 #endif
 
-#if defined(ISP_3DNR_V1_2) || defined(ISP_3DNR_V2_1) || \
-	defined(ISP_3DNR_V2_4) || defined(ISP_3DNR_V3) ||   \
-	defined(ISP_3DNR_V3_1) || defined(ISP_3DNR_V4)
-#include "visp_3dnr.h"
-#endif
-
-#if defined(ISP_AF_V3) || defined(ISP_AF_V4) || defined(ISP_AF_V4_1_1) || \
-	defined(ISP_AF_V4_3)
-#include "visp_af.h"
-#endif
-
-#if defined(ISP_PDAF_V1)
-#include "visp_pdaf.h"
-#endif
-
-#if defined(ISP_AFM_V1) || defined(ISP_AFM_V1_1) || defined(ISP_AFM_V3)
-#include "visp_afm.h"
-#endif
-
-#if defined(ISP_DMSC_V1) || defined(ISP_DMSC_V2) || defined(ISP_DMSC_V3)
+#if defined(ISP_DMSC_V2)
 #include "visp_dmsc.h"
 #endif
 
@@ -139,22 +117,11 @@
 #include "visp_exp.h"
 #endif
 
-#if defined(ISP_EXP_V3)
-#include "visp_exp_v3.h"
-#endif
-
 #if defined(ISP_GTM_V1)
 #include "visp_gtm.h"
 #endif
 
-#if defined(ISP_HDR_V1_3) || defined(ISP_HDR_V2) || defined(ISP_HDR_V2_1) || \
-	defined(ISP_HDR_V2_1_2DOL) || defined(ISP_HDR_V3) ||                     \
-	defined(ISP_HDR_V3_2DOL) || defined(ISP_HDR_V3_1)
-#include "visp_hdr.h"
-#endif
-
-#if defined(ISP_RGBIR_V1) || defined(ISP_RGBIR_V1_1) || \
-	defined(ISP_RGBIR_V2) || defined(ISP_RGBIR_V2_1)
+#if defined(ISP_RGBIR_V2_1)
 #include "visp_rgbir.h"
 #endif
 
@@ -162,29 +129,19 @@
 #include "visp_dg.h"
 #endif
 
-#if defined(ISP_CMPD_20BIT) || defined(ISP_CMPD_24BIT)
+#if defined(ISP_CPD_V1_1)
 #include "visp_cpd.h"
 #endif
 
-#if defined(ISP_DPF_V1)
-#include "visp_dpf.h"
+#if defined(ISP_HIST64)
+#include "visp_hist64.h"
 #endif
 
-#if defined(ISP_CNR_V1) || defined(ISP_CNR_V2_1) || defined(ISP_CNR_V2_2)
-#include "visp_cnr.h"
+#if defined(ISP_HIST256)
+#include "visp_hist256.h"
 #endif
 
-#if defined(ISP_GWDR_V1)
-#include "visp_gwdr.h"
-#endif
-
-#if defined(ISP_YNR_V1)
-#include "visp_ynr.h"
-#endif
-
-#if defined(ISP_LUT3D_V1)
-#include "visp_lut3d.h"
-#endif
+#include "visp_base.h"
 
 #include "visp_sensor.h"
 
@@ -192,23 +149,23 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 {
 	uint32_t ctrl_count = 0;
 
-#if defined(ISP_AE_V3) || defined(ISP_AE_V4) || defined(ISP_AE_V4_1)
+#if defined(ISP_AE_V4)
 	ctrl_count += visp_ae_ctrl_count();
 #endif
 
-#if defined(ISP_AWB_V3) || defined(ISP_AWB_V4) || defined(ISP_AWB_V4_1)
+#if defined(ISP_AWB_V4)
 	ctrl_count += visp_awb_ctrl_count();
 #endif
 
-#if defined(ISP_GC_V1) || defined(ISP_GC_V2)
+#if defined(ISP_GC_V2)
 	ctrl_count += visp_gc_ctrl_count();
 #endif
 
-#if defined(ISP_2DNR_V3) || defined(ISP_2DNR_V5_2) || defined(ISP_2DNR_V6)
+#if defined(ISP_2DNR_V5_2)
 	ctrl_count += visp_2dnr_ctrl_count();
 #endif
 
-#if defined(ISP_EE_V1) || defined(ISP_EE_V2) || defined(ISP_EE_V3)
+#if defined(ISP_EE_V2)
 	ctrl_count += visp_ee_ctrl_count();
 #endif
 
@@ -216,9 +173,7 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	ctrl_count += visp_cproc_ctrl_count();
 #endif
 
-#if defined(ISP_WDR_V3) || defined(ISP_WDR_V4) || defined(ISP_WDR_V5) || \
-	defined(ISP_WDR_V5_1) || defined(ISP_WDR_V5_2) ||                    \
-	defined(ISP_WDR_V5_2_1) || defined(ISP_WDR_V5_3)
+#if defined(ISP_WDR_V5_2)
 	ctrl_count += visp_wdr_ctrl_count();
 #endif
 
@@ -226,7 +181,7 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	ctrl_count += visp_bls_ctrl_count();
 #endif
 
-#if defined(ISP_CCM)
+#if defined(ISP_CCM_V1_1)
 	ctrl_count += visp_ccm_ctrl_count();
 #endif
 
@@ -238,35 +193,15 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	ctrl_count += visp_ge_ctrl_count();
 #endif
 
-#if defined(ISP_LSC_V1) || defined(ISP_LSC_V2) || defined(ISP_LSC_V3) || \
-	defined(ISP_LSC_V4)
+#if defined(ISP_LSC_V3)
 	ctrl_count += visp_lsc_ctrl_count();
 #endif
 
-#if defined(ISP_WB_V1) || defined(ISP_WB_V1_1)
+#if defined(ISP_WB_V1_1)
 	ctrl_count += visp_wb_ctrl_count();
 #endif
 
-#if defined(ISP_3DNR_V1_2) || defined(ISP_3DNR_V2_1) || \
-	defined(ISP_3DNR_V2_4) || defined(ISP_3DNR_V3) ||   \
-	defined(ISP_3DNR_V3_1) || defined(ISP_3DNR_V4)
-	ctrl_count += visp_3dnr_ctrl_count();
-#endif
-
-#if defined(ISP_AF_V3) || defined(ISP_AF_V4) || defined(ISP_AF_V4_1_1) || \
-	defined(ISP_AF_V4_3)
-	ctrl_count += visp_af_ctrl_count();
-#endif
-
-#if defined(ISP_PDAF_V1)
-	ctrl_count += visp_pdaf_ctrl_count();
-#endif
-
-#if defined(ISP_AFM_V1) || defined(ISP_AFM_V1_1) || defined(ISP_AFM_V3)
-	ctrl_count += visp_afm_ctrl_count();
-#endif
-
-#if defined(ISP_DMSC_V1) || defined(ISP_DMSC_V2) || defined(ISP_DMSC_V3)
+#if defined(ISP_DMSC_V2)
 	ctrl_count += visp_dmsc_ctrl_count();
 #endif
 
@@ -274,22 +209,11 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	ctrl_count += visp_exp_ctrl_count();
 #endif
 
-#if defined(ISP_EXP_V3)
-	ctrl_count += visp_exp_v3_ctrl_count();
-#endif
-
 #if defined(ISP_GTM_V1)
 	ctrl_count += visp_gtm_ctrl_count();
 #endif
 
-#if defined(ISP_HDR_V1_3) || defined(ISP_HDR_V2) || defined(ISP_HDR_V2_1) || \
-	defined(ISP_HDR_V2_1_2DOL) || defined(ISP_HDR_V3) ||                     \
-	defined(ISP_HDR_V3_2DOL) || defined(ISP_HDR_V3_1)
-	ctrl_count += visp_hdr_ctrl_count();
-#endif
-
-#if defined(ISP_RGBIR_V1) || defined(ISP_RGBIR_V1_1) || \
-	defined(ISP_RGBIR_V2) || defined(ISP_RGBIR_V2_1)
+#if defined(ISP_RGBIR_V2_1)
 	ctrl_count += visp_rgbir_ctrl_count();
 #endif
 
@@ -297,51 +221,41 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	ctrl_count += visp_dg_ctrl_count();
 #endif
 
-#if defined(ISP_CMPD_20BIT) || defined(ISP_CMPD_24BIT)
+#if defined(ISP_CPD_V1_1)
 	ctrl_count += visp_cpd_ctrl_count();
 #endif
 
-#if defined(ISP_DPF_V1)
-	ctrl_count += visp_dpf_ctrl_count();
+#if defined(ISP_HIST64)
+	ctrl_count += visp_hist64_ctrl_count();
 #endif
 
-#if defined(ISP_CNR_V1) || defined(ISP_CNR_V2_1) || defined(ISP_CNR_V2_2)
-	ctrl_count += visp_cnr_ctrl_count();
+#if defined(ISP_HIST256)
+	ctrl_count += visp_hist256_ctrl_count();
 #endif
 
-#if defined(ISP_GWDR_V1)
-	ctrl_count += visp_gwdr_ctrl_count();
-#endif
-
-#if defined(ISP_YNR_V1)
-	ctrl_count += visp_ynr_ctrl_count();
-#endif
-
-#if defined(ISP_LUT3D_V1)
-	ctrl_count += visp_lut3d_ctrl_count();
-#endif
+	ctrl_count += visp_base_ctrl_count();
 
 	ctrl_count += visp_sensor_ctrl_count();
 
 	v4l2_ctrl_handler_init(&isp_dev->ctrl_handler, ctrl_count);
 
-#if defined(ISP_AE_V3) || defined(ISP_AE_V4) || defined(ISP_AE_V4_1)
+#if defined(ISP_AE_V4)
 	visp_ae_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_AWB_V3) || defined(ISP_AWB_V4) || defined(ISP_AWB_V4_1)
+#if defined(ISP_AWB_V4)
 	visp_awb_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_GC_V1) || defined(ISP_GC_V2)
+#if defined(ISP_GC_V2)
 	visp_gc_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_2DNR_V3) || defined(ISP_2DNR_V5_2) || defined(ISP_2DNR_V6)
+#if defined(ISP_2DNR_V5_2)
 	visp_2dnr_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_EE_V1) || defined(ISP_EE_V2) || defined(ISP_EE_V3)
+#if defined(ISP_EE_V2)
 	visp_ee_ctrl_create(isp_dev);
 #endif
 
@@ -349,9 +263,7 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	visp_cproc_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_WDR_V3) || defined(ISP_WDR_V4) || defined(ISP_WDR_V5) || \
-	defined(ISP_WDR_V5_1) || defined(ISP_WDR_V5_2) ||                    \
-	defined(ISP_WDR_V5_2_1) || defined(ISP_WDR_V5_3)
+#if defined(ISP_WDR_V5_2)
 	visp_wdr_ctrl_create(isp_dev);
 #endif
 
@@ -359,7 +271,7 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	visp_bls_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_CCM)
+#if defined(ISP_CCM_V1_1)
 	visp_ccm_ctrl_create(isp_dev);
 #endif
 
@@ -371,35 +283,15 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	visp_ge_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_LSC_V1) || defined(ISP_LSC_V2) || defined(ISP_LSC_V3) || \
-	defined(ISP_LSC_V4)
+#if defined(ISP_LSC_V3)
 	visp_lsc_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_WB_V1) || defined(ISP_WB_V1_1)
+#if defined(ISP_WB_V1_1)
 	visp_wb_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_3DNR_V1_2) || defined(ISP_3DNR_V2_1) || \
-	defined(ISP_3DNR_V2_4) || defined(ISP_3DNR_V3) ||   \
-	defined(ISP_3DNR_V3_1) || defined(ISP_3DNR_V4)
-	visp_3dnr_ctrl_create(isp_dev);
-#endif
-
-#if defined(ISP_AF_V3) || defined(ISP_AF_V4) || defined(ISP_AF_V4_1_1) || \
-	defined(ISP_AF_V4_3)
-	visp_af_ctrl_create(isp_dev);
-#endif
-
-#if defined(ISP_PDAF_V1)
-	visp_pdaf_ctrl_create(isp_dev);
-#endif
-
-#if defined(ISP_AFM_V1) || defined(ISP_AFM_V1_1) || defined(ISP_AFM_V3)
-	visp_afm_ctrl_create(isp_dev);
-#endif
-
-#if defined(ISP_DMSC_V1) || defined(ISP_DMSC_V2) || defined(ISP_DMSC_V3)
+#if defined(ISP_DMSC_V2)
 	visp_dmsc_ctrl_create(isp_dev);
 #endif
 
@@ -407,22 +299,11 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	visp_exp_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_EXP_V3)
-	visp_exp_v3_ctrl_create(isp_dev);
-#endif
-
 #if defined(ISP_GTM_V1)
 	visp_gtm_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_HDR_V1_3) || defined(ISP_HDR_V2) || defined(ISP_HDR_V2_1) || \
-	defined(ISP_HDR_V2_1_2DOL) || defined(ISP_HDR_V3) ||                     \
-	defined(ISP_HDR_V3_2DOL) || defined(ISP_HDR_V3_1)
-	visp_hdr_ctrl_create(isp_dev);
-#endif
-
-#if defined(ISP_RGBIR_V1) || defined(ISP_RGBIR_V1_1) || \
-	defined(ISP_RGBIR_V2) || defined(ISP_RGBIR_V2_1)
+#if defined(ISP_RGBIR_V2_1)
 	visp_rgbir_ctrl_create(isp_dev);
 #endif
 
@@ -430,29 +311,20 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	visp_dg_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_CMPD_20BIT) || defined(ISP_CMPD_24BIT)
+#if defined(ISP_CPD_V1_1)
 	visp_cpd_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_DPF_V1)
-	visp_dpf_ctrl_create(isp_dev);
+#if defined(ISP_HIST64)
+	visp_hist64_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_CNR_V1) || defined(ISP_CNR_V2_1) || defined(ISP_CNR_V2_2)
-	visp_cnr_ctrl_create(isp_dev);
+#if defined(ISP_HIST256)
+	visp_hist256_ctrl_create(isp_dev);
 #endif
 
-#if defined(ISP_GWDR_V1)
-	visp_gwdr_ctrl_create(isp_dev);
-#endif
+	visp_base_ctrl_create(isp_dev);
 
-#if defined(ISP_YNR_V1)
-	visp_ynr_ctrl_create(isp_dev);
-#endif
-
-#if defined(ISP_LUT3D_V1)
-	visp_lut3d_ctrl_create(isp_dev);
-#endif
 	visp_sensor_ctrl_create(isp_dev);
 
 	isp_dev->sd.ctrl_handler = &isp_dev->ctrl_handler;

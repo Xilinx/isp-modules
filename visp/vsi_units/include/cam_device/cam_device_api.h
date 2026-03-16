@@ -62,6 +62,9 @@
 extern "C" {
 #endif
 
+#define CAMDEV_CC_MATRIX_SIZE       9U      /**< Color correction matrix size 3x3*/
+#define CAMDEV_CC_COLOR_CHANNEL_NUM 3U      /**< Color channel number 3*/
+
 /*****************************************************************************/
 /**
  * @brief   Structure to configure MCM mode parameters.
@@ -73,6 +76,7 @@ typedef struct cam_device_mcm_mode_config_s {
 			connect position*/
 	cam_device_mcm_operation_t mcm_op;  /**< MCM operation mode */
 	cam_device_mcm_selection_t mcm_sel; /**< MCM selection mode */
+	cam_device_mcm_reg_cfg_mode_t mcm_reg_cfg;/**< MCM register configuration mode */
 } cam_device_mcm_mode_config_t;
 
 /*****************************************************************************/
@@ -86,17 +90,6 @@ typedef struct cam_device_stream_mode_config_s {
 			connect position*/
 } cam_device_stream_mode_config_t;
 
-/*****************************************************************************/
-/**
- *  * @brief   Structure to configure betch mode parameters.
- *   *
- *    *****************************************************************************/
-typedef struct cam_device_batch_mode_config_s {
-	cam_device_stream_port_id_t
-	    port_id; /**< port index of MCM which indicates the sensor hardware
-			connect position*/
-	uint8_t batch_number; /**< Buffer number of one batch*/
-} cam_device_batch_mode_config_t;
 
 /*****************************************************************************/
 /**
@@ -123,8 +116,6 @@ typedef union cam_device_mode_config_s {
 		    //    CamDeviceRdmaModeConfig_t   rdma;     /**< Reseverd */
 	cam_device_mcm_mode_config_t
 	    mcm; /**< MCM mode configuration parameters */
-	cam_device_batch_mode_config_t
-	    batch; /**< Batch mode configuration parameters */
 } cam_device_mode_config_t;
 
 /*****************************************************************************/
@@ -196,6 +187,8 @@ typedef struct cam_device_pipe_out_fmt_s {
 						three yuv channal save in ddr */
 	cam_device_mi_swap_u
 	    swap; /**< Output format swap control information */
+	cam_device_mi_buf_offset_t buf_offset; /**< Output format buffer offset */
+	cam_device_mi_buf_stride_t buf_stride; /**< Output format buffer stride */
 } cam_device_pipe_out_fmt_t;
 
 /*****************************************************************************/
@@ -328,6 +321,34 @@ typedef struct cam_device_metadata_mean_luma_s {
 
 } cam_device_metadata_mean_luma_t;
 
+typedef struct cam_device_raw_channel_float_s {
+	float32_t red_channel;
+	float32_t gr_rhannel;
+	float32_t gb_channel;
+	float32_t blue_channel;
+} cam_device_raw_channel_float_t;
+
+/******************************************************************************/
+/**
+ * @brief   VsCamDevice CCM manual configuration.
+ *
+ *****************************************************************************/
+typedef struct cam_device_ccm_manual_config_s {
+	float32_t cc_matrix[CAMDEV_CC_MATRIX_SIZE]; /**< Color correction matrix coeff */
+	float32_t cc_offset[CAMDEV_CC_COLOR_CHANNEL_NUM];    /**< Color offset coefficient*/
+} cam_device_ccm_manual_config_t;
+
+/******************************************************************************/
+/**
+ * @brief   VsCamDevice CCM status structure.
+ *
+ *****************************************************************************/
+typedef struct cam_device_ccm_status_s {
+	bool_t enable;              /**< CCM enable status*/
+	cam_device_config_mode_t current_mode;       /**< The run mode: 0--manual, 1--auto */
+	cam_device_ccm_manual_config_t current_cfg;   /**< CCM current configuration*/
+} cam_device_ccm_status_t;
+
 /*****************************************************************************/
 /**
  * @brief   Structure to metadata exposure information.
@@ -336,6 +357,8 @@ typedef struct cam_device_metadata_mean_luma_s {
 typedef struct cam_device_metadata_info_s {
 	uint32_t chip_id;
 	uint64_t frame_count;
+	uint32_t aperture_size;  /**< Aperture size */
+	uint32_t iso_strength;   /**< ISO strength */
 
 	float32_t junction_temperature;
 	uint32_t black_level_pedestal;
@@ -348,9 +371,18 @@ typedef struct cam_device_metadata_info_s {
 	    [CAMDEV_EXPOSURE_FRAME_MAX]; /**< Exposure time(unit: us) */
 
 	float32_t analog_gain[CAMDEV_EXPOSURE_FRAME_MAX];
+	cam_device_float_range_t analog_gain_range[CAMDEV_EXPOSURE_FRAME_MAX];
 	float32_t digital_gain[CAMDEV_EXPOSURE_FRAME_MAX];
-	float32_t wb_gain[CAMDEV_EXPOSURE_FRAME_MAX][CAMDEV_RAW_CHANNEL_NUM];
+	cam_device_float_range_t digital_gain_range[CAMDEV_EXPOSURE_FRAME_MAX];
+	cam_device_raw_channel_float_t wb_gain[CAMDEV_EXPOSURE_FRAME_MAX];
 	float32_t dual_conv_gain[CAMDEV_EXPOSURE_FRAME_MAX];
+
+	cam_device_raw_channel_float_t isp_dgain;
+	cam_device_raw_channel_float_t isp_wb_gain;
+
+	float32_t lux_index;
+	float32_t total_gain;
+	cam_device_ccm_status_t ccmConfig;
 
 	cam_device_metadata_hist_t
 	    hist_bins[CAMDEV_EXPOSURE_FRAME_MAX]; // reserved
@@ -402,26 +434,6 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
  *****************************************************************************/
 RESULT vsi_cam_device_destroy(struct visp_dev *isp_dev,
 			      cam_device_handle_t h_cam_device);
-
-/*****************************************************************************/
-/**
- * @brief   This function loads the calibration parameters into the database of
- *          software stack.
- *
- * @param   h_cam_device          Handle to the CamDevice instance.
- * @param   def_calib_illum       Select the default illumination when pipeline
- *is connected.
- * @param   p_calib_cfg           Configuration structure for calibration
- *parameter.
- *
- * @retval  RET_SUCCESS         Operation succeeded
- * @retval  RET_FAILURE         General failure
- *
- *****************************************************************************/
-RESULT
-vsi_cam_device_load_calibration(cam_device_handle_t h_cam_device,
-				cam_device_calib_illum_type_t def_calib_illum,
-				cam_device_calib_cfg_t *p_calib_cfg);
 
 /*****************************************************************************/
 /**

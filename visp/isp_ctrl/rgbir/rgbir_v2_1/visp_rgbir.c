@@ -317,7 +317,7 @@ const struct v4l2_ctrl_config visp_rgbir_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {72},
+		.dims = {0x48},
 	},
 	{
 		/* uint8_t data of CamDeviceRgbirStatus_t */
@@ -329,7 +329,7 @@ const struct v4l2_ctrl_config visp_rgbir_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {88},
+		.dims = {0x58},
 	},
 };
 

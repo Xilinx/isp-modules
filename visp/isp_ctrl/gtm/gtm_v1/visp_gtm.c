@@ -65,8 +65,7 @@ static int visp_gtm_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
+	switch (ctrl->id) {
 		case VISP_CID_GTM_ENABLE:
 		case VISP_CID_GTM_BW_CORRECTION_ENABLE:
 		case VISP_CID_GTM_RESET:
@@ -114,15 +113,17 @@ static int visp_gtm_s_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_GTM_MANU_LOG_KNEE_X_LOG:
 		case VISP_CID_GTM_MANU_LOG_KNEE_SLOPE:
 		case VISP_CID_GTM_MANU_USER_CURVE:
+		/*
 		case VISP_CID_GTM_HIST_STATISTIC_MIN:
 		case VISP_CID_GTM_HIST_STATISTIC_MAX:
 		case VISP_CID_GTM_HIST_STATISTIC_DATA:
+		*/
 		case VISP_CID_GTM_ALL_CONFIG:
 			ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
 		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
 			return -EACCES;
 	}
 
@@ -135,8 +136,7 @@ static int visp_gtm_g_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
+	switch (ctrl->id) {
 		case VISP_CID_GTM_ENABLE:
 		case VISP_CID_GTM_BW_CORRECTION_ENABLE:
 		case VISP_CID_GTM_RESET:
@@ -184,9 +184,11 @@ static int visp_gtm_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_GTM_MANU_LOG_KNEE_X_LOG:
 		case VISP_CID_GTM_MANU_LOG_KNEE_SLOPE:
 		case VISP_CID_GTM_MANU_USER_CURVE:
+		/*
 		case VISP_CID_GTM_HIST_STATISTIC_MIN:
 		case VISP_CID_GTM_HIST_STATISTIC_MAX:
 		case VISP_CID_GTM_HIST_STATISTIC_DATA:
+		*/
 		case VISP_CID_GTM_STAT_RGB_COEF:
 		case VISP_CID_GTM_STAT_LIGHTNESS_WEIGHT:
 		case VISP_CID_GTM_STAT_COLOR_WEIGHT:
@@ -203,14 +205,17 @@ static int visp_gtm_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_GTM_STAT_LOG_KNEE_X_LOG:
 		case VISP_CID_GTM_STAT_LOG_KNEE_SLOPE:
 		case VISP_CID_GTM_STAT_USER_CURVE:
+		case VISP_CID_GTM_BW_CORRECTION_EN_CONFIG:
 		case VISP_CID_GTM_ALL_CONFIG:
 		case VISP_CID_GTM_ALL_STATUS:
+		/*
 		case VISP_CID_GTM_ALL_HIST:
+		*/
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
 		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
 			return -EACCES;
 	}
 
@@ -962,6 +967,16 @@ const struct v4l2_ctrl_config visp_gtm_ctrls[] = {
 		.dims = {129, 0, 0, 0},
 	},
 	{
+		.ops = &visp_gtm_ctrl_ops,
+		.id = VISP_CID_GTM_BW_CORRECTION_EN_CONFIG,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_gtm_bw_correction_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
 		/* uint8_t data of CamDeviceGtmConfig_t */
 		.ops = &visp_gtm_ctrl_ops,
 		.id = VISP_CID_GTM_ALL_CONFIG,
@@ -971,7 +986,7 @@ const struct v4l2_ctrl_config visp_gtm_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {13352},
+		.dims = {0x3428},
 	},
 	{
 		/* uint8_t data of CamDeviceGtmStatus_t */
@@ -983,10 +998,10 @@ const struct v4l2_ctrl_config visp_gtm_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {624},
+		.dims = {0x270},
 	},
+	/*
 	{
-		/* uint8_t data of CamDeviceGtmHistogram_t */
 		.ops = &visp_gtm_ctrl_ops,
 		.id = VISP_CID_GTM_ALL_HIST,
 		.type = V4L2_CTRL_TYPE_U8,
@@ -997,6 +1012,7 @@ const struct v4l2_ctrl_config visp_gtm_ctrls[] = {
 		.max = 0xFF,
 		.dims = {520},
 	},
+	*/
 };
 
 int visp_gtm_ctrl_count(void)

@@ -62,7 +62,6 @@
 #include "visp_driver.h"
 #include "isi_mixed.h"
 
-#define SENSOR_NAME_LEN 20
 
 RESULT vsi_cam_device_sensor_open(struct visp_dev *isp_dev,
 				  cam_device_handle_t h_cam_device,
@@ -119,7 +118,7 @@ RESULT vsi_cam_device_sensor_open(struct visp_dev *isp_dev,
 
 RESULT vsi_cam_device_sensor_drv_handle_register(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
-	const cam_device_sensor_drv_cfg_t *p_sensor_drv)
+	const cam_device_sensor_drv_handle_t p_sensor_drv)
 {
 	RESULT result = RET_SUCCESS;
 	payload_packet *packet = NULL;
@@ -144,8 +143,7 @@ RESULT vsi_cam_device_sensor_drv_handle_register(
 	packet->type = CMD;
 	packet->payload_size = 0;
 
-	pcamcfg =
-	    (isi_cam_drv_config_mbox_t *)(p_sensor_drv->sensor_drv_handle);
+	pcamcfg = (isi_cam_drv_config_mbox_t *)(p_sensor_drv);
 
 	pcamcfg->instance_id = p_cam_dev_ctx->instance_id;
 	p_data = packet->payload;
@@ -154,13 +152,11 @@ RESULT vsi_cam_device_sensor_drv_handle_register(
 	p_data += sizeof(uint32_t);
 	packet->payload_size += sizeof(uint32_t);
 
-	memcpy(p_data, p_sensor_drv->sensor_drv_handle,
+	memcpy(p_data, p_sensor_drv,
 	       sizeof(isi_cam_drv_config_mbox_t));
 	p_data += sizeof(isi_cam_drv_config_mbox_t);
 	packet->payload_size += sizeof(isi_cam_drv_config_mbox_t);
 
-	memcpy(p_data, &p_sensor_drv->sensor_dev_id, sizeof(uint32_t));
-	packet->payload_size += sizeof(uint32_t);
 	if (packet->payload_size > MAX_ITEM) {
 		dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",
 			packet->payload_size, MAX_ITEM);
@@ -273,22 +269,25 @@ RESULT vsi_cam_device_sensor_close(struct visp_dev *isp_dev,
 	kfree(packet);
 	return result;
 }
+
 RESULT vsi_cam_device_sensor_mapping(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
-	const char *p_sensor_name,
+	const cam_device_sensor_module_map_cfg_t *p_module_info,
 	cam_device_sensor_drv_handle_t *p_sensor_drvhandle)
 {
 	RESULT result = RET_SUCCESS;
 	uint8_t *p_data = NULL;
 	payload_packet *packet = NULL;
-	isi_cam_drv_config_mbox_t camcfg; //= NULL;
+	isi_cam_drv_config_mbox_t *camcfg; //= NULL;
 
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
 		return RET_WRONG_HANDLE;
-	if (NULL == p_sensor_name || NULL == p_sensor_drvhandle)
+
+	if (NULL == p_module_info || NULL == p_sensor_drvhandle)
 		return RET_NULL_POINTER;
+
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
@@ -307,9 +306,12 @@ RESULT vsi_cam_device_sensor_mapping(
 	p_data += sizeof(uint32_t);
 	packet->payload_size += sizeof(uint32_t);
 
-	memcpy(p_data, p_sensor_name, SENSOR_NAME_LEN);
-	p_data += SENSOR_NAME_LEN;
-	packet->payload_size += SENSOR_NAME_LEN;
+	memcpy(p_data, p_module_info->module_name, SENSOR_MODULE_NAME);
+	p_data += SENSOR_MODULE_NAME;
+	packet->payload_size += SENSOR_MODULE_NAME;
+
+	memcpy(p_data, &p_module_info->sensor_dev_id, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
 
 	packet->payload_size += sizeof(isi_cam_drv_config_mbox_t);
 
@@ -337,7 +339,8 @@ RESULT vsi_cam_device_sensor_mapping(
 
 	kfree(packet);
 
-	camcfg = **(isi_cam_drv_config_mbox_t **)p_sensor_drvhandle;
+	camcfg = *(isi_cam_drv_config_mbox_t **)p_sensor_drvhandle;
+	camcfg->instance_id = p_cam_dev_ctx->instance_id; // assign instanceid
 
 	return result;
 }
@@ -496,18 +499,111 @@ RESULT vsi_cam_device_sensor_set_frame_rate(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_SENSOR_SET_FRAMERATE, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
-		return RET_FAILURE;
 
 	kfree(packet);
 
 	return result;
 }
 
+RESULT vsi_cam_device_sensor_get_number(struct visp_dev *isp_dev,
+					uint16_t *p_number)
+{
+	RESULT result = RET_SUCCESS;
+	uint8_t *p_data = NULL;
+	payload_packet *packet = NULL;
+	uint32_t instance_id = isp_dev->id * CAMDEV_VIRTUAL_ID_MAX;
+
+	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+	if (!packet)
+		return -ENOMEM;
+	memset(packet, 0, sizeof(payload_packet));
+
+	packet->cookie = 0;
+	packet->type = CMD;
+	packet->payload_size = 0;
+
+	p_data = packet->payload;
+	memcpy(p_data, &instance_id, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	packet->payload_size += sizeof(uint32_t);
+
+	packet->payload_size += sizeof(uint16_t);
+
+	if (packet->payload_size > MAX_ITEM) {
+		dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",
+			packet->payload_size, MAX_ITEM);
+		kfree(packet);
+		return RET_OUTOFRANGE;
+	}
+
+	xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_SENSOR_GET_NUMBER,
+				packet,
+				packet->payload_size + payload_extra_size,
+				isp_dev->isp_rpu, MBOX_CORE_APU);
+
+	memcpy(p_number, p_data, sizeof(uint16_t));
+
+	kfree(packet);
+
+	return result;
+}
+
+RESULT vsi_cam_device_sensor_get_list_info(struct visp_dev *isp_dev,
+					   cam_device_sensor_list_info_t *p_sensor_list_info,
+					   const uint16_t sensor_num)
+{
+	RESULT result = RET_SUCCESS;
+	uint8_t *p_data = NULL;
+	payload_packet *packet = NULL;
+	uint32_t instance_id = isp_dev->id * CAMDEV_VIRTUAL_ID_MAX;
+
+	if (!p_sensor_list_info)
+		return RET_NULL_POINTER;
+
+	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+	if (!packet)
+		return -ENOMEM;
+	memset(packet, 0, sizeof(payload_packet));
+
+	packet->cookie = 1;
+	packet->type = CMD;
+	packet->payload_size = 0;
+
+	p_data = packet->payload;
+	memcpy(p_data, &instance_id, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	packet->payload_size += sizeof(uint32_t);
+
+	memcpy(p_data, &sensor_num, sizeof(uint16_t));
+	p_data += sizeof(uint16_t);
+	packet->payload_size += sizeof(uint16_t);
+
+	packet->payload_size += sizeof(cam_device_sensor_list_info_t) * sensor_num;
+
+	if (packet->payload_size > MAX_ITEM) {
+		dev_err(isp_dev->dev, "Payload size:%d is > MAX_ITEM:%d\n",
+			packet->payload_size, MAX_ITEM);
+		kfree(packet);
+		return RET_OUTOFRANGE;
+	}
+
+	xlnx_send_mbox_data_cmd(isp_dev,
+				APU_2_RPU_MB_CMD_SENSOR_GET_LIST_INFO, packet,
+				packet->payload_size + payload_extra_size,
+				isp_dev->isp_rpu, MBOX_CORE_APU);
+
+	memcpy(p_sensor_list_info, p_data,
+	       sizeof(cam_device_sensor_list_info_t) * sensor_num);
+
+	kfree(packet);
+	return result;
+}
+
 RESULT vsi_cam_device_sensor_get_connect_port_info(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
-	cam_device_mcm_port_id_t port_id,
-	cam_device_sensor_connect_port_info_t *p_port_info)
+	sensor_drv_id_t sensor_drv_id,
+	cam_device_sensor_connect_port_info_t *p_port_info
+)
 {
 	RESULT result = RET_SUCCESS;
 	uint8_t *p_data = NULL;
@@ -515,11 +611,12 @@ RESULT vsi_cam_device_sensor_get_connect_port_info(
 
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
+
 	if (p_cam_dev_ctx == NULL)
 		return RET_WRONG_HANDLE;
+
 	if (p_port_info == NULL)
 		return RET_NULL_POINTER;
-	p_cam_dev_ctx->cookie++;
 
 	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
 	if (!packet) {
@@ -528,6 +625,8 @@ RESULT vsi_cam_device_sensor_get_connect_port_info(
 		return -ENOMEM;
 	}
 	memset(packet, 0, sizeof(payload_packet));
+
+	p_cam_dev_ctx->cookie++;
 
 	packet->cookie = p_cam_dev_ctx->cookie;
 	packet->type = CMD;
@@ -538,12 +637,10 @@ RESULT vsi_cam_device_sensor_get_connect_port_info(
 	p_data += sizeof(uint32_t);
 	packet->payload_size += sizeof(uint32_t);
 
-	memcpy(p_data, &port_id, sizeof(cam_device_mcm_port_id_t));
-	p_data += sizeof(cam_device_mcm_port_id_t);
-	packet->payload_size += sizeof(cam_device_mcm_port_id_t);
+	memcpy(p_data, &sensor_drv_id, sizeof(sensor_drv_id_t));
+	p_data += sizeof(sensor_drv_id_t);
+	packet->payload_size += sizeof(sensor_drv_id_t);
 
-	memcpy(p_data, p_port_info,
-	       sizeof(cam_device_sensor_connect_port_info_t));
 	packet->payload_size += sizeof(cam_device_sensor_connect_port_info_t);
 
 	if (packet->payload_size > MAX_ITEM) {

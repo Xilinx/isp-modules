@@ -115,8 +115,8 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 			seq_printf(sfile, "mode        : %u\n",
 				   isp_dev->isp_ports[port].sensor_info.mode);
 			seq_printf(
-			    sfile, "xml         : %s\n",
-			    isp_dev->isp_ports[port].sensor_info.calib_xml);
+			    sfile, "calib       : %s\n",
+			    isp_dev->isp_ports[port].sensor_info.calib);
 			seq_printf(
 			    sfile, "manu_json   : %s\n",
 			    isp_dev->isp_ports[port].sensor_info.manu_json);
@@ -199,9 +199,11 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					       0,
 					       sizeof(isp_dev->isp_ports[port]
 							  .sensor_info.name));
-					strncpy(isp_dev->isp_ports[port]
+					strscpy(isp_dev->isp_ports[port]
 						    .sensor_info.name,
-						val, strlen(val));
+						val,
+						sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.name));
 				}
 			} else if (strcmp(val, "mode") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -211,18 +213,20 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					    (uint32_t)simple_strtoul(val, &end,
 								     0);
 				}
-			} else if (strcmp(val, "xml") == 0) {
+			} else if (strcmp(val, "calib") == 0) {
 				val = strsep(&kv_cur, kv_delim);
 				if (val) {
 					memset(
 					    isp_dev->isp_ports[port]
-						.sensor_info.calib_xml,
+						.sensor_info.calib,
 					    0,
 					    sizeof(isp_dev->isp_ports[port]
-						       .sensor_info.calib_xml));
-					strncpy(isp_dev->isp_ports[port]
-						    .sensor_info.calib_xml,
-						val, strlen(val));
+						       .sensor_info.calib));
+					strscpy(isp_dev->isp_ports[port]
+						    .sensor_info.calib,
+						val,
+						sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.calib));
 				}
 			} else if (strcmp(val, "manu_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -233,9 +237,11 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					    0,
 					    sizeof(isp_dev->isp_ports[port]
 						       .sensor_info.manu_json));
-					strncpy(isp_dev->isp_ports[port]
+					strscpy(isp_dev->isp_ports[port]
 						    .sensor_info.manu_json,
-						val, strlen(val));
+						val,
+						sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.manu_json));
 				}
 			} else if (strcmp(val, "auto_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -246,9 +252,11 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					    0,
 					    sizeof(isp_dev->isp_ports[port]
 						       .sensor_info.auto_json));
-					strncpy(isp_dev->isp_ports[port]
+					strscpy(isp_dev->isp_ports[port]
 						    .sensor_info.auto_json,
-						val, strlen(val));
+						val,
+						sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.auto_json));
 				}
 			} else if (strcmp(val, "one_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -259,9 +267,11 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					    0,
 					    sizeof(isp_dev->isp_ports[port]
 						       .sensor_info.one_json));
-					strncpy(isp_dev->isp_ports[port]
+					strscpy(isp_dev->isp_ports[port]
 						    .sensor_info.one_json,
-						val, strlen(val));
+						val,
+						sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.one_json));
 				}
 			} else if (strcmp(val, "output_type") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -316,9 +326,10 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					       0,
 					       sizeof(isp_dev->isp_ports[port]
 							  .bufmode));
-					strncpy(
+					strscpy(
 					    isp_dev->isp_ports[port].bufmode,
-					    val, strlen(val));
+					    val,
+					    sizeof(isp_dev->isp_ports[port].bufmode));
 				}
 			}
 			else if (strcmp(val, "hw_mcm") == 0) {

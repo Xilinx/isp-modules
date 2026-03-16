@@ -65,8 +65,7 @@ static int visp_2dnr_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
+	switch (ctrl->id) {
 		case VISP_CID_2DNR_ENABLE:
 		case VISP_CID_2DNR_RESET:
 		case VISP_CID_2DNR_ENABLE_LUMA:
@@ -84,17 +83,13 @@ static int visp_2dnr_s_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_2DNR_MANU_SIGMA_RANGE:
 		case VISP_CID_2DNR_MANU_LUMA_CURVE_X:
 		case VISP_CID_2DNR_MANU_LUMA_CURVE_Y:
-		case VISP_CID_2DNR_BLEND_STATIC:
-		case VISP_CID_2DNR_BLEND_MOTION:
-		case VISP_CID_2DNR_BLEND_SLOPE:
 		case VISP_CID_2DNR_SIGMA_OFFSET:
 		case VISP_CID_2DNR_ALL_CONFIG:
-		case VISP_CID_2DNR_ALL_BLEND_CONFIG:
 			ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
 		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
 			return -EACCES;
 	}
 
@@ -107,8 +102,7 @@ static int visp_2dnr_g_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
+	switch (ctrl->id) {
 		case VISP_CID_2DNR_ENABLE:
 		case VISP_CID_2DNR_RESET:
 		case VISP_CID_2DNR_ENABLE_LUMA:
@@ -126,9 +120,6 @@ static int visp_2dnr_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_2DNR_MANU_SIGMA_RANGE:
 		case VISP_CID_2DNR_MANU_LUMA_CURVE_X:
 		case VISP_CID_2DNR_MANU_LUMA_CURVE_Y:
-		case VISP_CID_2DNR_BLEND_STATIC:
-		case VISP_CID_2DNR_BLEND_MOTION:
-		case VISP_CID_2DNR_BLEND_SLOPE:
 		case VISP_CID_2DNR_SIGMA_OFFSET:
 		case VISP_CID_2DNR_STAT_PRE_GC_STRENGTH:
 		case VISP_CID_2DNR_STAT_STRENGTH:
@@ -136,19 +127,14 @@ static int visp_2dnr_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_2DNR_STAT_SIGMA_RANGE:
 		case VISP_CID_2DNR_STAT_LUMA_CURVE_X:
 		case VISP_CID_2DNR_STAT_LUMA_CURVE_Y:
-		case VISP_CID_2DNR_STAT_BLEND_STATIC:
-		case VISP_CID_2DNR_STAT_BLEND_MOTION:
-		case VISP_CID_2DNR_STAT_BLEND_SLOPE:
 		case VISP_CID_2DNR_STAT_SIGMA_OFFSET:
 		case VISP_CID_2DNR_ALL_CONFIG:
 		case VISP_CID_2DNR_ALL_STATUS:
-		case VISP_CID_2DNR_ALL_BLEND_CONFIG:
-		case VISP_CID_2DNR_ALL_BLEND_STATUS:
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
 		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
 			return -EACCES;
 	}
 
@@ -162,351 +148,287 @@ static const struct v4l2_ctrl_ops visp_2dnr_ctrl_ops = {
 
 const struct v4l2_ctrl_config visp_2dnr_ctrls[] = {
 	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_ENABLE,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_ENABLE,
 		.type = V4L2_CTRL_TYPE_BOOLEAN,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_enable",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 	},
 	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_RESET,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_RESET,
 		.type = V4L2_CTRL_TYPE_BOOLEAN,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_reset",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 	},
 	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_ENABLE_LUMA,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_ENABLE_LUMA,
 		.type = V4L2_CTRL_TYPE_BOOLEAN,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_enable_luma",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 	},
 	{
 		/* manual/auto */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_MODE,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_MODE,
 		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_mode",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 	},
-	{.ops = &visp_2dnr_ctrl_ops,
-	 .id = VISP_CID_2DNR_AUTO_LEVEL,
-	 .type = V4L2_CTRL_TYPE_U8,
-	 .flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-	 .name = "isp_2dnr_auto_level",
-	 .step = 1,
-	 .min = 1,
-	 .max = 20,
-	 .def = 1,
-	 .dims = {1}},
+	{
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_AUTO_LEVEL,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_2dnr_auto_level",
+		.step = 1,
+		.min  = 1,
+		.max  = 20,
+		.def  = 1,
+		.dims = {1}
+	},
 	{
 		/* float array 20*32bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_AUTO_GAIN,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_AUTO_GAIN,
 		.type = V4L2_CTRL_TYPE_U32,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_auto_gain",
 		.step = 1,
-		.min = 0,
-		.max = 0xFFFFFFFF,
+		.min  = 0,
+		.max  = 0xFFFFFFFF,
 		.dims = {20},
 	},
 	{
 		/* float array 20*32bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_AUTO_SIGMA,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_AUTO_SIGMA,
 		.type = V4L2_CTRL_TYPE_U32,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_auto_sigma",
 		.step = 1,
-		.min = 0,
-		.max = 0xFFFFFFFF,
+		.min  = 0,
+		.max  = 0xFFFFFFFF,
 		.dims = {20},
 	},
 	{
 		/* uint8_t array 20*8bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_AUTO_STRENGTH,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_AUTO_STRENGTH,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_auto_strength",
 		.step = 1,
-		.min = 0,
-		.max = 127,
+		.min  = 0,
+		.max  = 127,
 		.dims = {20},
 	},
 	{
 		/* uint8_t array 20*8bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_AUTO_PRE_GC_STRENGTH,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_AUTO_PRE_GC_STRENGTH,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_auto_pre_gc_strength",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 		.dims = {20},
 	},
 	{
 		/* uint16_t array 8x16bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_AUTO_LUMA_CURVE_X,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_AUTO_LUMA_CURVE_X,
 		.type = V4L2_CTRL_TYPE_U16,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_auto_luma_curve_x",
 		.step = 1,
-		.min = 0,
-		.max = 4095,
+		.min  = 0,
+		.max  = 4095,
 		.dims = {20, 12},
 	},
 	{
 		/* uint16_t array 8x16bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_AUTO_LUMA_CURVE_Y,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_AUTO_LUMA_CURVE_Y,
 		.type = V4L2_CTRL_TYPE_U16,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_auto_luma_curve_y",
 		.step = 1,
-		.min = 0,
-		.max = 256,
+		.min  = 0,
+		.max  = 16383,
 		.dims = {20, 12},
 	},
 	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_MANU_PRE_GC_STRENGTH,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_MANU_PRE_GC_STRENGTH,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_manu_pre_gc_strength",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 		.dims = {1},
 	},
 	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_MANU_STRENGTH,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_MANU_STRENGTH,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_manu_strength",
 		.step = 1,
-		.min = 0,
-		.max = 127,
+		.min  = 0,
+		.max  = 127,
 		.dims = {1},
 	},
 	{
 		/* float 0.1~100. */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_MANU_SIGMA,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_MANU_SIGMA,
 		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_manu_sigma",
 		.step = 1,
-		.min = 1,
-		.max = 1000,
-		.def = 50,
+		.min  = 1,
+		.max  = 1000,
+		.def  = 50,
 	},
 	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_MANU_SIGMA_RANGE,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_MANU_SIGMA_RANGE,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_manu_sigma_range",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 		.dims = {1},
 	},
 	{
 		/* uint16_t array 12x16bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_MANU_LUMA_CURVE_X,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_MANU_LUMA_CURVE_X,
 		.type = V4L2_CTRL_TYPE_U16,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_manu_luma_curve_x",
 		.step = 1,
-		.min = 0,
-		.max = 4095,
+		.min  = 0,
+		.max  = 4095,
 		.dims = {12},
 	},
 	{
 		/* uint16_t array 12x16bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_MANU_LUMA_CURVE_Y,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_MANU_LUMA_CURVE_Y,
 		.type = V4L2_CTRL_TYPE_U16,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_manu_luma_curve_y",
 		.step = 1,
-		.min = 0,
-		.max = 16383,
+		.min  = 0,
+		.max  = 16383,
 		.dims = {12},
 	},
 	{
-		/* float 0.0~100.0 */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_BLEND_STATIC,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_2dnr_blend_stc",
-		.step = 1,
-		.min = 0,
-		.max = 1000,
-	},
-	{
-		/* float 0.0~100.0 */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_BLEND_MOTION,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_2dnr_blend_mot",
-		.step = 1,
-		.min = 0,
-		.max = 1000,
-	},
-	{
-		/* float 0.0~32.0 */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_BLEND_SLOPE,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_2dnr_blend_slope",
-		.step = 1,
-		.min = 0,
-		.max = 320,
-	},
-	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_SIGMA_OFFSET,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_SIGMA_OFFSET,
 		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_sigma_offset",
 		.step = 1,
-		.min = 0,
-		.max = 4095,
+		.min  = 0,
+		.max  = 4095,
 	},
 	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_PRE_GC_STRENGTH,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_STAT_PRE_GC_STRENGTH,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_stat_pre_gc_strength",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 		.dims = {1},
 	},
 	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_STRENGTH,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_STAT_STRENGTH,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_stat_strength",
 		.step = 1,
-		.min = 0,
-		.max = 127,
+		.min  = 0,
+		.max  = 127,
 		.dims = {1},
 	},
 	{
 		/* float 0.1~100. */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_SIGMA,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_STAT_SIGMA,
 		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_stat_sigma",
 		.step = 1,
-		.min = 1,
-		.max = 1000,
-		.def = 50,
+		.min  = 1,
+		.max  = 1000,
+		.def  = 50,
 	},
 	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_SIGMA_RANGE,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_STAT_SIGMA_RANGE,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_stat_sigma_range",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 		.dims = {1},
 	},
 	{
 		/* uint16_t array 12x16bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_LUMA_CURVE_X,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_STAT_LUMA_CURVE_X,
 		.type = V4L2_CTRL_TYPE_U16,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_stat_luma_curve_x",
 		.step = 1,
-		.min = 0,
-		.max = 4095,
+		.min  = 0,
+		.max  = 4095,
 		.dims = {12},
 	},
 	{
 		/* uint16_t array 12x16bit */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_LUMA_CURVE_Y,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_STAT_LUMA_CURVE_Y,
 		.type = V4L2_CTRL_TYPE_U16,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_stat_luma_curve_y",
 		.step = 1,
-		.min = 0,
-		.max = 16383,
+		.min  = 0,
+		.max  = 16383,
 		.dims = {12},
 	},
 	{
-		/* float 0.0~100.0 */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_BLEND_STATIC,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_2dnr_stat_blend_stc",
-		.step = 1,
-		.min = 0,
-		.max = 1000,
-	},
-	{
-		/* float 0.0~100.0 */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_BLEND_MOTION,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_2dnr_stat_blend_mot",
-		.step = 1,
-		.min = 0,
-		.max = 1000,
-	},
-	{
-		/* float 0.0~32.0 */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_BLEND_SLOPE,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_2dnr_stat_blend_slope",
-		.step = 1,
-		.min = 0,
-		.max = 320,
-	},
-	{
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_STAT_SIGMA_OFFSET,
+		.ops  = &visp_2dnr_ctrl_ops,
+		.id   = VISP_CID_2DNR_STAT_SIGMA_OFFSET,
 		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_2dnr_stat_sigma_offset",
 		.step = 1,
-		.min = 0,
-		.max = 4095,
+		.min  = 0,
+		.max  = 4095,
 	},
 	{
 		/* uint8_t data of CamDevice2DnrConfig_t */
@@ -518,7 +440,7 @@ const struct v4l2_ctrl_config visp_2dnr_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {1228},
+		.dims = {0x4cc},
 	},
 	{
 		/* uint8_t data of CamDevice2DnrStatus_t */
@@ -530,31 +452,7 @@ const struct v4l2_ctrl_config visp_2dnr_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {72},
-	},
-	{
-		/* uint8_t data of CamDevice2DnrBlendConfig_t */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_ALL_BLEND_CONFIG,
-		.type = V4L2_CTRL_TYPE_U8,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_2dnr_all_blend_config",
-		.step = 1,
-		.min = 0,
-		.max = 0xFF,
-		.dims = {16},
-	},
-	{
-		/* uint8_t data of CamDevice2DnrBlendConfig_t */
-		.ops = &visp_2dnr_ctrl_ops,
-		.id = VISP_CID_2DNR_ALL_BLEND_STATUS,
-		.type = V4L2_CTRL_TYPE_U8,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_2dnr_all_blend_status",
-		.step = 1,
-		.min = 0,
-		.max = 0xFF,
-		.dims = {16},
+		.dims = {0x48},
 	},
 };
 

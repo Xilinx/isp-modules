@@ -330,7 +330,7 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 		return 0;
 	}
 	cam_device_context_t *p_cam_dev_ctx =
-	    (cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
+		(cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
 
 	p_cam_dev_ctx->cookie++;
 

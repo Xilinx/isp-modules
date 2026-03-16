@@ -396,10 +396,358 @@ static int visp_video_fourcc_to_mbus(uint32_t fourcc, uint32_t *mbus)
 	return -EINVAL;
 }
 
+static int visp_video_get_format_stride(uint32_t fourcc,
+				uint32_t width, uint32_t height, uint32_t *pstride)
+{
+	/* 0: unalign 1: word align(16bit) 2: double world align */
+	int align_mode = -1;
+	/* 0: YUV 1: RGB 2: RAW */
+	int fmt_type = 0;
+	uint32_t stride = 0;
+	int32_t bit_width = 8;
+
+	switch (fourcc) {
+	case V4L2_PIX_FMT_YUYV:
+		bit_width = 8;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_NV16:
+		bit_width = 8;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_NV12:
+		bit_width = 8;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_GREY:
+		bit_width = 8;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_Y10BPACK:
+		bit_width = 10;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_Y10DWA:
+		bit_width = 10;
+		align_mode = 2;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_Y10:
+		bit_width = 10;
+		align_mode = 1;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_P00BPACK:
+		bit_width = 10;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_P00DWA:
+		bit_width = 10;
+		align_mode = 2;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_P010:
+		bit_width = 10;
+		align_mode = 1;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_P02BPACK:
+		bit_width = 12;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_P20BPACK:
+		bit_width = 10;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_P20DWA:
+		bit_width = 10;
+		align_mode = 2;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_P210:
+		bit_width = 10;
+		align_mode = 1;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_P22BPACK:
+		bit_width = 12;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_I20BPACK:
+		bit_width = 10;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_I210:
+		bit_width = 10;
+		align_mode = 1;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_M48BPACK:
+		bit_width = 8;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_I48BPACK:
+		bit_width = 8;
+		align_mode = 0;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_I48DWA:
+		bit_width = 8;
+		align_mode = 2;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_I40DWA:
+		bit_width = 10;
+		align_mode = 2;
+		fmt_type = 0;
+		break;
+	case V4L2_PIX_FMT_RGB24:
+		/*orientation is normal*/
+		bit_width = 8;
+		fmt_type = 1;
+		break;
+	case V4L2_PIX_FMT_RGB24DWA:
+		/* not support stride */
+		bit_width = 8;
+		fmt_type = 1;
+		break;
+	case V4L2_PIX_FMT_RGB24P:
+		bit_width = 8;
+		fmt_type = 1;
+		break;
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
+	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
+		/*not support */
+		bit_width = 8;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR10:
+	case V4L2_PIX_FMT_SGBRG10:
+	case V4L2_PIX_FMT_SGRBG10:
+	case V4L2_PIX_FMT_SRGGB10:
+		bit_width = 10;
+		align_mode = 1;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR10BPACK:
+	case V4L2_PIX_FMT_SGBRG10BPACK:
+	case V4L2_PIX_FMT_SGRBG10BPACK:
+	case V4L2_PIX_FMT_SRGGB10BPACK:
+		bit_width = 10;
+		align_mode = 0;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR10DWA:
+	case V4L2_PIX_FMT_SGBRG10DWA:
+	case V4L2_PIX_FMT_SGRBG10DWA:
+	case V4L2_PIX_FMT_SRGGB10DWA:
+		bit_width = 10;
+		align_mode = 2;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR12:
+	case V4L2_PIX_FMT_SGBRG12:
+	case V4L2_PIX_FMT_SGRBG12:
+	case V4L2_PIX_FMT_SRGGB12:
+		bit_width = 12;
+		align_mode = 1;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR12BPACK:
+	case V4L2_PIX_FMT_SGBRG12BPACK:
+	case V4L2_PIX_FMT_SGRBG12BPACK:
+	case V4L2_PIX_FMT_SRGGB12BPACK:
+		bit_width = 12;
+		align_mode = 0;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR12DWA:
+	case V4L2_PIX_FMT_SGBRG12DWA:
+	case V4L2_PIX_FMT_SGRBG12DWA:
+	case V4L2_PIX_FMT_SRGGB12DWA:
+		bit_width = 12;
+		align_mode = 2;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR14:
+	case V4L2_PIX_FMT_SGBRG14:
+	case V4L2_PIX_FMT_SGRBG14:
+	case V4L2_PIX_FMT_SRGGB14:
+		bit_width = 14;
+		align_mode = 1;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR14BPACK:
+	case V4L2_PIX_FMT_SGBRG14BPACK:
+	case V4L2_PIX_FMT_SGRBG14BPACK:
+	case V4L2_PIX_FMT_SRGGB14BPACK:
+		bit_width = 14;
+		align_mode = 0;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR14DWA:
+	case V4L2_PIX_FMT_SGBRG14DWA:
+	case V4L2_PIX_FMT_SGRBG14DWA:
+	case V4L2_PIX_FMT_SRGGB14DWA:
+		bit_width = 14;
+		align_mode = 2;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR16:
+	case V4L2_PIX_FMT_SGBRG16:
+	case V4L2_PIX_FMT_SGRBG16:
+	case V4L2_PIX_FMT_SRGGB16:
+		bit_width = 16;
+		align_mode = 0;
+		fmt_type = 2;
+		break;
+	case V4L2_PIX_FMT_SBGGR24:
+	case V4L2_PIX_FMT_SGBRG24:
+	case V4L2_PIX_FMT_SGRBG24:
+	case V4L2_PIX_FMT_SRGGB24:
+		bit_width = 24;
+		align_mode = 0;
+		fmt_type = 2;
+		break;
+	default:
+		printk(KERN_ERR "Not support format %d", fourcc);
+		return -EINVAL;
+	}
+
+	if (fmt_type == 0) {
+		/*YUV*/
+		switch (bit_width) {
+		case 8:
+			if (align_mode == 0) {
+				stride = ALIGN(width, ALIGN_BYTES);
+			} else if (align_mode == 2) {
+				stride = width * 4 / 3;
+				if (fourcc == V4L2_PIX_FMT_I40DWA ||
+					fourcc == V4L2_PIX_FMT_I48DWA) {
+					stride = ALIGN(stride, 16);
+				} else {
+					stride = ALIGN(stride, ALIGN_BYTES);
+				}
+
+			}
+			break;
+
+		case 10:
+			if (align_mode == 0) {
+				stride = DIV_ROUND_UP(width * 10, 128) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			} else if (align_mode == 1) {
+				stride = DIV_ROUND_UP(width, 8) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			} else {
+				stride = width * 4 / 3;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			}
+			break;
+
+		case 12:
+			stride = DIV_ROUND_UP(width * 12, 128) * 16;
+			stride = ALIGN(stride, ALIGN_BYTES);
+			break;
+
+		default:
+			pr_err("format %d data_bits %d is not support\n",
+				fourcc, bit_width);
+			return -1;
+		}
+		*pstride = stride;
+	} else if (fmt_type == 1) {
+		/*RGB*/
+		if (fourcc == V4L2_PIX_FMT_RGB24DWA)
+			stride = ALIGN(width * 4 / 3, 16);
+		else
+			stride = ALIGN(width, ALIGN_BYTES);
+
+		*pstride = stride;
+	} else {
+		/*RAW*/
+		switch (bit_width) {
+		case 8:
+			stride = ALIGN(width, 16);
+			break;
+		case 10:
+			if (align_mode == 0) {
+				stride = DIV_ROUND_UP(width * 10, 128) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			} else if (align_mode == 1) {
+				stride = DIV_ROUND_UP(width, 8) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			} else {
+				stride = width * 4 / 3;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			}
+			break;
+
+		case 12:
+			if (align_mode == 0) {
+				stride = DIV_ROUND_UP(width * 12, 128) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			} else if (align_mode == 1) {
+				stride = DIV_ROUND_UP(width, 8) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			} else {
+				stride = DIV_ROUND_UP(width, 10) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			}
+			break;
+
+		case 14:
+			if (align_mode == 0) {
+				stride = DIV_ROUND_UP(width * 14, 128) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			} else if (align_mode == 1) {
+				stride = DIV_ROUND_UP(width, 8) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			} else {
+				stride = DIV_ROUND_UP(width, 9) * 16;
+				stride = ALIGN(stride, ALIGN_BYTES);
+			}
+			break;
+
+		case 16:
+			stride = DIV_ROUND_UP(width * 16, 128) * 16;
+			stride = ALIGN(stride, ALIGN_BYTES);
+			break;
+
+		case 24:
+			stride = DIV_ROUND_UP(width * 24, 128) * 16;
+			stride = ALIGN(stride, ALIGN_BYTES);
+			break;
+
+		default:
+			pr_err("format %d data_bits %d is not support\n",
+				fourcc, bit_width);
+			return -1;
+		}
+		*pstride = stride;
+	}
+
+	return 0;
+}
+
 static int visp_video_vfmt_to_mfmt(struct v4l2_format *f,
 				   struct v4l2_subdev_format *mfmt)
 {
 	int ret;
+	struct format_reserved fmt_res;
 
 	mfmt->format.width = f->fmt.pix.width;
 	mfmt->format.height = f->fmt.pix.height;
@@ -407,10 +755,16 @@ static int visp_video_vfmt_to_mfmt(struct v4l2_format *f,
 	mfmt->format.colorspace = f->fmt.pix.colorspace;
 	mfmt->format.quantization = f->fmt.pix.quantization;
 
+	memset(&fmt_res, 0, sizeof(fmt_res));
+	fmt_res.fourcc = f->fmt.pix.pixelformat;
+
 	ret = visp_video_fourcc_to_mbus(f->fmt.pix.pixelformat,
 					&mfmt->format.code);
-	memcpy(mfmt->format.reserved, &f->fmt.pix.pixelformat,
-	       sizeof(f->fmt.pix.pixelformat));
+	ret |= visp_video_get_format_stride(f->fmt.pix.pixelformat,
+		f->fmt.pix.width, f->fmt.pix.height,
+		&(fmt_res.stride));
+
+	memcpy(mfmt->format.reserved, &fmt_res, sizeof(fmt_res));
 
 	return ret;
 }
@@ -432,6 +786,49 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 #else
 		.bpp = {1, 0, 0, 0},
 #endif
+	},
+	/* YUV packed formats */
+	{
+		.format = V4L2_PIX_FMT_YUYV,
+		.pixel_enc = V4L2_PIXEL_ENC_YUV,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+		/* YUV planar formats */
+	{
+		.format = V4L2_PIX_FMT_NV12,
+		.pixel_enc = V4L2_PIXEL_ENC_YUV,
+		.mem_planes = 1,
+		.comp_planes = 2,
+		.hdiv = 2,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_NV16,
+		.pixel_enc = V4L2_PIXEL_ENC_YUV,
+		.mem_planes = 1,
+		.comp_planes = 2,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_P010,
+		.pixel_enc = V4L2_PIXEL_ENC_YUV,
+		.mem_planes = 1,
+		.comp_planes = 2,
+		.hdiv = 2,
+		.vdiv = 1
+	},
+
+	{
+		.format = V4L2_PIX_FMT_GREY,
+		.pixel_enc = V4L2_PIXEL_ENC_YUV,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
 	},
 	{
 		.format = V4L2_PIX_FMT_Y10BPACK,
@@ -475,7 +872,7 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 		.bpp = {2, 0, 0, 0},
 #endif
 	},
-	    // 420
+	// 420
 	{
 		.format = V4L2_PIX_FMT_P00BPACK,
 		.pixel_enc = V4L2_PIXEL_ENC_YUV,
@@ -509,8 +906,8 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 		.pixel_enc = V4L2_PIXEL_ENC_YUV,
 		.mem_planes = 1,
 		.comp_planes = 2,
-		.hdiv = 1,
-		.vdiv = 2,
+		.hdiv = 2,
+		.vdiv = 1,
 #if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
 		.bpp = {2, 2, 0, 0},
 		.bpp_div = {1, 1, 1, 1},
@@ -532,7 +929,7 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 		.bpp = {2, 2, 0, 0},
 #endif
 	},
-	    // 422
+	// 422
 	{
 		.format = V4L2_PIX_FMT_P20BPACK,
 		.pixel_enc = V4L2_PIXEL_ENC_YUV,
@@ -617,7 +1014,7 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 		.bpp = {4, 0, 0, 0},
 #endif
 	},
-	    // 444
+	    // YUV444
 	{
 		.format = V4L2_PIX_FMT_M48BPACK,
 		.pixel_enc = V4L2_PIXEL_ENC_YUV,
@@ -717,7 +1114,40 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 		.bpp = {1, 1, 1, 0},
 #endif
 	},
-	    // RAW
+		/* Bayer RGB formats */
+	{
+		.format = V4L2_PIX_FMT_SBGGR8,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_SGBRG8,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_SGRBG8,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_SRGGB8,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	// RAW10
 	{
 		.format = V4L2_PIX_FMT_SBGGR10BPACK,
 		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
@@ -775,6 +1205,38 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 #endif
 	},
 	{
+		.format = V4L2_PIX_FMT_SBGGR10,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_SGBRG10,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_SGRBG10,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_SRGGB10,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
 		.format = V4L2_PIX_FMT_SBGGR10DWA,
 		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
 		.mem_planes = 1,
@@ -830,6 +1292,7 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 		.bpp = {2, 0, 0, 0},
 #endif
 	},
+	// RAW12
 	{
 		.format = V4L2_PIX_FMT_SBGGR12BPACK,
 		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
@@ -887,6 +1350,38 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 #endif
 	},
 	{
+		.format = V4L2_PIX_FMT_SBGGR12,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_SGBRG12,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_SGRBG12,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
+		.format = V4L2_PIX_FMT_SRGGB12,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1
+	},
+	{
 		.format = V4L2_PIX_FMT_SBGGR12DWA,
 		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
 		.mem_planes = 1,
@@ -942,6 +1437,7 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 		.bpp = {2, 0, 0, 0},
 #endif
 	},
+	// RAW14
 	{
 		.format = V4L2_PIX_FMT_SBGGR14BPACK,
 		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
@@ -999,62 +1495,6 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 #endif
 	},
 	{
-		.format = V4L2_PIX_FMT_SBGGR14DWA,
-		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
-		.mem_planes = 1,
-		.comp_planes = 1,
-		.hdiv = 1,
-		.vdiv = 1,
-#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
-		.bpp = {16, 0, 0, 0},
-		.bpp_div = {9, 1, 1, 1},
-#else
-		.bpp = {2, 0, 0, 0},
-#endif
-	},
-	{
-		.format = V4L2_PIX_FMT_SGBRG14DWA,
-		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
-		.mem_planes = 1,
-		.comp_planes = 1,
-		.hdiv = 1,
-		.vdiv = 1,
-#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
-		.bpp = {16, 0, 0, 0},
-		.bpp_div = {9, 1, 1, 1},
-#else
-		.bpp = {2, 0, 0, 0},
-#endif
-	},
-	{
-		.format = V4L2_PIX_FMT_SGRBG14DWA,
-		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
-		.mem_planes = 1,
-		.comp_planes = 1,
-		.hdiv = 1,
-		.vdiv = 1,
-#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
-		.bpp = {16, 0, 0, 0},
-		.bpp_div = {9, 1, 1, 1},
-#else
-		.bpp = {2, 0, 0, 0},
-#endif
-	},
-	{
-		.format = V4L2_PIX_FMT_SRGGB14DWA,
-		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
-		.mem_planes = 1,
-		.comp_planes = 1,
-		.hdiv = 1,
-		.vdiv = 1,
-#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
-		.bpp = {16, 0, 0, 0},
-		.bpp_div = {9, 1, 1, 1},
-#else
-		.bpp = {2, 0, 0, 0},
-#endif
-	},
-	{
 		.format = V4L2_PIX_FMT_SBGGR14,
 		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
 		.mem_planes = 1,
@@ -1062,8 +1502,8 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 		.hdiv = 1,
 		.vdiv = 1,
 #if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
-		.bpp = {2, 0, 0, 0},
-		.bpp_div = {1, 1, 1, 1},
+		.bpp = {16, 0, 0, 0},
+		.bpp_div = {9, 1, 1, 1},
 #else
 		.bpp = {2, 0, 0, 0},
 #endif
@@ -1076,14 +1516,42 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 		.hdiv = 1,
 		.vdiv = 1,
 #if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
-		.bpp = {2, 0, 0, 0},
-		.bpp_div = {1, 1, 1, 1},
+		.bpp = {16, 0, 0, 0},
+		.bpp_div = {9, 1, 1, 1},
 #else
 		.bpp = {2, 0, 0, 0},
 #endif
 	},
 	{
 		.format = V4L2_PIX_FMT_SGRBG14,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1,
+#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
+		.bpp = {16, 0, 0, 0},
+		.bpp_div = {9, 1, 1, 1},
+#else
+		.bpp = {2, 0, 0, 0},
+#endif
+	},
+	{
+		.format = V4L2_PIX_FMT_SRGGB14,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1,
+#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
+		.bpp = {16, 0, 0, 0},
+		.bpp_div = {9, 1, 1, 1},
+#else
+		.bpp = {2, 0, 0, 0},
+#endif
+	},
+	{
+		.format = V4L2_PIX_FMT_SBGGR14DWA,
 		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
 		.mem_planes = 1,
 		.comp_planes = 1,
@@ -1097,7 +1565,35 @@ static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
 #endif
 	},
 	{
-		.format = V4L2_PIX_FMT_SRGGB14,
+		.format = V4L2_PIX_FMT_SGBRG14DWA,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1,
+#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
+		.bpp = {2, 0, 0, 0},
+		.bpp_div = {1, 1, 1, 1},
+#else
+		.bpp = {2, 0, 0, 0},
+#endif
+	},
+	{
+		.format = V4L2_PIX_FMT_SGRBG14DWA,
+		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
+		.mem_planes = 1,
+		.comp_planes = 1,
+		.hdiv = 1,
+		.vdiv = 1,
+#if KERNEL_VERSION(6, 5, 0) <= LINUX_VERSION_CODE
+		.bpp = {2, 0, 0, 0},
+		.bpp_div = {1, 1, 1, 1},
+#else
+		.bpp = {2, 0, 0, 0},
+#endif
+	},
+	{
+		.format = V4L2_PIX_FMT_SRGGB14DWA,
 		.pixel_enc = V4L2_PIXEL_ENC_BAYER,
 		.mem_planes = 1,
 		.comp_planes = 1,
@@ -1239,15 +1735,16 @@ static int visp_video_mfmt_to_vfmt(struct v4l2_subdev_format *mfmt,
 {
 	int ret;
 	const struct v4l2_format_info *info;
-	uint32_t bytesperline;
+	uint32_t bytesperline, t_bpl;
 	uint32_t sizeimage = 0;
 	uint32_t width;
 	uint32_t height;
 	int i;
-	int private_fmt = 0;
-	uint32_t fourcc_code = 0;
+	uint32_t stride = 0;
+	struct format_reserved fmt_res;
 
-	memcpy(&fourcc_code, mfmt->format.reserved, sizeof(fourcc_code));
+	memset(&fmt_res, 0, sizeof(fmt_res));
+	memcpy(&fmt_res, mfmt->format.reserved, sizeof(fmt_res));
 
 	f->fmt.pix.width = mfmt->format.width;
 	f->fmt.pix.height = mfmt->format.height;
@@ -1255,17 +1752,18 @@ static int visp_video_mfmt_to_vfmt(struct v4l2_subdev_format *mfmt,
 	f->fmt.pix.colorspace = mfmt->format.colorspace;
 	f->fmt.pix.quantization = mfmt->format.quantization;
 	ret = visp_video_mbus_to_fourcc(mfmt->format.code,
-					&f->fmt.pix.pixelformat, fourcc_code);
+					&f->fmt.pix.pixelformat, fmt_res.fourcc);
 	if (ret)
 		return ret;
 
 	width = f->fmt.pix.width;
 	height = f->fmt.pix.height;
-	info = v4l2_format_info(f->fmt.pix.pixelformat);
-	if (info != NULL) {
-		bytesperline = info->bpp[0] * width;
-	} else {
-		private_fmt = 1;
+
+	ret = visp_video_get_format_stride(f->fmt.pix.pixelformat,
+		width, height, &stride);
+	if (ret)
+		return ret;
+	{
 		info = visp_video_vfmt_info(f->fmt.pix.pixelformat);
 		if (info == NULL)
 			return -EINVAL;
@@ -1277,15 +1775,24 @@ static int visp_video_mfmt_to_vfmt(struct v4l2_subdev_format *mfmt,
 		case V4L2_PIX_FMT_GREY:
 		case V4L2_PIX_FMT_M48BPACK:
 		case V4L2_PIX_FMT_I48BPACK:
-			bytesperline = width;
+			bytesperline = stride;
 			if (info->format == V4L2_PIX_FMT_I48BPACK)
 				bytesperline *= 3;
+			break;
+
+		case V4L2_PIX_FMT_NV12:
+		case V4L2_PIX_FMT_NV16:
+			bytesperline = stride;
+			break;
+
+		case V4L2_PIX_FMT_YUYV:
+			bytesperline = stride * 2;
 			break;
 
 		// 8bit dwa
 		case V4L2_PIX_FMT_I48DWA:
 		case V4L2_PIX_FMT_I40DWA:
-			bytesperline = ((width * 4) / 3) * 3;
+			bytesperline = stride * 3;
 			break;
 
 		// 10bit unalign
@@ -1293,7 +1800,7 @@ static int visp_video_mfmt_to_vfmt(struct v4l2_subdev_format *mfmt,
 		case V4L2_PIX_FMT_P00BPACK:
 		case V4L2_PIX_FMT_P20BPACK:
 		case V4L2_PIX_FMT_I20BPACK:
-			bytesperline = DIV_ROUND_UP(width * 10, 128) * 16;
+			bytesperline = stride;
 			if (info->format == V4L2_PIX_FMT_I20BPACK)
 				bytesperline *= 4;
 			break;
@@ -1302,7 +1809,7 @@ static int visp_video_mfmt_to_vfmt(struct v4l2_subdev_format *mfmt,
 		case V4L2_PIX_FMT_Y10DWA:
 		case V4L2_PIX_FMT_P00DWA:
 		case V4L2_PIX_FMT_P20DWA:
-			bytesperline = width * 4 / 3;
+			bytesperline = stride;
 			break;
 
 		// 10 bit mode 1, per pixel 16bits
@@ -1310,7 +1817,7 @@ static int visp_video_mfmt_to_vfmt(struct v4l2_subdev_format *mfmt,
 		case V4L2_PIX_FMT_P010:
 		case V4L2_PIX_FMT_P210:
 		case V4L2_PIX_FMT_I210:
-			bytesperline = DIV_ROUND_UP(width, 8) * 16;
+			bytesperline = stride;
 			if (info->format == V4L2_PIX_FMT_I210)
 				bytesperline *= 2;
 			break;
@@ -1318,51 +1825,73 @@ static int visp_video_mfmt_to_vfmt(struct v4l2_subdev_format *mfmt,
 		// 12bit unalign
 		case V4L2_PIX_FMT_P02BPACK:
 		case V4L2_PIX_FMT_P22BPACK:
-			bytesperline = DIV_ROUND_UP(width * 12, 128) * 16;
+			bytesperline = stride;
 			break;
 
 		// rgb
 		case V4L2_PIX_FMT_RGB24:
-			bytesperline = width * 3;
+			bytesperline = stride * 3;
 			break;
 
 		case V4L2_PIX_FMT_RGB24P:
-			bytesperline = width;
+			bytesperline = stride;
 			break;
 
 		case V4L2_PIX_FMT_RGB24DWA:
-			bytesperline = (width * 4 / 3) * 3;
+			bytesperline = stride * 3;
 			break;
 
-		// RAW
+		//RAW8
+		case V4L2_PIX_FMT_SBGGR8:
+		case V4L2_PIX_FMT_SGBRG8:
+		case V4L2_PIX_FMT_SGRBG8:
+		case V4L2_PIX_FMT_SRGGB8:
+			bytesperline = stride;
+			break;
+
+		// RAW10
+		case V4L2_PIX_FMT_SBGGR10:
+		case V4L2_PIX_FMT_SGBRG10:
+		case V4L2_PIX_FMT_SGRBG10:
+		case V4L2_PIX_FMT_SRGGB10:
+			bytesperline = stride;
+			break;
+
 		// 10 bit-unalign
 		case V4L2_PIX_FMT_SBGGR10BPACK:
 		case V4L2_PIX_FMT_SGBRG10BPACK:
 		case V4L2_PIX_FMT_SGRBG10BPACK:
 		case V4L2_PIX_FMT_SRGGB10BPACK:
-			bytesperline = DIV_ROUND_UP(width * 10, 128) * 16;
+			bytesperline = stride;
 			break;
 
 		case V4L2_PIX_FMT_SBGGR10DWA:
 		case V4L2_PIX_FMT_SGBRG10DWA:
 		case V4L2_PIX_FMT_SGRBG10DWA:
 		case V4L2_PIX_FMT_SRGGB10DWA:
-			bytesperline = DIV_ROUND_UP(width, 12) * 16;
+			bytesperline = stride;
 			break;
 
 		// 12bit
+		case V4L2_PIX_FMT_SBGGR12:
+		case V4L2_PIX_FMT_SGBRG12:
+		case V4L2_PIX_FMT_SGRBG12:
+		case V4L2_PIX_FMT_SRGGB12:
+			bytesperline = stride;
+			break;
+
 		case V4L2_PIX_FMT_SBGGR12BPACK:
 		case V4L2_PIX_FMT_SGBRG12BPACK:
 		case V4L2_PIX_FMT_SGRBG12BPACK:
 		case V4L2_PIX_FMT_SRGGB12BPACK:
-			bytesperline = DIV_ROUND_UP(width * 12, 128) * 16;
+			bytesperline = stride;
 			break;
 
 		case V4L2_PIX_FMT_SBGGR12DWA:
 		case V4L2_PIX_FMT_SGBRG12DWA:
 		case V4L2_PIX_FMT_SGRBG12DWA:
 		case V4L2_PIX_FMT_SRGGB12DWA:
-			bytesperline = DIV_ROUND_UP(width, 10) * 16;
+			bytesperline = stride;
 			break;
 
 		// 14 bit
@@ -1370,35 +1899,37 @@ static int visp_video_mfmt_to_vfmt(struct v4l2_subdev_format *mfmt,
 		case V4L2_PIX_FMT_SGBRG14BPACK:
 		case V4L2_PIX_FMT_SGRBG14BPACK:
 		case V4L2_PIX_FMT_SRGGB14BPACK:
-			bytesperline = DIV_ROUND_UP(width * 14, 128) * 16;
+			bytesperline = stride;
 			break;
 
 		case V4L2_PIX_FMT_SBGGR14DWA:
 		case V4L2_PIX_FMT_SGBRG14DWA:
 		case V4L2_PIX_FMT_SGRBG14DWA:
 		case V4L2_PIX_FMT_SRGGB14DWA:
-			bytesperline = DIV_ROUND_UP(width, 9) * 16;
+			bytesperline = stride;
 			break;
 
 		case V4L2_PIX_FMT_SBGGR14:
 		case V4L2_PIX_FMT_SGBRG14:
 		case V4L2_PIX_FMT_SGRBG14:
 		case V4L2_PIX_FMT_SRGGB14:
-			bytesperline = DIV_ROUND_UP(width, 8) * 16;
+			bytesperline = stride;
 			break;
 
+		// RAW16
 		case V4L2_PIX_FMT_SBGGR16:
 		case V4L2_PIX_FMT_SGBRG16:
 		case V4L2_PIX_FMT_SGRBG16:
 		case V4L2_PIX_FMT_SRGGB16:
-			bytesperline = DIV_ROUND_UP(width * 16, 128) * 16;
+			bytesperline = stride;
 			break;
 
+		// RAW24
 		case V4L2_PIX_FMT_SBGGR24:
 		case V4L2_PIX_FMT_SGBRG24:
 		case V4L2_PIX_FMT_SGRBG24:
 		case V4L2_PIX_FMT_SRGGB24:
-			bytesperline = DIV_ROUND_UP(width * 24, 128) * 16;
+			bytesperline = stride;
 			break;
 
 		default:
@@ -1418,13 +1949,8 @@ static int visp_video_mfmt_to_vfmt(struct v4l2_subdev_format *mfmt,
 	f->fmt.pix.sizeimage = sizeimage;
 
 	for (i = 1; i < info->comp_planes; i++) {
-		if (private_fmt) {
-			bytesperline = DIV_ROUND_UP(bytesperline, info->hdiv);
-		} else {
-			bytesperline =
-			    info->bpp[i] * DIV_ROUND_UP(width, info->hdiv);
-		}
-		sizeimage = bytesperline * DIV_ROUND_UP(height, info->vdiv);
+		t_bpl = DIV_ROUND_UP(bytesperline, info->hdiv);
+		sizeimage = t_bpl * DIV_ROUND_UP(height, info->vdiv);
 		f->fmt.pix.sizeimage += sizeimage;
 	}
 
@@ -1533,6 +2059,7 @@ static int visp_videoc_enum_fmt_vid_cap(struct file *file, void *priv,
 	    .pads = &pad_cfg,
 	};
 	int ret = -EINVAL;
+	struct format_reserved fmt_res;
 
 	ret = visp_video_try_create_pipeline(visp_vdev);
 	if (ret) {
@@ -1561,9 +2088,10 @@ static int visp_videoc_enum_fmt_vid_cap(struct file *file, void *priv,
 			dev_err(visp_vdev->visp_mdev->dev, "enum_fmt: enum_mbus_code failed: %d\n", ret);
 			return ret;
 		}
-
+		memset(&fmt_res, 0, sizeof(fmt_res));
+		memcpy(&fmt_res, mbus_code.reserved, sizeof(fmt_res));
 		ret = visp_video_mbus_to_fourcc(mbus_code.code, &f->pixelformat,
-						(uint32_t)mbus_code.reserved[0]);
+						fmt_res.fourcc);
 
 		if (ret)
 			return ret;
@@ -2297,6 +2825,7 @@ static int visp_video_vb2_start_streaming(struct vb2_queue *queue,
 	struct v4l2_subdev *subdev;
 	struct visp_pad_stream_status stream_status;
 	int ret = -EINVAL;
+	int i = 0;
 
 	subdev = visp_video_remote_subdev(visp_vdev);
 	if (subdev) {
@@ -2309,6 +2838,15 @@ static int visp_video_vb2_start_streaming(struct vb2_queue *queue,
 		stream_status.status = 1;
 		ret = v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_S_STREAM,
 				       &stream_status);
+	}
+
+	if (ret) {
+		for (i = 0; i < queue->max_num_buffers; i++) {
+			if (!queue->bufs[i])
+				return -EINVAL; // RET if max_numbuffers > allocated buffers.
+			if (queue->bufs[i]->state == VB2_BUF_STATE_ACTIVE)
+				vb2_buffer_done(queue->bufs[i], VB2_BUF_STATE_QUEUED);
+		}
 	}
 
 	return ret;

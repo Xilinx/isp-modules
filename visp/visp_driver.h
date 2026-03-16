@@ -181,7 +181,7 @@ typedef struct iba_info {
 struct visp_sensor_info {
 	char sensor[MEDIA_ISP_CHAR_LENGTH_MAX];
 	uint8_t mode;
-	char xml[MEDIA_ISP_CHAR_LENGTH_MAX];
+	char calib[MEDIA_ISP_CHAR_LENGTH_MAX];
 	char manu_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char auto_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char one_json[MEDIA_ISP_PATH_LENGTH_MAX];

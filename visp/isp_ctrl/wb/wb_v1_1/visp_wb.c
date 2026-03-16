@@ -247,7 +247,7 @@ const struct v4l2_ctrl_config visp_wb_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {16},
+		.dims = {0x10},
 	},
 	{
 		/* uint8_t data of CamDeviceWbStatus_t */
@@ -259,7 +259,7 @@ const struct v4l2_ctrl_config visp_wb_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {24},
+		.dims = {0x18},
 	},
 };
 

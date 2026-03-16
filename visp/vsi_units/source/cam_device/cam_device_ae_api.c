@@ -88,7 +88,7 @@ RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 	packet->payload_size += sizeof(uint32_t);
 
 	result = xlnx_send_mbox_acked_cmd(
-	    isp_dev, RPU_2_APU_MB_CMD_UNREGISTER_AELIB, packet,
+	    isp_dev, APU_2_RPU_MB_CMD_UNREGISTER_AELIB, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)

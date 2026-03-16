@@ -65,24 +65,30 @@ static int visp_bls_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
-		case VISP_CID_BLS_RESET:
-		case VISP_CID_BLS_MODE:
-		case VISP_CID_BLS_AUTO_LEVEL:
-		case VISP_CID_BLS_AUTO_GAIN:
-		case VISP_CID_BLS_AUTO_TABLE:
-		case VISP_CID_BLS_MANU_R_VALUE:
-		case VISP_CID_BLS_MANU_GR_VALUE:
-		case VISP_CID_BLS_MANU_GB_VALUE:
-		case VISP_CID_BLS_MANU_B_VALUE:
-		case VISP_CID_BLS_ALL_CONFIG:
-			ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
-			break;
+	if (ctrl->id == VISP_CID_BLS_ALL_BIT_WIDTH &&
+	    isp_dev->streamon[isp_dev->ctrl_pad] == 1) {
+		dev_err(isp_dev->dev,
+			"ctrl 0x%x can not be set after streamon\n", ctrl->id);
+		return -EACCES;
+	}
 
-		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
-			return -EACCES;
+	switch (ctrl->id) {
+	case VISP_CID_BLS_RESET:
+	case VISP_CID_BLS_MODE:
+	case VISP_CID_BLS_AUTO_LEVEL:
+	case VISP_CID_BLS_AUTO_GAIN:
+	case VISP_CID_BLS_AUTO_TABLE:
+	case VISP_CID_BLS_MANU_R_VALUE:
+	case VISP_CID_BLS_MANU_GR_VALUE:
+	case VISP_CID_BLS_MANU_GB_VALUE:
+	case VISP_CID_BLS_MANU_B_VALUE:
+	case VISP_CID_BLS_ALL_CONFIG:
+	case VISP_CID_BLS_ALL_BIT_WIDTH:
+		ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
+	default:
+		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
+		return -EACCES;
 	}
 
 	return ret;
@@ -94,29 +100,27 @@ static int visp_bls_g_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
-		case VISP_CID_BLS_RESET:
-		case VISP_CID_BLS_MODE:
-		case VISP_CID_BLS_AUTO_LEVEL:
-		case VISP_CID_BLS_AUTO_GAIN:
-		case VISP_CID_BLS_AUTO_TABLE:
-		case VISP_CID_BLS_MANU_R_VALUE:
-		case VISP_CID_BLS_MANU_GR_VALUE:
-		case VISP_CID_BLS_MANU_GB_VALUE:
-		case VISP_CID_BLS_MANU_B_VALUE:
-		case VISP_CID_BLS_STAT_R_VALUE:
-		case VISP_CID_BLS_STAT_GR_VALUE:
-		case VISP_CID_BLS_STAT_GB_VALUE:
-		case VISP_CID_BLS_STAT_B_VALUE:
-		case VISP_CID_BLS_ALL_CONFIG:
-		case VISP_CID_BLS_ALL_STATUS:
-			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
-			break;
-
-		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
-			return -EACCES;
+	switch (ctrl->id) {
+	case VISP_CID_BLS_MODE:
+	case VISP_CID_BLS_AUTO_LEVEL:
+	case VISP_CID_BLS_AUTO_GAIN:
+	case VISP_CID_BLS_AUTO_TABLE:
+	case VISP_CID_BLS_MANU_R_VALUE:
+	case VISP_CID_BLS_MANU_GR_VALUE:
+	case VISP_CID_BLS_MANU_GB_VALUE:
+	case VISP_CID_BLS_MANU_B_VALUE:
+	case VISP_CID_BLS_STAT_R_VALUE:
+	case VISP_CID_BLS_STAT_GR_VALUE:
+	case VISP_CID_BLS_STAT_GB_VALUE:
+	case VISP_CID_BLS_STAT_B_VALUE:
+	case VISP_CID_BLS_ALL_CONFIG:
+	case VISP_CID_BLS_ALL_STATUS:
+	case VISP_CID_BLS_ALL_BIT_WIDTH:
+		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
+	default:
+		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
+		return -EACCES;
 	}
 
 	return ret;
@@ -281,7 +285,7 @@ const struct v4l2_ctrl_config visp_bls_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {424},
+		.dims = {0x1a8},
 	},
 	{
 		/* uint8_t data of CamDeviceBlsStatus_t */
@@ -293,7 +297,20 @@ const struct v4l2_ctrl_config visp_bls_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {24},
+		.dims = {0x18},
+	},
+	{
+		/* BlsSet/GetBitWidth */
+		.ops = &visp_bls_ctrl_ops,
+		.id = VISP_CID_BLS_ALL_BIT_WIDTH,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_bls_all_bit_width",
+		.step = 1,
+		.def = 8,
+		.min = 8,
+		.max = 24,
+		.dims = {1},
 	},
 };
 

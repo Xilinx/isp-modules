@@ -60,6 +60,9 @@ int visp_set_frame_interval_public(struct visp_dev *isp_dev,
 				   struct v4l2_subdev_frame_interval *fi);
 int visp_set_fmt_public(struct visp_dev *isp_dev,
 			struct v4l2_subdev_format *format);
+int visp_get_format_stride_public(struct visp_dev *isp_dev, uint32_t fourcc,
+				  uint32_t width, uint32_t height,
+				  uint32_t *pstride);
 int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
 				    uint32_t *frame_rate);
 int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
@@ -112,6 +115,7 @@ RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 #define VSI_SUCCESS 0
 #define VSI_FAILURE (-1)
 #define VSI_NULL ((void *)0)
+#define VSI_RPU_NOT_SUPPORT (0xFFFF)
 
 typedef enum ErrCode_E {
 	VSI_ERR_INVALID_DEVID = 1,

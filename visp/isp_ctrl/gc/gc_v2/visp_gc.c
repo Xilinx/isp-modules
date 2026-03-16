@@ -176,25 +176,27 @@ const struct v4l2_ctrl_config visp_gc_ctrls[] = {
 		.dims = {1},
 	},
 	{/* float array 20*32bit */
-	 .ops = &visp_gc_ctrl_ops,
-	 .id = VISP_CID_GC_AUTO_GAIN,
-	 .type = V4L2_CTRL_TYPE_U32,
-	 .flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-	 .name = "isp_gc_auto_gain",
-	 .step = 1,
-	 .min = 0,
-	 .max = 0xFFFFFFFF,
-	 .dims = {20}},
+		.ops = &visp_gc_ctrl_ops,
+		.id = VISP_CID_GC_AUTO_GAIN,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_gc_auto_gain",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20}
+	},
 	{// uint16_t  20 * 64 * 16bit
-	 .ops = &visp_gc_ctrl_ops,
-	 .id = VISP_CID_GC_AUTO_CURVE,
-	 .type = V4L2_CTRL_TYPE_U16,
-	 .flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-	 .name = "isp_gc_auto_curve",
-	 .step = 1,
-	 .min = 0,
-	 .max = 1023,
-	 .dims = {20, 64, 0, 0}},
+		.ops = &visp_gc_ctrl_ops,
+		.id = VISP_CID_GC_AUTO_CURVE,
+		.type = V4L2_CTRL_TYPE_U16,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_gc_auto_curve",
+		.step = 1,
+		.min = 0,
+		.max = 1023,
+		.dims = {20, 64, 0, 0}
+	},
 	{
 		.ops = &visp_gc_ctrl_ops,
 		.id = VISP_CID_GC_MANU_USE_STD,
@@ -317,7 +319,7 @@ const struct v4l2_ctrl_config visp_gc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {3044},
+		.dims = {0xbe4},
 	},
 	{
 		/* uint8_t data of CamDeviceGcStatus_t */
@@ -329,7 +331,7 @@ const struct v4l2_ctrl_config visp_gc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {404},
+		.dims = {0x194},
 	},
 };
 

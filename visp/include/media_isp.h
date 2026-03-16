@@ -116,7 +116,7 @@ typedef struct media_isp_mcm_s {
 typedef struct media_isp_sensor_info_s {
 	uint8_t mode;
 	char name[MEDIA_ISP_CHAR_LENGTH_MAX];
-	char calib_xml[MEDIA_ISP_PATH_LENGTH_MAX];
+	char calib[MEDIA_ISP_PATH_LENGTH_MAX];
 	char manu_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char auto_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char one_json[MEDIA_ISP_PATH_LENGTH_MAX];
@@ -143,6 +143,7 @@ typedef struct media_isp_port_s {
 	struct mutex main_lock;
 	char bufmode[BUF_MODE_SIZE];
 	bool_t hw_mcm;
+	bool_t load_json;
 } media_isp_port_attr;
 
 typedef struct media_isp_event_dev_s {

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -51,46 +52,18 @@
  *
  *****************************************************************************/
 
-#ifndef __VISP_CPROC_H__
-#define __VISP_CPROC_H__
-
-#include "visp_ctrl.h"
-
-#define VISP_CID_CPROC_ENABLE               (VISP_CID_CPROC_BASE + 0x0000)
-#define VISP_CID_CPROC_RESET                (VISP_CID_CPROC_BASE + 0x0001)
-#define VISP_CID_CPROC_CHROMA_OUT_TYPE      (VISP_CID_CPROC_BASE + 0x0002)
-#define VISP_CID_CPROC_MODE                 (VISP_CID_CPROC_BASE + 0x0003)
-#define VISP_CID_CPROC_AUTO_LEVEL           (VISP_CID_CPROC_BASE + 0x0004)
-#define VISP_CID_CPROC_AUTO_GAIN            (VISP_CID_CPROC_BASE + 0x0005)
-#define VISP_CID_CPROC_AUTO_CONTRAST        (VISP_CID_CPROC_BASE + 0x0006)
-#define VISP_CID_CPROC_AUTO_BRIGHT          (VISP_CID_CPROC_BASE + 0x0007)
-#define VISP_CID_CPROC_AUTO_SATURATION      (VISP_CID_CPROC_BASE + 0x0008)
-#define VISP_CID_CPROC_AUTO_HUE             (VISP_CID_CPROC_BASE + 0x0009)
-#define VISP_CID_CPROC_MANU_CONTRAST        (VISP_CID_CPROC_BASE + 0x000A)
-#define VISP_CID_CPROC_MANU_BRIGHT          (VISP_CID_CPROC_BASE + 0x000B)
-#define VISP_CID_CPROC_MANU_SATURATION      (VISP_CID_CPROC_BASE + 0x000C)
-#define VISP_CID_CPROC_MANU_HUE             (VISP_CID_CPROC_BASE + 0x000D)
-#define VISP_CID_CPROC_CONV_MATRIX          (VISP_CID_CPROC_BASE + 0x000E)
-#define VISP_CID_CPROC_RGB_TO_YUV           (VISP_CID_CPROC_BASE + 0x000F)
-#define VISP_CID_CPROC_GAMUT                (VISP_CID_CPROC_BASE + 0x0010)
-#define VISP_CID_CPROC_STAT_CONTRAST        (VISP_CID_CPROC_BASE + 0x0011)
-#define VISP_CID_CPROC_STAT_BRIGHT          (VISP_CID_CPROC_BASE + 0x0012)
-#define VISP_CID_CPROC_STAT_SATURATION      (VISP_CID_CPROC_BASE + 0x0013)
-#define VISP_CID_CPROC_STAT_HUE             (VISP_CID_CPROC_BASE + 0x0014)
-#define VISP_CID_CPROC_STAT_CONV_MATRIX     (VISP_CID_CPROC_BASE + 0x0015)
-#define VISP_CID_CPROC_STAT_RGB_TO_YUV      (VISP_CID_CPROC_BASE + 0x0016)
-#define VISP_CID_CPROC_STAT_CHROMA_OUT_TYPE (VISP_CID_CPROC_BASE + 0x0017)
-#define VISP_CID_CPROC_STAT_GAMUT           (VISP_CID_CPROC_BASE + 0x0018)
-
-#define VISP_CID_CPROC_ALL_CONFIG           (VISP_CID_CPROC_BASE + 0x0020)
-#define VISP_CID_CPROC_ALL_STATUS           (VISP_CID_CPROC_BASE + 0x0021)
-#define VISP_CID_CPROC_ALL_RANGE            (VISP_CID_CPROC_BASE + 0x0022)
-#define VISP_CID_CPROC_ALL_RANGE_STATUS     (VISP_CID_CPROC_BASE + 0x0023)
+#ifndef __VISP_SENSOR_COMMON_H__
+#define __VISP_SENSOR_COMMON_H__
 
 
-#ifdef __KERNEL__
-int visp_cproc_ctrl_count(void);
-int visp_cproc_ctrl_create(struct visp_dev *isp_dev);
-#endif
+struct visp_sensor_reg {
+	uint32_t addr;
+	uint32_t val;
+};
+
+#define VISP_SENSOR_S_REGISTER                                                     \
+	_IOWR('S', BASE_VIDIOC_PRIVATE + 0, struct visp_sensor_reg)
+#define VISP_SENSOR_G_REGISTER                                                     \
+	_IOWR('S', BASE_VIDIOC_PRIVATE + 1, struct visp_sensor_reg)
 
 #endif

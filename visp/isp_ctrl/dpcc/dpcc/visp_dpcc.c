@@ -539,7 +539,7 @@ const struct v4l2_ctrl_config visp_dpcc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {8260},
+		.dims = {0x2044},
 	},
 	{
 		/* uint8_t data of CamDeviceDpccStatus_t */
@@ -551,7 +551,7 @@ const struct v4l2_ctrl_config visp_dpcc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {8260},
+		.dims = {0x2044},
 	},
 };
 

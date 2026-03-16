@@ -1,8 +1,8 @@
-ISP_AE_V3 := 1
-ccflags-y += -DISP_AE_V3=1
+ISP_AE_V4 := 1
+ccflags-y += -DISP_AE_V4
 
-ISP_AWB_V3 := 1
-ccflags-y += -DISP_AWB_V3
+ISP_AWB_V4 := 1
+ccflags-y += -DISP_AWB_V4
 
 ISP_GC_V2 := 1
 ccflags-y += -DISP_GC_V2
@@ -22,8 +22,8 @@ ccflags-y += -DISP_WDR_V5_2
 ISP_BLS := 1
 ccflags-y += -DISP_BLS
 
-ISP_CCM := 1
-ccflags-y += -DISP_CCM
+ISP_CCM_V1_1 := 1
+ccflags-y += -DISP_CCM_V1_1
 
 ISP_DPCC := 1
 ccflags-y += -DISP_DPCC
@@ -46,14 +46,11 @@ ccflags-y += -DISP_EXP_V2
 ISP_GTM_V1 := 1
 ccflags-y += -DISP_GTM_V1
 
-ISP_HDR_V3_1 := 1
-ccflags-y += -DISP_HDR_V3_1
-
 ISP_RGBIR_V2_1 := 1
 ccflags-y += -DISP_RGBIR_V2_1
 
 ISP_DG_V1 := 1
 ccflags-y += -DISP_DG_V1
 
-ISP_CPD := 1
-ccflags-y += -DISP_CPD
+ISP_CPD_V1_1 := 1
+ccflags-y += -DISP_CPD_V1_1

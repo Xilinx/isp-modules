@@ -89,7 +89,7 @@
 
 #define VISP_DEFAULT_SENSOR "ox03f10"
 #define VISP_DEFAULT_SENSOR_MODE 0
-#define VISP_DEFAULT_SENSOR_XML "/usr/share/limo_example_jsons/OX03f10.xml"
+#define VISP_DEFAULT_SENSOR_CALIB "/usr/share/limo_example_jsons/OX03f10.json"
 #define VISP_DEFAULT_SENSOR_MANU_JSON "/usr/share/limo_example_jsons/manual_ext.json"
 #define VISP_DEFAULT_SENSOR_AUTO_JSON "/usr/share/limo_example_jsons/auto.json"
 
@@ -711,9 +711,9 @@ static int visp_querycap(struct v4l2_subdev *sd, void *arg)
 {
 	struct v4l2_capability *cap = (struct v4l2_capability *)arg;
 
-	strncpy(cap->driver, sd->name, sizeof(cap->driver));
+	strscpy(cap->driver, sd->name, sizeof(cap->driver));
 	cap->driver[sizeof(cap->driver) - 1] = '\0';
-	strncpy(cap->card, sd->name, sizeof(cap->card));
+	strscpy(cap->card, sd->name, sizeof(cap->card));
 	cap->card[sizeof(cap->card) - 1] = '\0';
 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s", sd->name);
 
@@ -1196,7 +1196,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		 * piplines MP/SP/RAW are up on a port
 		 */
 		if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
-			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
 		/* Stream on all pipeline subdevices */
 			ret = visp_stream_pipeline_subdevs(isp_dev, port, 1);
 			if (ret) {
@@ -1204,9 +1203,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 					port, ret);
 				goto ERR_TO_RPU_LOCK;
 			}
-
-		} else {
-			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
 		}
 
 		ret = media_isp_device_set_frame_rate(isp_dev, port,
@@ -1234,6 +1230,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			ret = -EINVAL;
 			goto ERR_TO_RPU_LOCK;
 		}
+		/* only all subdev stream on, then mark subdev_streamon_count */
+		ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
 		mutex_unlock(&isp_dev->rpu->rpu_lock);
 		/* EXIT PORT Level CRITICAL SECTION */
 	} else {
@@ -1247,6 +1245,11 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			 * stream off and proceeds to perform complete cleanup of input pipeline.
 			 */
 			if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
+				/* clean sink pad sink_detect */
+				isp_dev->pad_data[port * VISP_PORT_PAD_NR].sink_detected = 0;
+				memset(&isp_dev->pad_data[port * VISP_PORT_PAD_NR].format, 0,
+				       sizeof(struct v4l2_mbus_framefmt));
+
 				/* Stream off all pipeline subdevices */
 				ret = visp_stream_pipeline_subdevs(isp_dev, port, 0);
 				if (ret) {
@@ -1311,7 +1314,6 @@ int visp_buf_done(struct v4l2_subdev *sd, void *arg)
 		spin_unlock_irqrestore(&cur_pad->qlock, flags);
 		return -EINVAL;
 	}
-
 
 	list_for_each_entry_safe(pos, next, &cur_pad->queue, list) {
 		if (pos && (pos->sequence == ubuf.index)) {
@@ -1857,16 +1859,13 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	uint32_t sink_pad_index;
 	struct visp_pad_data *cur_pad = &isp_dev->pad_data[format->pad];
 	struct visp_pad_data *sink_pad;
+	struct visp_pad_data *source_pad;
 	int i;
 	int ret = 0;
 	media_fmt Format_media;
 	struct v4l2_mbus_framefmt *MBusFormat;
 	struct media_pad *mediapad_t;
-	uint32_t fourcc_code = 0;
-
-	ret = visp_setup_isp_pipeline(isp_dev, format->pad);
-	if (ret)
-		return ret;
+	struct format_reserved fmt_res;
 
 	sink_pad_index = format->pad - (format->pad % VISP_PORT_PAD_NR);
 	sink_pad = &isp_dev->pad_data[sink_pad_index];
@@ -1874,6 +1873,39 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	/* Apply format to the current pad being set */
 	cur_pad->sink_detected = 1;
 	cur_pad->format = format->format;
+	if (sink_pad == cur_pad) {
+		for (i = 1; i < VISP_PORT_PAD_NR; i++) {
+			source_pad = &isp_dev->pad_data[sink_pad_index + i];
+			switch (i) {
+			case VISP_PORT_PAD_SOURCE_MP:
+			case VISP_PORT_PAD_SOURCE_SP1:
+			case VISP_PORT_PAD_SOURCE_SP2:
+			case VISP_PORT_PAD_SOURCE_RAW:
+				source_pad->format = format->format;
+				source_pad->format.code = source_pad->fmts[0].code;
+				source_pad->format.field = V4L2_FIELD_NONE;
+				source_pad->format.quantization = V4L2_QUANTIZATION_DEFAULT;
+				source_pad->format.colorspace = V4L2_COLORSPACE_DEFAULT;
+
+				memset(&fmt_res, 0, sizeof(fmt_res));
+				fmt_res.fourcc = source_pad->fmts[0].fourcc;
+				visp_get_format_stride_public(isp_dev, fmt_res.fourcc,
+						      format->format.width,
+						      format->format.height,
+						      &fmt_res.stride);
+				memcpy(source_pad->format.reserved, &fmt_res,
+				       sizeof(fmt_res));
+				break;
+			default:
+				break;
+			}
+		}
+		return 0;
+	}
+
+	ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+	if (ret)
+		return ret;
 
 	w = ALIGN(format->format.width, VISP_WIDTH_ALIGN);
 	h = ALIGN(format->format.height, VISP_HEIGHT_ALIGN);
@@ -1883,17 +1915,23 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	format->format.width = w;
 	format->format.height = h;
 
-	memcpy(&fourcc_code, format->format.reserved, sizeof(uint32_t));
+	memset(&fmt_res, 0, sizeof(fmt_res));
+	memcpy(&fmt_res, format->format.reserved, sizeof(fmt_res));
 	for (i = 0; i < cur_pad->num_formats; i++) {
 		if (format->format.code == cur_pad->fmts[i].code &&
-		    fourcc_code == cur_pad->fmts[i].fourcc)
+		    fmt_res.fourcc == cur_pad->fmts[i].fourcc)
 			break;
 	}
 
 	if (i >= cur_pad->num_formats) {
 		format->format.code = cur_pad->fmts[0].code;
-		memcpy(format->format.reserved, &cur_pad->fmts[0].fourcc,
-		       sizeof(uint32_t));
+		memset(&fmt_res, 0, sizeof(fmt_res));
+		fmt_res.fourcc = cur_pad->fmts[0].fourcc;
+		visp_get_format_stride_public(isp_dev, fmt_res.fourcc,
+				      format->format.width,
+				      format->format.height,
+				      &fmt_res.stride);
+		memcpy(format->format.reserved, &fmt_res, sizeof(fmt_res));
 	}
 
 	memset(&Format_media, 0, sizeof(Format_media));
@@ -1903,17 +1941,10 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	Format_media.height = MBusFormat->height;
 	Format_media.color_space = MBusFormat->colorspace;
 	Format_media.quantization = MBusFormat->quantization;
-	fourcc_code = 0;
+	Format_media.stride = fmt_res.stride;
 
-	if (sizeof(MBusFormat->reserved) == (sizeof(uint16_t) * 10)) {
-		memcpy(&fourcc_code, &MBusFormat->reserved,
-		       sizeof(fourcc_code));
-	} else {
-		memcpy(&fourcc_code, &MBusFormat->reserved[1],
-		       sizeof(fourcc_code));
-	}
 	media_isp_hal_mbus_fmt_to_media_fmt(
-	    &MBusFormat->code, &Format_media.pixel_format, fourcc_code);
+		&MBusFormat->code, &Format_media.pixel_format, fmt_res.fourcc);
 
 	mediapad_t = &isp_dev->pads[format->pad];
 	ret = media_isp_set_format(isp_dev, mediapad_t->index, Format_media);
@@ -1928,101 +1959,14 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 int visp_set_fmt_public(struct visp_dev *isp_dev,
 			struct v4l2_subdev_format *format)
 {
-	uint32_t w, h;
-	uint32_t sink_pad_index;
-	struct visp_pad_data *cur_pad = &isp_dev->pad_data[format->pad];
-	struct visp_pad_data *sink_pad;
-	struct visp_pad_data *source_pad;
-	int i;
-	int ret;
-	media_fmt Format_media;
-	struct v4l2_mbus_framefmt *MBusFormat;
-	struct media_pad *mediapad_t;
-	uint32_t fourcc_code = 0;
+	struct v4l2_subdev_pad_config pad_cfg;
 
-	sink_pad_index = format->pad - (format->pad % VISP_PORT_PAD_NR);
-	sink_pad = &isp_dev->pad_data[sink_pad_index];
+	memset(&pad_cfg, 0, sizeof(pad_cfg));
+	struct v4l2_subdev_state sd_state = {
+	    .pads = &pad_cfg,
+	};
 
-	if (sink_pad == cur_pad) {
-		cur_pad->sink_detected = 1;
-		cur_pad->format = format->format;
-		for (i = 1; i < VISP_PORT_PAD_NR; i++) {
-			source_pad = &isp_dev->pad_data[sink_pad_index + i];
-			source_pad->sink_detected = 1;
-
-			switch (i) {
-			case VISP_PORT_PAD_SOURCE_MP:
-			case VISP_PORT_PAD_SOURCE_SP1:
-			case VISP_PORT_PAD_SOURCE_SP2:
-			case VISP_PORT_PAD_SOURCE_RAW:
-				source_pad->format = format->format;
-				source_pad->format.code =
-				    source_pad->fmts[0].code;
-				memcpy(source_pad->format.reserved,
-				       &source_pad->fmts[0].fourcc,
-				       sizeof(uint32_t));
-				source_pad->format.field = V4L2_FIELD_NONE;
-				source_pad->format.quantization =
-				    V4L2_QUANTIZATION_DEFAULT;
-				source_pad->format.colorspace =
-				    V4L2_COLORSPACE_DEFAULT;
-				break;
-			default:
-				break;
-			}
-		}
-		return 0;
-	}
-
-	w = ALIGN(format->format.width, VISP_WIDTH_ALIGN);
-	h = ALIGN(format->format.height, VISP_HEIGHT_ALIGN);
-	w = clamp_t(uint32_t, w, VISP_WIDTH_MIN, sink_pad->format.width);
-	h = clamp_t(uint32_t, h, VISP_HEIGHT_MIN, sink_pad->format.height);
-
-	format->format.width = w;
-	format->format.height = h;
-
-	memcpy(&fourcc_code, format->format.reserved, sizeof(uint32_t));
-	for (i = 0; i < cur_pad->num_formats; i++) {
-		if (format->format.code == cur_pad->fmts[i].code &&
-		    fourcc_code == cur_pad->fmts[i].fourcc)
-			break;
-	}
-
-	if (i >= cur_pad->num_formats) {
-		format->format.code = cur_pad->fmts[0].code;
-		memcpy(format->format.reserved, &cur_pad->fmts[0].fourcc,
-		       sizeof(uint32_t));
-	}
-
-	if (ret)
-		return ret;
-
-	memset(&Format_media, 0, sizeof(Format_media));
-
-	MBusFormat = (struct v4l2_mbus_framefmt *)&format->format;
-	Format_media.width = MBusFormat->width;
-	Format_media.height = MBusFormat->height;
-	Format_media.color_space = MBusFormat->colorspace;
-	Format_media.quantization = MBusFormat->quantization;
-	fourcc_code = 0;
-
-	if (sizeof(MBusFormat->reserved) == (sizeof(uint16_t) * 10)) {
-		memcpy(&fourcc_code, &MBusFormat->reserved,
-		       sizeof(fourcc_code));
-	} else {
-		memcpy(&fourcc_code, &MBusFormat->reserved[1],
-		       sizeof(fourcc_code));
-	}
-	media_isp_hal_mbus_fmt_to_media_fmt(
-	    &MBusFormat->code, &Format_media.pixel_format, fourcc_code);
-
-	mediapad_t = &isp_dev->pads[format->pad];
-	media_isp_set_format(isp_dev, mediapad_t->index, Format_media);
-
-	cur_pad->format = format->format;
-
-	return 0;
+	return visp_set_fmt(&isp_dev->sd, &sd_state, format);
 }
 
 static int visp_get_fmt(struct v4l2_subdev *sd,
@@ -2049,8 +1993,11 @@ static int visp_enum_mbus_code(struct v4l2_subdev *sd,
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_data *pad_data = &isp_dev->pad_data[code->pad];
+	int ret = 0;
 
-	visp_setup_isp_pipeline(isp_dev, code->pad);
+	ret = visp_setup_isp_pipeline(isp_dev, code->pad);
+	if (ret)
+		return ret;
 
 	if (code->index >= pad_data->num_formats)
 		return 0;
@@ -2513,25 +2460,26 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	struct device_node *node = pdev->dev.of_node;
 
 	for (port = 0; port < VISP_PORT_NR; port++) {
-		strncpy(isp_dev->isp_ports[port].sensor_info.name,
-			VISP_DEFAULT_SENSOR, strlen(VISP_DEFAULT_SENSOR) + 1);
+		strscpy(isp_dev->isp_ports[port].sensor_info.name,
+			VISP_DEFAULT_SENSOR,
+			sizeof(isp_dev->isp_ports[port].sensor_info.name));
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.calib_xml,
-			VISP_DEFAULT_SENSOR_XML,
-			strlen(VISP_DEFAULT_SENSOR_XML) + 1);
+		strscpy(isp_dev->isp_ports[port].sensor_info.calib,
+			VISP_DEFAULT_SENSOR_CALIB,
+			sizeof(isp_dev->isp_ports[port].sensor_info.calib));
 
 		isp_dev->isp_ports[port].sensor_info.mode =
 		    VISP_DEFAULT_SENSOR_MODE;
 		isp_dev->isp_ports[port].sensor_info.sensor_id =
 		    sensor_dev_id[port];
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.manu_json,
+		strscpy(isp_dev->isp_ports[port].sensor_info.manu_json,
 			VISP_DEFAULT_SENSOR_MANU_JSON,
-			strlen(VISP_DEFAULT_SENSOR_MANU_JSON) + 1);
+			sizeof(isp_dev->isp_ports[port].sensor_info.manu_json));
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.auto_json,
+		strscpy(isp_dev->isp_ports[port].sensor_info.auto_json,
 			VISP_DEFAULT_SENSOR_AUTO_JSON,
-			strlen(VISP_DEFAULT_SENSOR_AUTO_JSON) + 1);
+			sizeof(isp_dev->isp_ports[port].sensor_info.auto_json));
 	}
 
 	fwnode_property_read_u32(of_fwnode_handle(node), "isp_id",
@@ -2764,7 +2712,7 @@ static int visp_probe(struct platform_device *pdev)
 	dev_info(dev, "ISP: Entity function: 0x%x, pads: %u\n",
 		 isp_dev->sd.entity.function, isp_dev->sd.entity.num_pads);
 
-	/* Assign the XML path to sensor_info[0].xml */
+	/* Assign the CALIB path to sensor_info[0].calib */
 	ret = visp_procfs_register(isp_dev, &isp_dev->pde);
 	if (ret) {
 		dev_err(dev, "register procfs failed.\n");
