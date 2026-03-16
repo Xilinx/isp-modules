@@ -69,7 +69,7 @@ int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 		      uint64_t shm_start_addr_phy, uint32_t shm_block_size)
 {
 	fifo_init_data *init_fifo = NULL;
-	uint64_t buffer_addr_virt;
+	void *buffer_addr_virt;
 	uint64_t buffer_addr_phy;
 	int ret;
 
@@ -80,16 +80,22 @@ int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 		return VPI_ERR_NOMEM;
 
 	if (core_id == MBOX_CORE_APU) {
-		/* visp_mbox Virtual Address of reserved mem*/
-		buffer_addr_virt = (sender_id * shm_block_size) + shm_start_addr;
-		buffer_addr_phy = (sender_id * shm_block_size) + shm_start_addr_phy;
+		/* APU receiving from RPU: RX channel (even index within pair) */
+		uint64_t channel_idx = sender_id * 2;  /* sender_id is RPU enum (0-3) */
+		uint64_t offset = channel_idx * shm_block_size;
+
+		buffer_addr_virt = (void *)(shm_start_addr + offset);
+		buffer_addr_phy = shm_start_addr_phy + offset;
 		mbox_fifo->core_id = core_id;
 		mbox_fifo->sender_id = sender_id;
 		mbox_fifo->receiver_id = core_id;
 	} else {
-		/* visp_mbox Virtual Address of reserved mem*/
-		buffer_addr_virt = ((sender_id + core_id) * shm_block_size) + shm_start_addr;
-		buffer_addr_phy = ((sender_id + core_id) * shm_block_size) + shm_start_addr_phy;
+		/* RPU receiving from APU: TX channel (odd index within pair) */
+		uint64_t channel_idx = (core_id * 2) + 1;  /* core_id is RPU enum (0-3) */
+		uint64_t offset = channel_idx * shm_block_size;
+
+		buffer_addr_virt = (void *)(shm_start_addr + offset);
+		buffer_addr_phy = shm_start_addr_phy + offset;
 		mbox_fifo->core_id = sender_id;
 		mbox_fifo->sender_id = core_id;
 		mbox_fifo->receiver_id = sender_id;
@@ -100,9 +106,9 @@ int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 	init_fifo->buffer_size = shm_block_size - ALIGN(sizeof(fifo_control), 8);
 	init_fifo->item_total = init_fifo->buffer_size / init_fifo->item_size;
 	mbox_fifo->buffer_address_phy = buffer_addr_phy + sizeof(fifo_control);
-	mbox_fifo->buffer_address_virt = buffer_addr_virt + sizeof(fifo_control);
+	mbox_fifo->buffer_address_virt = (uint64_t)buffer_addr_virt + sizeof(fifo_control);
 
-	mbox_fifo->fifo = (fifo_control *)(uint64_t)(buffer_addr_virt);
+	mbox_fifo->fifo = (fifo_control *)buffer_addr_virt;
 	init_fifo->buffer_addr_virt = mbox_fifo->buffer_address_virt;
 	init_fifo->buffer_addr_phy = mbox_fifo->buffer_address_phy;
 
@@ -175,9 +181,10 @@ int vpi_mbox_post(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
 
 	ret = visp_mbox_fifo_write(msg, (mbox_fifo->fifo));
 
-	if (ret != VPI_SUCCESS)
+	if (ret != VPI_SUCCESS) {
+		pr_err("MBOX_POST: FAILED ret=%d\n", ret);
 		return ret;
-
+	}
 	/* Callback is optional - IPI may be handled by framework */
 	if (mbox_driver_cb)
 		mbox_driver_cb(receiver_id);
@@ -211,6 +218,8 @@ EXPORT_SYMBOL_GPL(vpi_mbox_broadcast);
 int vpi_mbox_read(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
 		  mbox_core_id sender_id)
 {
+	uint16_t ret;
+
 	if (mbox_fifoctrl_init_check(mbox_fifo) == VPI_ERR_UNINITED)
 		return VPI_ERR_UNINITED;
 	if (msg == NULL)
@@ -218,7 +227,15 @@ int vpi_mbox_read(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
 	if (VPI_ERR_INVALID ==
 	    mbox_core_id_check(mbox_fifo, sender_id, mbox_fifo->core_id))
 		return VPI_ERR_INVALID;
-	return visp_mbox_fifo_read(msg, (mbox_fifo->fifo));
+
+	ret = visp_mbox_fifo_read(msg, (mbox_fifo->fifo));
+
+	if (ret == VPI_SUCCESS)
+		return ret;
+	else if (ret != VPI_ERR_EMPTY)
+		pr_err("MBOX_READ: FAILED ret=%d\n", ret);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(vpi_mbox_read);
 int vpi_mbox_reset(mbox_fifo_ctrl *mbox_fifo, mbox_core_id sender_id,

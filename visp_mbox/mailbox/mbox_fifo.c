@@ -77,9 +77,9 @@ void visp_mbox_fifo_info(fifo_control *fifo)
 	       fifo->item_total);
 	pr_err("\tbuffer_size      (%p) %u\n", (void *)&fifo->buffer_size,
 	       fifo->buffer_size);
-	pr_err("\tread_offset      (%p) %u\n", (void *)&fifo->read_offset,
+	pr_err("\tread_index       (%p) %u\n", (void *)&fifo->read_offset,
 	       fifo->read_offset);
-	pr_err("\twrite_offset     (%p) %u\n", (void *)&fifo->write_offset,
+	pr_err("\twrite_index      (%p) %u\n", (void *)&fifo->write_offset,
 	       fifo->write_offset);
 }
 EXPORT_SYMBOL_GPL(visp_mbox_fifo_info);
@@ -118,22 +118,20 @@ int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 	}
 
 	/*
-	 * CRITICAL: Read offsets with system barrier for cross-cluster visibility
-	 * read_offset: Modified by RPU (consumer), must see fresh value
-	 * write_offset: Local to this producer
+	 * CRITICAL: Read indices with system barrier for cross-cluster visibility
+	 * read_offset: Modified by RPU (consumer), must see fresh value (now simple index)
+	 * write_offset: Local to this producer (now simple index)
 	 * Use //dmb(sy) not dmb(ish) - RPU may be in different cluster
-	 * NOTE: Barriers are currently commented out; enable if coherence issues are observed.
 	 */
 	//dmb(sy);  /* System-wide barrier - invalidate cache before reading RPU's read_offset */
 	current_write_offset = fifo->write_offset;
 	current_read_offset = READ_ONCE(fifo->read_offset);
 
 	if (current_write_offset >= current_read_offset)
-		items_stored = (current_write_offset - current_read_offset) /
-				fifo->item_size;
+		items_stored = current_write_offset - current_read_offset;
 	else
-		items_stored = ((fifo->buffer_size - current_read_offset) +
-				current_write_offset) / fifo->item_size;
+		items_stored = (fifo->item_total - current_read_offset) +
+				current_write_offset;
 
 	/* Reserve one slot to distinguish full from empty (N-1 slots usable) */
 	if (items_stored >= (fifo->item_total - 1)) {
@@ -142,8 +140,8 @@ int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 		return VPI_ERR_FULL;
 	}
 
-	/* Copy message to shared memory buffer */
-	memcpy(((uint8_t *)fifo->buffer_virt + current_write_offset), msg,
+	/* Copy message to shared memory buffer using index */
+	memcpy(((uint8_t *)fifo->buffer_virt + (current_write_offset * fifo->item_size)), msg,
 	       ALIGN(sizeof(mbox_post_msg) - sizeof(payload_packet) + msg->size,
 		     8));
 	/*
@@ -156,8 +154,8 @@ int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 	 */
 	//dmb(sy);
 	WRITE_ONCE(fifo->write_offset,
-		   (current_write_offset + fifo->item_size) >= fifo->buffer_size ?
-		   0 : (current_write_offset + fifo->item_size));
+		   (current_write_offset + 1) >= fifo->item_total ?
+		   0 : (current_write_offset + 1));
 	//dmb(sy);
 
 	return VPI_SUCCESS;
@@ -185,14 +183,15 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 	 */
 	//dmb(sy);  /* Full system barrier - invalidate cache before read */
 	current_write_offset = READ_ONCE(fifo->write_offset);
-	current_read_offset = fifo->read_offset; /* Local offset, no need for READ_ONCE */
+	current_read_offset = fifo->read_offset; /* Local index, no need for READ_ONCE */
 
-	/* Check if FIFO is empty using relative offsets */
+	/* Check if FIFO is empty using indices */
 	if (current_write_offset == current_read_offset)
 		return VPI_ERR_EMPTY;
 
 	fifo_msg =
-	    (mbox_post_msg *)(((char *)fifo->buffer_virt + current_read_offset));
+	    (mbox_post_msg *)(((char *)fifo->buffer_virt +
+	    (current_read_offset * fifo->item_size)));
 
 	memcpy(msg, fifo_msg,
 	       sizeof(mbox_post_msg) - sizeof(payload_packet) +
@@ -203,8 +202,8 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 	 */
 	//dmb(sy);  /* System-wide barrier to ensure RPU sees updated read_offset */
 	WRITE_ONCE(fifo->read_offset,
-		   (current_read_offset + fifo->item_size) >= fifo->buffer_size ?
-		   0 : (current_read_offset + fifo->item_size));
+		   (current_read_offset + 1) >= fifo->item_total ?
+		   0 : (current_read_offset + 1));
 	//dmb(sy);  /* Ensure read_offset update visible to RPU before returning */
 
 	return VPI_SUCCESS;
@@ -231,18 +230,18 @@ uint32_t visp_mbox_fifo_get_stored(fifo_control *fifo)
 	if (fifo == NULL)
 		return VPI_ERR_INVALID;
 
-	/* Read offsets atomically with system-wide memory barrier */
+	/* Read indices atomically with system-wide memory barrier */
 	//dmb(sy);  /* Invalidate cache before reading */
 	current_write_offset = READ_ONCE(fifo->write_offset);
 	current_read_offset = fifo->read_offset;
 
-	/* Calculate stored items using relative offset difference with wrap-around */
+	/* Calculate stored items using simple index difference with wrap-around */
 	if (current_write_offset >= current_read_offset)
 		offset_diff = current_write_offset - current_read_offset;
 	else
-		offset_diff = (fifo->buffer_size - current_read_offset) + current_write_offset;
+		offset_diff = (fifo->item_total - current_read_offset) + current_write_offset;
 
-	return offset_diff / fifo->item_size;
+	return offset_diff;
 }
 EXPORT_SYMBOL_GPL(visp_mbox_fifo_get_stored);
 
@@ -251,21 +250,24 @@ bool visp_mbox_fifo_is_full(fifo_control *fifo)
 	uint32_t offset_diff;
 	uint32_t current_write_offset, current_read_offset;
 
-	/* Read offsets atomically with system-wide memory barrier */
+	/* Read indices atomically with system-wide memory barrier */
 	//dmb(sy);  /* Invalidate cache before reading */
 	current_write_offset = READ_ONCE(fifo->write_offset);
 	/* RPU updates this - must use READ_ONCE */
 	current_read_offset = READ_ONCE(fifo->read_offset);
 
-	/* Calculate stored items using relative offset difference with wrap-around */
+	/* Calculate stored items using simple index difference with
+	 * wrap-around
+	 */
 	if (current_write_offset >= current_read_offset)
 		offset_diff = current_write_offset - current_read_offset;
 	else
-		offset_diff = (fifo->buffer_size - current_read_offset) +
+		offset_diff = (fifo->item_total - current_read_offset) +
 			      current_write_offset;
 
 	/* Reserve one slot to distinguish full from empty (N-1 slots usable) */
-	return (offset_diff / fifo->item_size) >= (fifo->item_total - 1);
+	bool is_full = offset_diff >= (fifo->item_total - 1);
+	return is_full;
 }
 EXPORT_SYMBOL_GPL(visp_mbox_fifo_is_full);
 
@@ -275,7 +277,8 @@ bool visp_mbox_fifo_is_empty(fifo_control *fifo)
 	//dmb(sy);
 	uint32_t current_write_offset = READ_ONCE(fifo->write_offset);
 	uint32_t current_read_offset = fifo->read_offset;
-	return current_write_offset == current_read_offset;
+	bool is_empty = (current_write_offset == current_read_offset);
+	return is_empty;
 }
 EXPORT_SYMBOL_GPL(visp_mbox_fifo_is_empty);
 

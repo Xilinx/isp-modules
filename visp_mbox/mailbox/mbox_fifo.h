@@ -64,6 +64,10 @@
  * NOTE: This structure is shared with RPU firmware - do not modify layout
  * without updating firmware!
  *
+ * read_offset and write_offset are SIMPLE INDICES (0, 1, 2, 3...) not byte offsets.
+ * These indices are mapped to actual message slot addresses by the RPU firmware
+ * using the message slot address list from mbox_phy.c
+ *
  * read_offset and write_offset MUST be volatile because:
  * 1. APU reads write_offset written by RPU (RX direction)
  * 2. RPU reads write_offset written by APU (TX direction)
