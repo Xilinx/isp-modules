@@ -53,6 +53,7 @@
 #include <linux/miscdevice.h>
 #include "visp_mbox_driver.h"
 #include "visp_common.h"
+#include "cam_device.h"
 
 #define DEBUG_ENABLE
 /* version 1.0 */
@@ -363,6 +364,52 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s,
 		d[i] = dma_addr;
 	}
 }
+
+
+static int visp_set_compatability_flag(struct visp_dev *isp,
+				       cam_device_handle_t h_cam_device,
+				       uint32_t compat)
+{
+	int result = 0;
+	payload_packet *packet;
+	uint8_t *p_data;
+	cam_device_context_t *p_cam_dev_ctx =
+		(cam_device_context_t *)h_cam_device;
+
+	if (!p_cam_dev_ctx)
+		return RET_WRONG_HANDLE;
+
+	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+	if (!packet)
+		return -ENOMEM;
+
+	p_data = packet->payload;
+	packet->cookie = 0x99;
+	packet->type = CMD;
+	packet->payload_size = 0;
+
+	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	packet->payload_size += sizeof(uint32_t);
+
+	memcpy(p_data, &compat, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	packet->payload_size += sizeof(uint32_t);
+
+	result = xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_LINUX_COMPAT,
+					  packet,
+					  packet->payload_size + payload_extra_size,
+					  isp->isp_rpu, MBOX_CORE_APU);
+	if (result != RET_SUCCESS) {
+		kfree(packet);
+		return RET_FAILURE;
+	}
+
+	kfree(packet);
+
+	return 0;
+}
+
 static int on;
 void visp_mimo_device_run(void *priv)
 {
@@ -396,6 +443,8 @@ void visp_mimo_device_run(void *priv)
 	device->isp_dev->op_a[2] = output_addr[2];
 	device->isp_dev->op_a[3] = output_addr[3];
 	if (!on) {
+		visp_set_compatability_flag(device->isp_dev,
+			device->isp_dev->isp_ports[0].cam_device_handle, 1);
 		ret = visp_l_calib_event(device, 0, VIDEO_EVENT_LOAD_CALIB);
 		if (ret != 0)
 			pr_err("[EVENT_FAIL] %s %d\n", __func__, __LINE__);
