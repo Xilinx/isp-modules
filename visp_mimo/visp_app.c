@@ -1378,7 +1378,7 @@ int media_isp_calib_get_sensor_name(struct visp_dev *isp_dev, uint8_t port,
 	dev_info(isp_dev->dev, "%s: mode: %d", __func__,
 		 isp_port->sensor_info.mode);
 	dev_info(isp_dev->dev, "%s: xml : %s", __func__,
-		 isp_port->sensor_info.calib_xml);
+		 isp_port->sensor_info.calib);
 	dev_info(isp_dev->dev, "%s: manu_json: %s", __func__,
 		 isp_port->sensor_info.manu_json);
 	dev_info(isp_dev->dev, "%s: auto_json: %s", __func__,
@@ -1957,13 +1957,13 @@ int media_isp_calib_load_isp_config(struct visp_dev *isp_dev, uint8_t port)
 	dev_err(isp_dev->dev, "%s: mode: %u", __func__,
 		isp_port->sensor_info.mode);
 	dev_err(isp_dev->dev, "%s: xml : %s", __func__,
-		isp_port->sensor_info.calib_xml);
+		isp_port->sensor_info.calib);
 	dev_err(isp_dev->dev, "%s: manu_json: %s", __func__,
 		isp_port->sensor_info.manu_json);
 	dev_err(isp_dev->dev, "%s: auto_json: %s", __func__,
 		isp_port->sensor_info.auto_json);
 	dev_err(isp_dev->dev, "%zu %zu %zu\n",
-		strlen(isp_port->sensor_info.calib_xml),
+		strlen(isp_port->sensor_info.calib),
 		strlen(isp_port->sensor_info.manu_json),
 		strlen(isp_port->sensor_info.auto_json));
 
@@ -2024,7 +2024,7 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	cam_device_config_t CamConfig;
 	media_fmt *format = NULL;
 	cam_device_sensor_drv_handle_t SensorDrvHandle = NULL;
-	cam_device_sensor_drv_cfg_t devSensorDrv = {NULL, 0};
+	cam_device_sensor_module_map_cfg_t module_info;
 	char sensor_name[MEDIA_ISP_CHAR_LENGTH_MAX];
 
 	/*Enter port Level Critical Section */
@@ -2067,9 +2067,12 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	}
 
 	/*****Map the sensor*****/
+	memset(&module_info, 0, sizeof(module_info));
+	strncpy(module_info.module_name, sensor_name, SENSOR_MODULE_NAME - 1);
+	module_info.sensor_dev_id = isp_port->sensor_info.sensor_id;
 	ret_val =
 		vsi_cam_device_sensor_mapping(isp_dev, isp_port->cam_device_handle,
-					  sensor_name, &SensorDrvHandle);
+				  &module_info, &SensorDrvHandle);
 	if (ret_val != VSI_SUCCESS || SensorDrvHandle == VSI_NULL) {
 		dev_err(isp_dev->dev,
 			"CamDevice sensor mapping %s Failed ret is %d",
@@ -2078,22 +2081,19 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
 
-	devSensorDrv.sensor_drv_handle = SensorDrvHandle;
-	devSensorDrv.sensor_dev_id = isp_port->sensor_info.sensor_id;
-
 	/***** FMC Config *****/
 	ret_val = vsi_cam_device_sensor_drv_handle_register(
 		isp_dev, isp_port->cam_device_handle,
-		/*SensorDrvHandle*/ &devSensorDrv);
+		SensorDrvHandle);
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev,
 			"CamDevice register sensor %s driver Failed, ret is %d",
-			/*SensorPortInfo.name*/ sensor_name, ret_val);
+			sensor_name, ret_val);
 		ret_val = VSI_ERR_TIMEOUT;
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
 
-	kfree(devSensorDrv.sensor_drv_handle);
+	kfree(SensorDrvHandle);
 
 	/***** Query Sensor *****/
 	ret_val = media_isp_calib_query_sensor(isp_dev, port);

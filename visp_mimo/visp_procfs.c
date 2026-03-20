@@ -116,7 +116,7 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 				   isp_dev->isp_ports[port].sensor_info.mode);
 			seq_printf(
 				sfile, "xml		 : %s\n",
-				isp_dev->isp_ports[port].sensor_info.calib_xml);
+				isp_dev->isp_ports[port].sensor_info.calib);
 			seq_printf(
 				sfile, "manu_json   : %s\n",
 				isp_dev->isp_ports[port].sensor_info.manu_json);
@@ -225,12 +225,12 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 
 					memset(
 						isp_dev->isp_ports[port]
-						.sensor_info.calib_xml,
+						.sensor_info.calib,
 						0,
 						sizeof(isp_dev->isp_ports[port]
-							   .sensor_info.calib_xml));
+							   .sensor_info.calib));
 					strncpy(isp_dev->isp_ports[port]
-							.sensor_info.calib_xml,
+							.sensor_info.calib,
 						val, strlen(val));
 				}
 			} else if (strcmp(val, "manu_json") == 0) {

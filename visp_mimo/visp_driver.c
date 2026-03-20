@@ -83,6 +83,7 @@
 #include "mbox_cmd.h"
 #include "visp_app.h"
 #include "visp_mbox_driver.h"
+#include "visp_common.h"
 
 #define VISP_DEFAULT_SENSOR "ox03f10"
 #define VISP_DEFAULT_SENSOR_MODE 0
@@ -760,8 +761,6 @@ static int visp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
 	return ret_val;
 }
 
-int media_isp_hal_buf_done(struct v4l2_subdev *sd, int pad, media_buf *buf);
-
 int media_isp_device_dqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 			   media_buf *buf, void *enque_buff_g,
 			   media_buffer_t *p_media_buffer);
@@ -773,12 +772,6 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 				   uint8_t chn);
 int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn);
 int isp_device_create(struct visp_dev *isp_dev, uint8_t port);
-#if 0
-int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
-					int *frame_rate);
-#endif
-int media_isp_set_frame_rate(struct visp_dev *isp_dev, int pad,
-				 int *frame_rate);
 
 static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 {
@@ -1402,8 +1395,6 @@ static struct v4l2_subdev_video_ops visp_video_ops = {
 
 int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
 					uint32_t fourcc_code);
-int media_isp_set_format(struct visp_dev *isp_dev, uint32_t pad_index,
-			 /*  media_pad_attr *pad,*/ media_fmt * format);
 
 static int visp_set_fmt(struct v4l2_subdev *sd,
 			struct v4l2_subdev_state *sd_state,
@@ -1500,7 +1491,7 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 		&MBusFormat->code, &Format_media.pixel_format, fourcc_code);
 
 	mediapad_t = &isp_dev->pads[format->pad];
-	media_isp_set_format(isp_dev, mediapad_t->index, &Format_media);
+	media_isp_set_format(isp_dev, mediapad_t->index, Format_media);
 	if (ret)
 		return ret;
 
@@ -1604,7 +1595,7 @@ int visp_set_fmt_public(struct visp_dev *isp_dev,
 		&MBusFormat->code, &Format_media.pixel_format, fourcc_code);
 
 	mediapad_t = &isp_dev->pads[format->pad];
-	media_isp_set_format(isp_dev, mediapad_t->index, &Format_media);
+	media_isp_set_format(isp_dev, mediapad_t->index, Format_media);
 
 	cur_pad->format = format->format;
 
@@ -2081,7 +2072,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		strncpy(isp_dev->isp_ports[port].sensor_info.name,
 			VISP_DEFAULT_SENSOR, strlen(VISP_DEFAULT_SENSOR) + 1);
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.calib_xml,
+		strncpy(isp_dev->isp_ports[port].sensor_info.calib,
 			VISP_DEFAULT_SENSOR_XML,
 			strlen(VISP_DEFAULT_SENSOR_XML) + 1);
 

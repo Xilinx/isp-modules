@@ -189,10 +189,10 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	dev_err(isp_dev->dev, "LENGTHS= %lu %lu %lu |%s%s%s|",
 		strlen(isp_port->sensor_info.auto_json),
 		strlen(isp_port->sensor_info.manu_json),
-		strlen(isp_port->sensor_info.calib_xml),
+		strlen(isp_port->sensor_info.calib),
 		isp_port->sensor_info.auto_json,
 		isp_port->sensor_info.manu_json,
-		isp_port->sensor_info.calib_xml);
+		isp_port->sensor_info.calib);
 	//
 
 	readback_1 =
