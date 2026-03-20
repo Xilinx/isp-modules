@@ -1128,14 +1128,11 @@ static int media_fmt_to_isp_fmt(uint32_t *media_fmt,
 		IspFmt->out_format = CAMDEV_PIX_FMT_YUV444I_ALIGNED_MODE0;
 		IspFmt->data_bits = 10;
 		break;
-	case MEDIA_PIX_FMT_RGB24:
-		IspFmt->out_format = CAMDEV_PIX_FMT_RGB888;
-		IspFmt->data_bits = 8;
-		break;
 	case MEDIA_PIX_FMT_RGB24DWA:
 		IspFmt->out_format = CAMDEV_PIX_FMT_RGB888_ALIGNED_MODE0;
 		IspFmt->data_bits = 8;
 		break;
+	case MEDIA_PIX_FMT_RGB24:
 	case MEDIA_PIX_FMT_RGB24P:
 		IspFmt->out_format = CAMDEV_PIX_FMT_RGB888P;
 		IspFmt->data_bits = 8;
