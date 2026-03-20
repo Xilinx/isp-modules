@@ -89,8 +89,7 @@ RESULT cam_device_request_instance(uint32_t hw_id,
 	}
 	if (index < CAMDEV_VIRTUAL_ID_MAX) {
 		g_cam_dev_ispcore.h_cam_dev_set[hw_id][index] =
-		    /*malloc(sizeof(cam_device_context_t));*/ kzalloc(
-			sizeof(cam_device_context_t), GFP_KERNEL);
+		    kzalloc(sizeof(cam_device_context_t), GFP_KERNEL);
 		if (g_cam_dev_ispcore.h_cam_dev_set[hw_id][index] == NULL)
 			return RET_OUTOFMEM;
 		*p_cam_devhandle =

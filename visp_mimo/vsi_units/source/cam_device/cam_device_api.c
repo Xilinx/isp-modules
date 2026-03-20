@@ -52,21 +52,24 @@
  *
  *****************************************************************************/
 
-#include "cam_device.h"
 #include "cam_device_api.h"
-#include "sensor_cmd.h"
+
+#include "cam_device.h"
+// #include "mailbox.h"
 #include <linux/delay.h>
-#include "visp_driver.h"
-#include "visp_app.h"
+
 #include "visp_mbox_driver.h"
-#include "visp_common.h"
+#include "sensor_cmd.h"
+#include "visp_app.h"
+#include "visp_driver.h"
+// #include <linux/xlnx_isp_def.h>
 #include <linux/string.h>
-uint8_t *cam_load_calib =
-	NULL; //[160010] __attribute__((section(".cam_load_calib")));
+
+uint8_t *cam_load_calib; //[160010] __attribute__(section(".cam_load_calib"));
 
 RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
-				 cam_device_config_t *p_cam_config,
-				 cam_device_handle_t *p_handle_cam_device)
+			     cam_device_config_t *p_cam_config,
+			     cam_device_handle_t *p_handle_cam_device)
 {
 	RESULT result = RET_SUCCESS;
 	uint32_t hw_id = p_cam_config->isp_hw_id;
@@ -78,7 +81,8 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
 	payload_packet *packet = NULL;
 
 	if (NULL == p_cam_config || NULL == p_handle_cam_device) {
-		dev_err(isp_dev->dev, "DRV %s %d\n", __func__, __LINE__);
+		dev_err(isp_dev->dev, "%s %d NULL pointer detected\n", __func__,
+			__LINE__);
 		return RET_NULL_POINTER;
 	}
 
@@ -92,6 +96,7 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
 	if (hw_id >= CAMDEV_HARDWARE_ID_MAX)
 		return RET_OUTOFRANGE;
 #endif
+
 	cam_device_ispcore_init();
 	/*Get Cam Device Handle*/
 	result = cam_device_request_instance(hw_id, &h_cam_device, &virtual_id);
@@ -131,30 +136,29 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
 		kfree(packet);
 		return RET_OUTOFRANGE;
 	}
+
 	result = xlnx_send_mbox_acked_cmd(
-		isp_dev, APU_2_RPU_MB_CMD_CREATE_INSTANCE, packet,
-		packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
-		MBOX_CORE_APU);
+	    isp_dev, APU_2_RPU_MB_CMD_CREATE_INSTANCE, packet,
+	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
 
 	*p_handle_cam_device = h_cam_device;
-
 	kfree(packet);
 	return result;
 }
-
 EXPORT_SYMBOL(vsi_cam_device_create);
 
 RESULT vsi_cam_device_destroy(struct visp_dev *isp_dev,
-				  cam_device_handle_t h_cam_device)
+			      cam_device_handle_t h_cam_device)
 {
 	RESULT result = RET_SUCCESS;
 	uint8_t *p_data = NULL;
 	payload_packet *packet = NULL;
 
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
 		return RET_WRONG_HANDLE;
 	p_cam_dev_ctx->cookie++;
@@ -180,37 +184,38 @@ RESULT vsi_cam_device_destroy(struct visp_dev *isp_dev,
 	}
 
 	result =
-		xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DESTORY, packet,
-					 packet->payload_size + payload_extra_size,
-					 isp_dev->isp_rpu, MBOX_CORE_APU);
+	    xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DESTORY, packet,
+				     packet->payload_size + payload_extra_size,
+				     isp_dev->isp_rpu, MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
 
 	kfree(packet);
 	cam_device_free_instance(h_cam_device, p_cam_dev_ctx->isp_hw_id);
+
 	return result;
 }
 EXPORT_SYMBOL(vsi_cam_device_destroy);
 
 RESULT vsi_cam_device_set_out_format(struct visp_dev *isp_dev,
-					 cam_device_handle_t h_cam_device,
-					 cam_device_pipe_out_path_type_t path,
-					 cam_device_pipe_out_fmt_t *p_fmt)
+				     cam_device_handle_t h_cam_device,
+				     cam_device_pipe_out_path_type_t path,
+				     cam_device_pipe_out_fmt_t *p_fmt)
 {
 	RESULT result = RET_SUCCESS;
 	payload_packet *packet = NULL;
 	uint8_t *p_data = NULL;
 
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL || p_fmt == NULL) {
 		dev_err(isp_dev->dev, "ISP_APP %s %d  \n", __func__, __LINE__);
 		return 0;
 	}
 	if (p_cam_dev_ctx == NULL)
-		return RET_WRONG_HANDLE;
+		return (RET_WRONG_HANDLE);
 	if (p_fmt == NULL)
-		return RET_NULL_POINTER;
+		return (RET_NULL_POINTER);
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
@@ -240,10 +245,11 @@ RESULT vsi_cam_device_set_out_format(struct visp_dev *isp_dev,
 		kfree(packet);
 		return RET_OUTOFRANGE;
 	}
+
 	result = xlnx_send_mbox_acked_cmd(
-		isp_dev, APU_2_RPU_MB_CMD_SET_OUT_FORMAT, packet,
-		packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
-		MBOX_CORE_APU);
+	    isp_dev, APU_2_RPU_MB_CMD_SET_OUT_FORMAT, packet,
+	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
 
@@ -252,16 +258,16 @@ RESULT vsi_cam_device_set_out_format(struct visp_dev *isp_dev,
 }
 
 RESULT vsi_cam_device_set_in_format(struct visp_dev *isp_dev,
-					cam_device_handle_t h_cam_device,
-					cam_device_pipe_in_path_type_t path,
-					cam_device_pipe_in_fmt_t *p_fmt)
+				    cam_device_handle_t h_cam_device,
+				    cam_device_pipe_in_path_type_t path,
+				    cam_device_pipe_in_fmt_t *p_fmt)
 {
 	RESULT result = RET_SUCCESS;
 	uint8_t *p_data = NULL;
 	payload_packet *packet = NULL;
 
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
 		return RET_WRONG_HANDLE;
 	if (p_fmt == NULL)
@@ -297,9 +303,9 @@ RESULT vsi_cam_device_set_in_format(struct visp_dev *isp_dev,
 	}
 
 	result = xlnx_send_mbox_acked_cmd(
-		isp_dev, APU_2_RPU_MB_CMD_SET_IN_FORMAT, packet,
-		packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
-		MBOX_CORE_APU);
+	    isp_dev, APU_2_RPU_MB_CMD_SET_IN_FORMAT, packet,
+	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
 
@@ -315,7 +321,7 @@ RESULT vsi_cam_device_connect_camera(
 	RESULT result = RET_SUCCESS;
 
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	payload_packet *packet = NULL;
 	uint8_t *p_data = NULL;
 
@@ -354,10 +360,11 @@ RESULT vsi_cam_device_connect_camera(
 		kfree(packet);
 		return RET_OUTOFRANGE;
 	}
+
 	result = xlnx_send_mbox_acked_cmd(
-		isp_dev, APU_2_RPU_MB_CMD_CONNECT_CAMERA, packet,
-		packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
-		MBOX_CORE_APU);
+	    isp_dev, APU_2_RPU_MB_CMD_CONNECT_CAMERA, packet,
+	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
 
@@ -374,7 +381,7 @@ RESULT vsi_cam_device_disconnect_camera(struct visp_dev *isp_dev,
 	payload_packet *packet = NULL;
 
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
 		return RET_WRONG_HANDLE;
 	p_cam_dev_ctx->cookie++;
@@ -400,23 +407,19 @@ RESULT vsi_cam_device_disconnect_camera(struct visp_dev *isp_dev,
 	}
 
 	result = xlnx_send_mbox_acked_cmd(
-		isp_dev, APU_2_RPU_MB_CMD_DISCONNECT_CAMERA, packet,
-		packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
-		MBOX_CORE_APU);
+	    isp_dev, APU_2_RPU_MB_CMD_DISCONNECT_CAMERA, packet,
+	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
 
 	kfree(packet);
 	return result;
 }
-RESULT vsi_cam_device_start_streaming(cam_device_config_t *p_cam_config,
-					  cam_device_handle_t h_cam_device,
-					  uint32_t frames // 0-continue
-);
 
 RESULT vsi_cam_device_start_streaming(cam_device_config_t *p_cam_config,
-					  cam_device_handle_t h_cam_device,
-					  uint32_t frames // 0-continue
+				      cam_device_handle_t h_cam_device,
+				      uint32_t frames // 0-continue
 )
 {
 	RESULT result = RET_SUCCESS;
@@ -426,9 +429,9 @@ RESULT vsi_cam_device_start_streaming(cam_device_config_t *p_cam_config,
 	struct visp_dev *isp_dev = p_cam_config->isp_dev;
 
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
-		return RET_WRONG_HANDLE;
+		return (RET_WRONG_HANDLE);
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
@@ -454,9 +457,9 @@ RESULT vsi_cam_device_start_streaming(cam_device_config_t *p_cam_config,
 		return RET_OUTOFRANGE;
 	}
 	result = xlnx_send_mbox_acked_cmd(
-		isp_dev, APU_2_RPU_MB_CMD_START_STREAMING, packet,
-		packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
-		MBOX_CORE_APU);
+	    isp_dev, APU_2_RPU_MB_CMD_START_STREAMING, packet,
+	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
 
@@ -475,7 +478,7 @@ vsi_cam_device_set_path_streaming(struct visp_dev *isp_dev,
 	int path_enable = -1;
 
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
 		return RET_WRONG_HANDLE;
 	if (p_config == NULL)
@@ -495,12 +498,12 @@ vsi_cam_device_set_path_streaming(struct visp_dev *isp_dev,
 
 	p_data = packet->payload;
 
-	*(packet->payload) = p_cam_dev_ctx->instance_id; //(int *)0x0;
+	*(packet->payload) = p_cam_dev_ctx->instance_id;
 	packet->payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);
 
 	path_enable = p_config->out_path_enable;
-	*(p_data) = path_enable; //(int *)p_config->out_path_enable;//0x1;
+	*(p_data) = path_enable;
 
 	packet->payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);
@@ -509,10 +512,11 @@ vsi_cam_device_set_path_streaming(struct visp_dev *isp_dev,
 		kfree(packet);
 		return RET_OUTOFRANGE;
 	}
+
 	result = xlnx_send_mbox_acked_cmd(
-		isp_dev, APU_2_RPU_MB_CMD_SET_PATH_STREAMING, packet,
-		packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
-		MBOX_CORE_APU);
+	    isp_dev, APU_2_RPU_MB_CMD_SET_PATH_STREAMING, packet,
+	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
 
@@ -529,11 +533,11 @@ vsi_cam_device_get_path_streaming(struct visp_dev *isp_dev,
 	uint8_t *p_data = NULL;
 	payload_packet *packet = NULL;
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
 		return RET_WRONG_HANDLE;
 	if (p_config == NULL)
-		return RET_NULL_POINTER;
+		return (RET_NULL_POINTER);
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
@@ -566,35 +570,34 @@ vsi_cam_device_get_path_streaming(struct visp_dev *isp_dev,
 				packet->payload_size + payload_extra_size,
 				isp_dev->isp_rpu, MBOX_CORE_APU);
 
+	memcpy(p_config, p_data, sizeof(cam_device_path_streaming_cfg_t));
 	kfree(packet);
 	return result;
 }
 
 RESULT vsi_cam_device_get_hardware_id(cam_device_handle_t h_cam_device,
-					  uint32_t *p_hw_id)
+				      uint32_t *p_hw_id)
 {
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
 		return RET_WRONG_HANDLE;
 	if (p_hw_id == NULL)
 		return RET_NULL_POINTER;
-	if (p_cam_dev_ctx->isp_hw_id > CAMDEV_HARDWARE_ID_MAX) {
+	if (p_cam_dev_ctx->isp_hw_id > CAMDEV_HARDWARE_ID_MAX)
 		return RET_OUTOFRANGE;
-	} else {
-		*p_hw_id = p_cam_dev_ctx->isp_hw_id;
-		return RET_SUCCESS;
-	}
+	*p_hw_id = p_cam_dev_ctx->isp_hw_id;
+	return RET_SUCCESS;
 }
 
 RESULT vsi_cam_device_alloc_res_memory(struct visp_dev *isp_dev,
-					   cam_device_handle_t h_cam_device,
-					   uint32_t byte_size,
-					   uint32_t *p_base_address,
-					   void **p_ipl_address)
+				       cam_device_handle_t h_cam_device,
+				       uint32_t byte_size,
+				       uint32_t *p_base_address,
+				       void **p_ipl_address)
 {
 	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
+	    (cam_device_context_t *)h_cam_device;
 	RESULT result = RET_SUCCESS;
 	payload_packet *packet = NULL;
 	uint8_t *p_data = NULL;
@@ -624,8 +627,6 @@ RESULT vsi_cam_device_alloc_res_memory(struct visp_dev *isp_dev,
 	p_data += sizeof(uint32_t);
 	memcpy(p_data, p_base_address, sizeof(uint32_t));
 	packet->payload_size += 2 * sizeof(uint32_t);
-	dev_info(isp_dev->dev, "[ISP] %s %d %d %p\n", __func__, __LINE__,
-		 byte_size, p_base_address);
 
 	if (packet->payload_size > MAX_ITEM) {
 		kfree(packet);
@@ -644,17 +645,17 @@ RESULT vsi_cam_device_alloc_res_memory(struct visp_dev *isp_dev,
 }
 
 RESULT vsi_cam_device_free_res_memory(struct visp_dev *isp_dev,
-					  cam_device_handle_t h_cam_device,
-					  uint32_t base_address)
+				      cam_device_handle_t h_cam_device,
+				      uint32_t base_address)
 {
-	cam_device_context_t *p_cam_dev_ctx =
-		(cam_device_context_t *)h_cam_device;
 	RESULT result = RET_SUCCESS;
+	cam_device_context_t *p_cam_dev_ctx =
+	    (cam_device_context_t *)h_cam_device;
 	uint8_t *p_data = NULL;
 	payload_packet *packet = NULL;
 
 	if (p_cam_dev_ctx == NULL)
-		return RET_WRONG_HANDLE;
+		return (RET_WRONG_HANDLE);
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
@@ -680,13 +681,15 @@ RESULT vsi_cam_device_free_res_memory(struct visp_dev *isp_dev,
 		kfree(packet);
 		return RET_OUTOFRANGE;
 	}
+
 	result = xlnx_send_mbox_acked_cmd(
-		isp_dev, APU_2_RPU_MB_CMD_FREE_RES_MEMORY, packet,
-		packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
-		MBOX_CORE_APU);
+	    isp_dev, APU_2_RPU_MB_CMD_FREE_RES_MEMORY, packet,
+	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
 
 	kfree(packet);
+	cam_device_free_instance(h_cam_device, p_cam_dev_ctx->isp_hw_id);
 	return RET_SUCCESS;
 }

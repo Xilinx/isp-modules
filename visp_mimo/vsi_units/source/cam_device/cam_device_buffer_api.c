@@ -57,10 +57,10 @@
 #include "cam_device_buffer_api.h"
 #include "cam_device.h"
 #include "cam_device_api.h"
-#include "sensor_cmd.h"
-#include "visp_driver.h"
 #include "visp_mbox_driver.h"
-/*#include "visp_app.h"*/
+#include "sensor_cmd.h"
+#include "visp_app.h"
+#include "visp_driver.h"
 extern uint32_t cookie;
 
 #include <linux/kernel.h>
@@ -117,6 +117,7 @@ RESULT vsi_cam_device_init_buf_chain(struct visp_dev *isp_dev,
 	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
+
 	kfree(packet);
 	return result;
 }
@@ -132,7 +133,7 @@ RESULT vsi_cam_device_de_init_buf_chain(struct visp_dev *isp_dev,
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
-		return RET_WRONG_HANDLE;
+		return (RET_WRONG_HANDLE);
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
@@ -158,12 +159,14 @@ RESULT vsi_cam_device_de_init_buf_chain(struct visp_dev *isp_dev,
 		kfree(packet);
 		return RET_OUTOFRANGE;
 	}
+
 	result = xlnx_send_mbox_acked_cmd(
 	    isp_dev, APU_2_RPU_MB_CMD_DEINIT_BUF_CHAIN, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
+
 	kfree(packet);
 
 	return result;
@@ -194,7 +197,6 @@ RESULT vsi_cam_device_create_buf_pool(
 	packet->cookie = p_cam_dev_ctx->cookie;
 	packet->type = CMD;
 	packet->payload_size = 0;
-
 
 	p_data = packet->payload;
 	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
@@ -234,16 +236,17 @@ RESULT vsi_cam_device_create_buf_pool(
 	p_data += h_buffer_pool_cfg->buf_num * sizeof(uint32_t);
 
 	if (packet->payload_size > MAX_ITEM) {
-		mutex_unlock(&isp_dev->mlock);
 		kfree(packet);
 		return RET_OUTOFRANGE;
 	}
+
 	result = xlnx_send_mbox_acked_cmd(
 	    isp_dev, APU_2_RPU_MB_CMD_CREATE_BUFFER_POOL, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
 		return RET_FAILURE;
+
 	kfree(packet);
 
 	return result;
@@ -307,7 +310,7 @@ RESULT vsi_cam_device_setup_buf_mgmt(struct visp_dev *isp_dev,
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
-		return (RET_WRONG_HANDLE);
+		return RET_WRONG_HANDLE;
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
@@ -332,6 +335,7 @@ RESULT vsi_cam_device_setup_buf_mgmt(struct visp_dev *isp_dev,
 
 	if (packet->payload_size > MAX_ITEM)
 		return RET_OUTOFRANGE;
+
 	result = xlnx_send_mbox_acked_cmd(
 	    isp_dev, APU_2_RPU_MB_CMD_SETUP_BUF_MGMT, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
@@ -363,7 +367,7 @@ RESULT vsi_cam_device_release_buf_mgmt(struct visp_dev *isp_dev,
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
-		return RET_WRONG_HANDLE;
+		return (RET_WRONG_HANDLE);
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
@@ -428,9 +432,11 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 			__LINE__);
 		return -ENOMEM;
 	}
-
+	/* to align size with rpu metadata
+	 * size has allocated with 1024
+	 */
 	(*p_media_buf)->p_meta_data =
-	    kzalloc(sizeof(pic_buf_meta_data_t), GFP_KERNEL);
+	    kzalloc(1024, GFP_KERNEL);
 
 	packet->cookie = p_cam_dev_ctx->cookie;
 	packet->type = CMD;
@@ -440,14 +446,16 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
 	packet->payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);
+
 	memcpy(p_data, &buf_id, sizeof(cam_device_buf_chain_id_t));
 	packet->payload_size += sizeof(cam_device_buf_chain_id_t);
 	p_data += sizeof(cam_device_buf_chain_id_t);
 
-	memcpy(p_data, (*p_media_buf)->p_meta_data,
-	       sizeof(pic_buf_meta_data_t));
-	packet->payload_size += sizeof(pic_buf_meta_data_t);
-	p_data += sizeof(pic_buf_meta_data_t);
+	/* memcpy(p_data, (*p_media_buf)->p_meta_data,
+	 * sizeof(pic_buf_meta_data_t));
+	 * packet->payload_size += sizeof(pic_buf_meta_data_t);
+	 * p_data += sizeof(pic_buf_meta_data_t);
+	 */
 	memcpy(p_data, &((*p_media_buf)->base_address), sizeof(uint32_t));
 	packet->payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);
@@ -472,12 +480,19 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 	packet->payload_size += sizeof(buff_mode);
 	p_data += sizeof(buff_mode);
 
-	memcpy(p_data, &((*p_media_buf)->p_ipl_address), sizeof(uint32_t));
-	packet->payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
+	/*memcpy(p_data, &((*p_media_buf)->p_ipl_address), sizeof(uint32_t));
+	 * packet->payload_size += sizeof(uint32_t);
+	 * p_data += sizeof(uint32_t);
+	 */
 
 	memcpy(p_data, &((*p_media_buf)->p_owner), sizeof(uint32_t));
 	packet->payload_size += sizeof(uint32_t);
+
+	/*memcpy(p_data, (*p_media_buf)->p_meta_data,
+	 * 1024);
+	 * packet->payload_size += 1024;
+	 * p_data += 1024;
+	 */
 
 	if (packet->payload_size > MAX_ITEM)
 		return RET_OUTOFRANGE;
@@ -486,6 +501,45 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 				isp_dev->isp_rpu, MBOX_CORE_APU);
 
 	p_data = packet->payload;
+
+	memcpy(&p_cam_dev_ctx->instance_id, p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	memcpy(&buf_id, p_data, sizeof(cam_device_buf_chain_id_t));
+	p_data += sizeof(cam_device_buf_chain_id_t);
+
+	memcpy(&((*p_media_buf)->base_address), p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	memcpy(&((*p_media_buf)->base_size), p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	memcpy(&((*p_media_buf)->lock_count), p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	memcpy(&((*p_media_buf)->is_full), p_data, sizeof(bool_t));
+	p_data += sizeof(bool_t);
+
+	memcpy(&((*p_media_buf)->index), p_data, sizeof(uint8_t));
+	p_data += sizeof(uint8_t);
+
+	memcpy(&((*p_media_buf)->buf_mode), p_data, sizeof(buff_mode));
+	p_data += sizeof(buff_mode);
+
+	/* memcpy(p_data, &((*p_media_buf)->p_ipl_address), sizeof(uint32_t));
+	 * packet->payload_size += sizeof(uint32_t);
+	 * p_data += sizeof(uint32_t);
+	 */
+
+	memcpy(&((*p_media_buf)->p_owner), p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	memcpy((*p_media_buf)->p_meta_data, p_data,
+	       1024);
+	packet->payload_size += 1024;
+	p_data += 1024;
+
+#if 0
 	p_data += (sizeof(uint32_t) + sizeof(cam_device_buf_chain_id_t));
 
 	memcpy((*p_media_buf)->p_meta_data, p_data,
@@ -515,12 +569,23 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 
 	memcpy(&((*p_media_buf)->p_owner), p_data, sizeof(uint32_t));
 
+#endif
 	kfree(packet);
 
 	return result;
 }
 
 int drv_enq_cnt;
+
+#define ENQ_CUSTOM_PAYLOAD_SIZE 48
+typedef struct payload_template_enq {
+	payload_type type;
+	uint32_t cookie;
+	uint32_t payload_size;
+	response_field_t resp_field;
+	uint8_t payload[ENQ_CUSTOM_PAYLOAD_SIZE];
+} payload_packet_enq;
+
 RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 				    cam_device_handle_t h_cam_device,
 				    cam_device_buf_chain_id_t buf_id,
@@ -589,9 +654,10 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 	packet->payload_size += sizeof(buff_mode);
 	p_data += sizeof(buff_mode);
 
-	memcpy(p_data, &((p_media_buf)->p_ipl_address), sizeof(uint32_t));
-	packet->payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
+	/* memcpy(p_data, &((p_media_buf)->p_ipl_address), sizeof(uint32_t));
+	 * packet->payload_size += sizeof(uint32_t);
+	 * p_data += sizeof(uint32_t);
+	 */
 
 	memcpy(p_data, &((p_media_buf)->p_owner), sizeof(uint32_t));
 	packet->payload_size += sizeof(uint32_t);
@@ -643,6 +709,7 @@ RESULT vsi_cam_device_get_buffer_size(struct visp_dev *isp_dev,
 	p_data += sizeof(uint32_t);
 
 	memcpy(p_data, &buf_id, sizeof(cam_device_buf_chain_id_t));
+	dev_info(isp_dev->dev, "RDMA p_data=%d==%d\n", *p_data, buf_id);
 	packet->payload_size += sizeof(cam_device_buf_chain_id_t);
 	p_data += sizeof(cam_device_buf_chain_id_t);
 

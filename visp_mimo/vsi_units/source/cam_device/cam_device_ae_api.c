@@ -52,13 +52,13 @@
  *
  *****************************************************************************/
 
-#include "cam_device.h"
-#include "sensor_cmd.h"
 #include <linux/delay.h>
+#include "cam_device.h"
+#include "visp_mbox_driver.h"
+#include "visp_common.h"
+#include "sensor_cmd.h"
 #include "visp_driver.h"
 #include <linux/string.h>
-#include "visp_common.h"
-#include "visp_mbox_driver.h"
 
 RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 					 cam_device_handle_t h_cam_device)
@@ -70,7 +70,7 @@ RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
 	if (p_cam_dev_ctx == NULL)
-		return RET_WRONG_HANDLE;
+		return (RET_WRONG_HANDLE);
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
@@ -88,7 +88,7 @@ RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 	packet->payload_size += sizeof(uint32_t);
 
 	result = xlnx_send_mbox_acked_cmd(
-	    isp_dev, RPU_2_APU_MB_CMD_UNREGISTER_AELIB, packet,
+	    isp_dev, APU_2_RPU_MB_CMD_UNREGISTER_AELIB, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
