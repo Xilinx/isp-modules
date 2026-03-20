@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT*/
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -61,7 +61,6 @@
 #include "cam_device_buffer_api.h"
 #include "cam_device_common.h"
 #include "cam_device_sensor_api.h"
-#include "vsi_errno.h"
 
 #define MEDIA_ISP_BUF_FRAME_MAX 32
 #define MEDIA_ISP_CHAR_LENGTH_MAX 64
@@ -92,6 +91,12 @@ typedef enum media_isp_mcm_input_select_e {
 int media_isp_event_create(media_entity_attr *media_entity);
 int media_isp_event_destroy(media_entity_attr *media_entity);
 
+typedef struct atm_info_s {
+	uint32_t ports_mask;
+	uint32_t ref_count;
+} atm_info;
+
+
 typedef struct media_isp_chn_s {
 	media_fmt format;
 	uint8_t num_bufs;
@@ -110,7 +115,7 @@ typedef struct media_isp_mcm_s {
 typedef struct media_isp_sensor_info_s {
 	uint8_t mode;
 	char name[MEDIA_ISP_CHAR_LENGTH_MAX];
-	char calib_xml[MEDIA_ISP_PATH_LENGTH_MAX];
+	char calib[MEDIA_ISP_PATH_LENGTH_MAX];
 	char manu_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char auto_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	char one_json[MEDIA_ISP_PATH_LENGTH_MAX];

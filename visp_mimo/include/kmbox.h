@@ -52,99 +52,10 @@
  *
  *****************************************************************************/
 
-#ifndef __LIST_H__
-#define __LIST_H__
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
-#include <linux/list.h>
-#include <linux/types.h>
-
-	struct ListHead_s {
-		struct ListHead_s *prev;
-		struct ListHead_s *next;
-	};
-
-#define ContainerOf(Ptr, type, Member) \
-	((type *)(((char *)Ptr) - (size_t)(&((type *)0)->Member)))
-
-	static inline void InitListHead(struct ListHead_s *list)
-	{
-		list->prev = list;
-		list->next = list;
-	}
-
-	static inline void __ListAdd(struct ListHead_s *new,
-								 struct ListHead_s *prev,
-								 struct ListHead_s *next)
-	{
-		next->prev = new;
-		new->next = next;
-		new->prev = prev;
-		prev->next = new;
-	}
-
-	static inline void ListAdd(struct ListHead_s *new, struct ListHead_s *head)
-	{
-		__ListAdd(new, head, head->next);
-	}
-
-	static inline void ListAddTail(struct ListHead_s *new,
-								   struct ListHead_s *head)
-	{
-		__ListAdd(new, head->prev, head);
-	}
-
-	static inline void __ListDel(struct ListHead_s *prev,
-								 struct ListHead_s *next)
-	{
-		next->prev = prev;
-		prev->next = next;
-	}
-
-	static inline void __ListDelEntry(struct ListHead_s *entry)
-	{
-		__ListDel(entry->prev, entry->next);
-	}
-
-	static inline void ListDel(struct ListHead_s *entry)
-	{
-		__ListDelEntry(entry);
-		entry->next = NULL;
-		entry->prev = NULL;
-	}
-
-	static inline int ListEmpty(const struct ListHead_s *head)
-	{
-		return head->next == head;
-	}
-
-#define ListEntry(Ptr, type, Member) ContainerOf(Ptr, type, Member)
-
-#define ListFirstEntry(Ptr, type, Member) ListEntry((Ptr)->next, type, Member)
-
-#define ListLastEntry(Ptr, type, Member) ListEntry((Ptr)->prev, type, Member)
-
-#define ListNextEntry(Pos, Member) \
-	ListEntry((Pos)->Member.next, typeof(*(Pos)), Member)
-
-#define ListPrivEntry(Pos, Member) \
-	ListEntry((Pos)->Member.prev, typeof(*(Pos)), Member)
-
-#define ListForEachEntry(Pos, head, Member)                \
-	for (Pos = ListFirstEntry(head, typeof(*Pos), Member); \
-		 &Pos->Member != (head); Pos = ListNextEntry(Pos, Member))
-
-#define ListForEachEntrySafe(Pos, N, head, Member)         \
-	for (Pos = ListFirstEntry(head, typeof(*Pos), Member), \
-		N = ListNextEntry(Pos, Member);                    \
-		 &Pos->Member != (head); Pos = N, N = ListNextEntry(N, Member))
-
-#ifdef __cplusplus
-}
-#endif
-
+ #ifndef __KMBOX__
+#define __KMBOX__
+uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data);
+uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev);
+int send_command(mb_cmd_id_e cmd, void *data, uint32_t size, uint8_t dest_cpu,
+				 uint8_t src_cpu);
 #endif

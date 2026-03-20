@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT*/
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -55,104 +55,105 @@
 #ifndef __MEDIA_DEVICE_H__
 #define __MEDIA_DEVICE_H__
 #include <linux/types.h>
+
 #include "list.h"
 #include <linux/mutex.h>
 
 #define MEDIA_DEV_MAX 2
 
-#define VISP_VIDEO "vvcam-video"
-#define VISP "vvcam-isp"
+#define VISP_VIDEO "visp-video"
+#define VISP "visp-isp"
 
 #define media_fourcc(a, b, c, d)                                               \
 	((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) |        \
 	 ((uint32_t)(d) << 24))
 
-#define MEDIA_PIX_FMT_YUYV              media_fourcc('Y', 'U', 'Y', 'V')
-#define MEDIA_PIX_FMT_NV16              media_fourcc('N', 'V', '1', '6')
-#define MEDIA_PIX_FMT_NV12              media_fourcc('N', 'V', '1', '2')
+#define MEDIA_PIX_FMT_YUYV media_fourcc('Y', 'U', 'Y', 'V')
+#define MEDIA_PIX_FMT_NV16 media_fourcc('N', 'V', '1', '6')
+#define MEDIA_PIX_FMT_NV12 media_fourcc('N', 'V', '1', '2')
 
-#define MEDIA_PIX_FMT_GREY              media_fourcc('G', 'R', 'E', 'Y')
-#define MEDIA_PIX_FMT_Y10BPACK          media_fourcc('Y', '1', '0', 'B')
-#define MEDIA_PIX_FMT_Y10DWA            media_fourcc('Y', '1', '0', 'D')
-#define MEDIA_PIX_FMT_Y10               media_fourcc('Y', '1', '0', ' ')
+#define MEDIA_PIX_FMT_GREY media_fourcc('G', 'R', 'E', 'Y')
+#define MEDIA_PIX_FMT_Y10BPACK media_fourcc('Y', '1', '0', 'B')
+#define MEDIA_PIX_FMT_Y10DWA media_fourcc('Y', '1', '0', 'D')
+#define MEDIA_PIX_FMT_Y10 media_fourcc('Y', '1', '0', ' ')
 
-#define MEDIA_PIX_FMT_P00BPACK          media_fourcc('P', '0', '0', 'B')
-#define MEDIA_PIX_FMT_P00DWA            media_fourcc('P', '0', '0', 'D')
-#define MEDIA_PIX_FMT_P010              media_fourcc('P', '0', '1', '0')
-#define MEDIA_PIX_FMT_P02BPACK          media_fourcc('P', '0', '2', 'B')
+#define MEDIA_PIX_FMT_P00BPACK media_fourcc('P', '0', '0', 'B')
+#define MEDIA_PIX_FMT_P00DWA media_fourcc('P', '0', '0', 'D')
+#define MEDIA_PIX_FMT_P010 media_fourcc('P', '0', '1', '0')
+#define MEDIA_PIX_FMT_P02BPACK media_fourcc('P', '0', '2', 'B')
 
-#define MEDIA_PIX_FMT_P20BPACK          media_fourcc('P', '2', '0', 'B')
-#define MEDIA_PIX_FMT_P20DWA            media_fourcc('P', '2', '0', 'D')
-#define MEDIA_PIX_FMT_P210              media_fourcc('P', '2', '1', '0')
-#define MEDIA_PIX_FMT_P22BPACK          media_fourcc('P', '2', '2', 'B')
-#define MEDIA_PIX_FMT_I20BPACK          media_fourcc('I', '2', '0', 'B')
-#define MEDIA_PIX_FMT_I210              media_fourcc('I', '2', '1', '0')
+#define MEDIA_PIX_FMT_P20BPACK media_fourcc('P', '2', '0', 'B')
+#define MEDIA_PIX_FMT_P20DWA media_fourcc('P', '2', '0', 'D')
+#define MEDIA_PIX_FMT_P210 media_fourcc('P', '2', '1', '0')
+#define MEDIA_PIX_FMT_P22BPACK media_fourcc('P', '2', '2', 'B')
+#define MEDIA_PIX_FMT_I20BPACK media_fourcc('I', '2', '0', 'B')
+#define MEDIA_PIX_FMT_I210 media_fourcc('I', '2', '1', '0')
 
-#define MEDIA_PIX_FMT_M48BPACK          media_fourcc('M', '4', '8', 'B')
-#define MEDIA_PIX_FMT_I48BPACK          media_fourcc('I', '4', '8', 'B')
-#define MEDIA_PIX_FMT_I48DWA            media_fourcc('I', '4', '8', 'D')
-#define MEDIA_PIX_FMT_I40DWA            media_fourcc('I', '4', '0', 'D')
+#define MEDIA_PIX_FMT_M48BPACK media_fourcc('M', '4', '8', 'B')
+#define MEDIA_PIX_FMT_I48BPACK media_fourcc('I', '4', '8', 'B')
+#define MEDIA_PIX_FMT_I48DWA media_fourcc('I', '4', '8', 'D')
+#define MEDIA_PIX_FMT_I40DWA media_fourcc('I', '4', '0', 'D')
 
-#define MEDIA_PIX_FMT_RGB24             media_fourcc('R', 'G', 'B', '3')
-#define MEDIA_PIX_FMT_RGB24DWA          media_fourcc('R', 'G', '3', 'D')
-#define MEDIA_PIX_FMT_RGB24P            media_fourcc('R', 'G', '3', 'P')
+#define MEDIA_PIX_FMT_RGB24 media_fourcc('R', 'G', 'B', '3')
+#define MEDIA_PIX_FMT_RGB24DWA media_fourcc('R', 'G', '3', 'D')
+#define MEDIA_PIX_FMT_RGB24P media_fourcc('R', 'G', '3', 'P')
 
-#define MEDIA_PIX_FMT_SBGGR8            media_fourcc('B', 'A', '8', '1')
-#define MEDIA_PIX_FMT_SGBRG8            media_fourcc('G', 'B', 'R', 'G')
-#define MEDIA_PIX_FMT_SGRBG8            media_fourcc('G', 'R', 'B', 'G')
-#define MEDIA_PIX_FMT_SRGGB8            media_fourcc('R', 'G', 'G', 'B')
+#define MEDIA_PIX_FMT_SBGGR8 media_fourcc('B', 'A', '8', '1')
+#define MEDIA_PIX_FMT_SGBRG8 media_fourcc('G', 'B', 'R', 'G')
+#define MEDIA_PIX_FMT_SGRBG8 media_fourcc('G', 'R', 'B', 'G')
+#define MEDIA_PIX_FMT_SRGGB8 media_fourcc('R', 'G', 'G', 'B')
 
-#define MEDIA_PIX_FMT_SBGGR10           media_fourcc('B', 'G', '1', '0')
-#define MEDIA_PIX_FMT_SGBRG10           media_fourcc('G', 'B', '1', '0')
-#define MEDIA_PIX_FMT_SGRBG10           media_fourcc('B', 'A', '1', '0')
-#define MEDIA_PIX_FMT_SRGGB10           media_fourcc('R', 'G', '1', '0')
+#define MEDIA_PIX_FMT_SBGGR10 media_fourcc('B', 'G', '1', '0')
+#define MEDIA_PIX_FMT_SGBRG10 media_fourcc('G', 'B', '1', '0')
+#define MEDIA_PIX_FMT_SGRBG10 media_fourcc('B', 'A', '1', '0')
+#define MEDIA_PIX_FMT_SRGGB10 media_fourcc('R', 'G', '1', '0')
 
-#define MEDIA_PIX_FMT_SBGGR10BPACK      media_fourcc('B', 'G', '0', 'B')
-#define MEDIA_PIX_FMT_SGBRG10BPACK      media_fourcc('G', 'B', '0', 'B')
-#define MEDIA_PIX_FMT_SGRBG10BPACK      media_fourcc('G', 'R', '0', 'B')
-#define MEDIA_PIX_FMT_SRGGB10BPACK      media_fourcc('R', 'G', '0', 'B')
-#define MEDIA_PIX_FMT_SBGGR10DWA        media_fourcc('B', 'G', '0', 'D')
-#define MEDIA_PIX_FMT_SGBRG10DWA        media_fourcc('G', 'B', '0', 'D')
-#define MEDIA_PIX_FMT_SGRBG10DWA        media_fourcc('G', 'R', '0', 'D')
-#define MEDIA_PIX_FMT_SRGGB10DWA        media_fourcc('R', 'G', '0', 'D')
+#define MEDIA_PIX_FMT_SBGGR10BPACK media_fourcc('B', 'G', '0', 'B')
+#define MEDIA_PIX_FMT_SGBRG10BPACK media_fourcc('G', 'B', '0', 'B')
+#define MEDIA_PIX_FMT_SGRBG10BPACK media_fourcc('G', 'R', '0', 'B')
+#define MEDIA_PIX_FMT_SRGGB10BPACK media_fourcc('R', 'G', '0', 'B')
+#define MEDIA_PIX_FMT_SBGGR10DWA media_fourcc('B', 'G', '0', 'D')
+#define MEDIA_PIX_FMT_SGBRG10DWA media_fourcc('G', 'B', '0', 'D')
+#define MEDIA_PIX_FMT_SGRBG10DWA media_fourcc('G', 'R', '0', 'D')
+#define MEDIA_PIX_FMT_SRGGB10DWA media_fourcc('R', 'G', '0', 'D')
 
-#define MEDIA_PIX_FMT_SBGGR12           media_fourcc('B', 'G', '1', '2')
-#define MEDIA_PIX_FMT_SGBRG12           media_fourcc('G', 'B', '1', '2')
-#define MEDIA_PIX_FMT_SGRBG12           media_fourcc('B', 'A', '1', '2')
-#define MEDIA_PIX_FMT_SRGGB12           media_fourcc('R', 'G', '1', '2')
+#define MEDIA_PIX_FMT_SBGGR12 media_fourcc('B', 'G', '1', '2')
+#define MEDIA_PIX_FMT_SGBRG12 media_fourcc('G', 'B', '1', '2')
+#define MEDIA_PIX_FMT_SGRBG12 media_fourcc('B', 'A', '1', '2')
+#define MEDIA_PIX_FMT_SRGGB12 media_fourcc('R', 'G', '1', '2')
 
-#define MEDIA_PIX_FMT_SBGGR12BPACK      media_fourcc('B', 'G', '2', 'B')
-#define MEDIA_PIX_FMT_SGBRG12BPACK      media_fourcc('G', 'B', '2', 'B')
-#define MEDIA_PIX_FMT_SGRBG12BPACK      media_fourcc('G', 'R', '2', 'B')
-#define MEDIA_PIX_FMT_SRGGB12BPACK      media_fourcc('R', 'G', '2', 'B')
-#define MEDIA_PIX_FMT_SBGGR12DWA        media_fourcc('B', 'G', '2', 'D')
-#define MEDIA_PIX_FMT_SGBRG12DWA        media_fourcc('G', 'B', '2', 'D')
-#define MEDIA_PIX_FMT_SGRBG12DWA        media_fourcc('G', 'R', '2', 'D')
-#define MEDIA_PIX_FMT_SRGGB12DWA        media_fourcc('R', 'G', '2', 'D')
+#define MEDIA_PIX_FMT_SBGGR12BPACK media_fourcc('B', 'G', '2', 'B')
+#define MEDIA_PIX_FMT_SGBRG12BPACK media_fourcc('G', 'B', '2', 'B')
+#define MEDIA_PIX_FMT_SGRBG12BPACK media_fourcc('G', 'R', '2', 'B')
+#define MEDIA_PIX_FMT_SRGGB12BPACK media_fourcc('R', 'G', '2', 'B')
+#define MEDIA_PIX_FMT_SBGGR12DWA media_fourcc('B', 'G', '2', 'D')
+#define MEDIA_PIX_FMT_SGBRG12DWA media_fourcc('G', 'B', '2', 'D')
+#define MEDIA_PIX_FMT_SGRBG12DWA media_fourcc('G', 'R', '2', 'D')
+#define MEDIA_PIX_FMT_SRGGB12DWA media_fourcc('R', 'G', '2', 'D')
 
-#define MEDIA_PIX_FMT_SBGGR14BPACK      media_fourcc('B', 'G', '4', 'B')
-#define MEDIA_PIX_FMT_SGBRG14BPACK      media_fourcc('G', 'B', '4', 'B')
-#define MEDIA_PIX_FMT_SGRBG14BPACK      media_fourcc('G', 'R', '4', 'B')
-#define MEDIA_PIX_FMT_SRGGB14BPACK      media_fourcc('R', 'G', '4', 'B')
-#define MEDIA_PIX_FMT_SBGGR14DWA        media_fourcc('B', 'G', '4', 'D')
-#define MEDIA_PIX_FMT_SGBRG14DWA        media_fourcc('G', 'B', '4', 'D')
-#define MEDIA_PIX_FMT_SGRBG14DWA        media_fourcc('G', 'R', '4', 'D')
-#define MEDIA_PIX_FMT_SRGGB14DWA        media_fourcc('R', 'G', '4', 'D')
+#define MEDIA_PIX_FMT_SBGGR14BPACK media_fourcc('B', 'G', '4', 'B')
+#define MEDIA_PIX_FMT_SGBRG14BPACK media_fourcc('G', 'B', '4', 'B')
+#define MEDIA_PIX_FMT_SGRBG14BPACK media_fourcc('G', 'R', '4', 'B')
+#define MEDIA_PIX_FMT_SRGGB14BPACK media_fourcc('R', 'G', '4', 'B')
+#define MEDIA_PIX_FMT_SBGGR14DWA media_fourcc('B', 'G', '4', 'D')
+#define MEDIA_PIX_FMT_SGBRG14DWA media_fourcc('G', 'B', '4', 'D')
+#define MEDIA_PIX_FMT_SGRBG14DWA media_fourcc('G', 'R', '4', 'D')
+#define MEDIA_PIX_FMT_SRGGB14DWA media_fourcc('R', 'G', '4', 'D')
 
-#define MEDIA_PIX_FMT_SBGGR14           media_fourcc('B', 'G', '1', '4')
-#define MEDIA_PIX_FMT_SGBRG14           media_fourcc('G', 'B', '1', '4')
-#define MEDIA_PIX_FMT_SGRBG14           media_fourcc('G', 'R', '1', '4')
-#define MEDIA_PIX_FMT_SRGGB14           media_fourcc('R', 'G', '1', '4')
+#define MEDIA_PIX_FMT_SBGGR14 media_fourcc('B', 'G', '1', '4')
+#define MEDIA_PIX_FMT_SGBRG14 media_fourcc('G', 'B', '1', '4')
+#define MEDIA_PIX_FMT_SGRBG14 media_fourcc('G', 'R', '1', '4')
+#define MEDIA_PIX_FMT_SRGGB14 media_fourcc('R', 'G', '1', '4')
 
-#define MEDIA_PIX_FMT_SBGGR16           media_fourcc('B', 'Y', 'R', '2')
-#define MEDIA_PIX_FMT_SGBRG16           media_fourcc('G', 'B', '1', '6')
-#define MEDIA_PIX_FMT_SGRBG16           media_fourcc('G', 'R', '1', '6')
-#define MEDIA_PIX_FMT_SRGGB16           media_fourcc('R', 'G', '1', '6')
+#define MEDIA_PIX_FMT_SBGGR16 media_fourcc('B', 'Y', 'R', '2')
+#define MEDIA_PIX_FMT_SGBRG16 media_fourcc('G', 'B', '1', '6')
+#define MEDIA_PIX_FMT_SGRBG16 media_fourcc('G', 'R', '1', '6')
+#define MEDIA_PIX_FMT_SRGGB16 media_fourcc('R', 'G', '1', '6')
 
-#define MEDIA_PIX_FMT_SBGGR24           media_fourcc('B', 'G', '2', '4')
-#define MEDIA_PIX_FMT_SGBRG24           media_fourcc('G', 'B', '2', '4')
-#define MEDIA_PIX_FMT_SGRBG24           media_fourcc('G', 'R', '2', '4')
-#define MEDIA_PIX_FMT_SRGGB24           media_fourcc('R', 'G', '2', '4')
+#define MEDIA_PIX_FMT_SBGGR24 media_fourcc('B', 'G', '2', '4')
+#define MEDIA_PIX_FMT_SGBRG24 media_fourcc('G', 'B', '2', '4')
+#define MEDIA_PIX_FMT_SGRBG24 media_fourcc('G', 'R', '2', '4')
+#define MEDIA_PIX_FMT_SRGGB24 media_fourcc('R', 'G', '2', '4')
 
 typedef struct media_device_attr_s {
 	void *hal_handle;
@@ -226,6 +227,7 @@ typedef struct {
 	uint32_t pixel_format;
 	uint32_t color_space;
 	uint32_t quantization;
+	uint32_t stride;
 } media_fmt;
 
 typedef struct {

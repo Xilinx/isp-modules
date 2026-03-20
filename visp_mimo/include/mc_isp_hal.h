@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT*/
+/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -56,16 +56,17 @@
 #define __MC_ISP_HAL_H__
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-typedef struct {
-	int isp_fd;
-} mc_isp_hal_handle;
+	typedef struct {
+		int isp_fd;
+	} mc_isp_hal_handle;
 
-int media_isp_hal_create(media_entity_attr *media_entity);
-int media_isp_hal_destroy(media_entity_attr *media_entity);
-void *media_isp_hal_event_listen_thread(void *Param);
+	int media_isp_hal_create(media_entity_attr *media_entity);
+	int media_isp_hal_destroy(media_entity_attr *media_entity);
+	void *media_isp_hal_event_listen_thread(void *Param);
 
 #ifdef __cplusplus
 }

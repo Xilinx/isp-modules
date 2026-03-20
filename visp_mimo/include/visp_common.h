@@ -52,8 +52,9 @@
  *
  *****************************************************************************/
 
-#ifndef __visp_COMMON_H__
-#define __visp_COMMON_H__
+#ifndef __VISP_COMMON_H__
+#define __VISP_COMMON_H__
+
 #include "visp_app.h"
 
 int visp_buf_done(struct v4l2_subdev *sd, void *arg);
@@ -61,6 +62,9 @@ int visp_set_frame_interval_public(struct visp_dev *isp_dev,
 				   struct v4l2_subdev_frame_interval *fi);
 int visp_set_fmt_public(struct visp_dev *isp_dev,
 			struct v4l2_subdev_format *format);
+int visp_get_format_stride_public(struct visp_dev *isp_dev, uint32_t fourcc,
+				  uint32_t width, uint32_t height,
+				  uint32_t *pstride);
 int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
 				    uint32_t *frame_rate);
 int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
@@ -86,6 +90,10 @@ int media_isp_calib_get_sensor_mode(struct visp_dev *isp_dev, uint8_t port,
 				    uint8_t *sensor_mode);
 int media_isp_device_sensor_open(struct visp_dev *isp_dev, uint8_t port);
 int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index);
+
+int media_isp_device_dqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
+			   media_buf *buf, void *enque_buff_g,
+			   media_buffer_t *p_media_buffer);
 int media_isp_calib_query_sensor(struct visp_dev *isp_dev, uint8_t port);
 int media_isp_calib_load_isp_config(struct visp_dev *isp_dev, uint8_t port);
 int media_isp_hal_set_fmt(struct visp_dev *isp_dev, int pad, media_fmt *format);
@@ -96,6 +104,9 @@ int media_isp_set_frame_rate(struct visp_dev *isp_dev, int pad,
 int media_isp_hal_buf_done(struct v4l2_subdev *sd, int pad,
 			   const media_buf *buf);
 int isp_device_create(struct visp_dev *isp_dev, uint8_t port);
+int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
+				void *packet_from_rpu,
+				media_buffer_t *p_media_buffer);
 
 RESULT vsi_cam_device_awb_disable(struct visp_dev *isp_dev,
 				  cam_device_handle_t h_cam_device);
@@ -106,7 +117,31 @@ RESULT vsi_cam_device_ae_disable(struct visp_dev *isp_dev,
 RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 					 cam_device_handle_t h_cam_device);
 
-int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
-			    void *packet_from_rpu,
-			    media_buffer_t *p_media_buffer);
+#define VSI_SUCCESS 0
+#define VSI_FAILURE (-1)
+#define VSI_NULL ((void *)0)
+#define VSI_RPU_NOT_SUPPORT (0xFFFF)
+
+typedef enum ErrCode_E {
+	VSI_ERR_INVALID_DEVID = 1,
+	VSI_ERR_INVALID_PORTID = 2,
+	VSI_ERR_INVALID_CHNID = 3,
+	VSI_ERR_ILLEGAL_PARAM = 4,
+	VSI_ERR_EXIST = 5,
+	VSI_ERR_UNEXIST = 6,
+	VSI_ERR_NULL_PTR = 7,
+	VSI_ERR_NOT_CONFIG = 8,
+	VSI_ERR_NOT_SUPPORT = 9,
+	VSI_ERR_NOT_PERM = 10,
+	VSI_ERR_NOMEM = 11,
+	VSI_ERR_NOBUF = 12,
+	VSI_ERR_BUF_EMPTY = 13,
+	VSI_ERR_BUF_FULL = 14,
+	VSI_ERR_NOTREADY = 15,
+	VSI_ERR_BADADDR = 17,
+	VSI_ERR_BUSY = 18,
+	VSI_ERR_TIMEOUT = 19,
+	VSI_ERR_BUTT = 256
+} vsi_err_code_e;
+
 #endif
