@@ -69,7 +69,12 @@ static int visp_ge_s_ctrl(struct v4l2_ctrl *ctrl)
 	{
 		case VISP_CID_GE_ENABLE:
 		case VISP_CID_GE_RESET:
-		case VISP_CID_GE_THRESHOLD:
+		case VISP_CID_GE_MANU_THRESHOLD:
+		case VISP_CID_GE_MODE:
+		case VISP_CID_GE_AUTO_LEVEL:
+		case VISP_CID_GE_AUTO_GAIN:
+		case VISP_CID_GE_AUTO_THRESHOLD:
+		case VISP_CID_GE_ALL_CONFIG:
 			ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
@@ -90,8 +95,14 @@ static int visp_ge_g_ctrl(struct v4l2_ctrl *ctrl)
 	switch (ctrl->id)
 	{
 		case VISP_CID_GE_ENABLE:
-		case VISP_CID_GE_RESET:
-		case VISP_CID_GE_THRESHOLD:
+		case VISP_CID_GE_MANU_THRESHOLD:
+		case VISP_CID_GE_STAT_THRESHOLD:
+		case VISP_CID_GE_MODE:
+		case VISP_CID_GE_AUTO_LEVEL:
+		case VISP_CID_GE_AUTO_GAIN:
+		case VISP_CID_GE_AUTO_THRESHOLD:
+		case VISP_CID_GE_ALL_CONFIG:
+		case VISP_CID_GE_ALL_STATUS:
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
@@ -132,13 +143,93 @@ const struct v4l2_ctrl_config visp_ge_ctrls[] = {
 	{
 		/* float 0.0 ~ 511.992 */
 		.ops = &visp_ge_ctrl_ops,
-		.id = VISP_CID_GE_THRESHOLD,
+		.id = VISP_CID_GE_MANU_THRESHOLD,
 		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_ge_threshold",
+		.name = "isp_ge_manu_threshold",
 		.step = 1,
 		.min = 0,
 		.max = 65535,
+	},
+	{
+		/* auto/manul */
+		.ops = &visp_ge_ctrl_ops,
+		.id = VISP_CID_GE_MODE,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ge_mode",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		/* auto level*/
+		.ops = &visp_ge_ctrl_ops,
+		.id = VISP_CID_GE_AUTO_LEVEL,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ge_auto_level",
+		.step = 1,
+		.min = 0,
+		.max = 20,
+		.dims = {1},
+	},
+	{/* float array 20*32bit */
+		.ops = &visp_ge_ctrl_ops,
+		.id = VISP_CID_GE_AUTO_GAIN,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ge_auto_gain",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20}
+	},
+	{/* float array 20*32bit */
+		.ops = &visp_ge_ctrl_ops,
+		.id = VISP_CID_GE_AUTO_THRESHOLD,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ge_auto_threshold",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {20},
+	},
+	{
+		/* float 0.0 ~ 511.992 */
+		.ops = &visp_ge_ctrl_ops,
+		.id = VISP_CID_GE_STAT_THRESHOLD,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ge_stat_threshold",
+		.step = 1,
+		.min = 0,
+		.max = 65535,
+	},
+	{
+		/* CamDeviceGeConfig_t */
+		.ops = &visp_ge_ctrl_ops,
+		.id = VISP_CID_GE_ALL_CONFIG,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ge_all_config",
+		.step = 1,
+		.min = 0,
+		.max = 0xFF,
+		.dims = {0xac},
+	},
+	{
+		/* CamDeviceGeStatus_t */
+		.ops = &visp_ge_ctrl_ops,
+		.id = VISP_CID_GE_ALL_STATUS,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ge_stat_threshold",
+		.step = 1,
+		.min = 0,
+		.max = 0xFF,
+		.dims = {0xc},
 	},
 };
 

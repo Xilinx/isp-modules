@@ -301,7 +301,7 @@ const struct v4l2_ctrl_config visp_lsc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {8984},
+		.dims = {0x2318},
 	},
 	{
 		/* uint8_t data of CamDeviceLscStatus_t */
@@ -313,7 +313,7 @@ const struct v4l2_ctrl_config visp_lsc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {8816},
+		.dims = {0x2270},
 	},
 };
 

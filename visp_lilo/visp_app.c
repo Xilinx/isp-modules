@@ -293,113 +293,6 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 	return 0;
 }
 
-static int isp_read_atm_properties(struct visp_dev *isp)
-{
-	struct device_node *mem_np;
-	const __be32 *prop;
-	u64 mem_addr;
-
-	// Generate the reserved memory node name dynamically
-	snprintf(isp->atm.node_name, sizeof(isp->atm.node_name),
-		 "isp%d_reserve_memory", isp->id);
-
-	// Locate the reserved memory node
-	mem_np = of_find_node_by_name(NULL, isp->atm.node_name);
-	if (!mem_np) {
-		dev_dbg(isp->dev, "Reserved memory '%s' not found, \
-				defaulting to 32-bit memory\n",
-			isp->atm.node_name);
-		isp->atm.high_mem_addr = 0;
-		isp->atm.is_64bit = false;
-		return 0; // No error, just treating as 32-bit mode
-	}
-
-	// Read the 'reg' property from the device tree
-	prop = of_get_property(mem_np, "reg", NULL);
-	if (!prop) {
-		dev_dbg(isp->dev, "Not found 'reg' property from '%s',\
-				defaulting to 32-bit memory\n",
-			isp->atm.node_name);
-		isp->atm.high_mem_addr = 0;
-		isp->atm.is_64bit = false;
-		of_node_put(mem_np);
-		return 0;
-	}
-
-	// Extract 64-bit base address (first two cells)
-	mem_addr = of_read_number(prop, 2);
-
-	// Store the high 32-bit value
-	isp->atm.high_mem_addr = (u32)(mem_addr >> 32);
-
-	// Determine if it's 32-bit or 64-bit based on high address
-	isp->atm.is_64bit = (isp->atm.high_mem_addr ? 1 : 0);
-
-	dev_dbg(isp->dev, "Extracted high 32-bit address from %s: \
-					0x%x (%s-bit memory)\n",
-		isp->atm.node_name, isp->atm.high_mem_addr,
-		isp->atm.is_64bit ? "64" : "32");
-
-	of_node_put(mem_np);
-	return 0;
-}
-
-static int isp_send_atm_prop_to_rpu(struct visp_dev *isp,
-				    cam_device_handle_t h_cam_device)
-{
-	int result = 0;
-	payload_packet *packet;
-	uint8_t *p_data;
-	int ret = 0;
-	cam_device_context_t *p_cam_dev_ctx =
-	    (cam_device_context_t *)h_cam_device;
-
-	if (p_cam_dev_ctx == NULL)
-		return RET_WRONG_HANDLE;
-
-	ret = isp_read_atm_properties(isp);
-	if (ret) {
-		dev_err(isp->dev, "Failed to read ATM properties for ISP%d\n",
-			isp->id);
-		return ret;
-	}
-
-	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
-	if (!packet) {
-		dev_err(isp->dev, "%s: Failed to allocate memory for packet\n",
-			__func__);
-		return -ENOMEM;
-	}
-
-	p_data = packet->payload;
-	packet->cookie = 0x99;
-	packet->type = CMD;
-	packet->payload_size = 0;
-
-	// Copy instance id
-	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
-	p_data += sizeof(uint32_t);
-	packet->payload_size += sizeof(uint32_t);
-
-	// Copy ATM properties (high_mem, is_64bit, node_name)
-	memcpy(p_data, &isp->atm.high_mem_addr, sizeof(uint32_t));
-	p_data += sizeof(uint32_t);
-	packet->payload_size += sizeof(uint32_t);
-
-	memcpy(p_data, &isp->atm.is_64bit, sizeof(int));
-	p_data += sizeof(int);
-	packet->payload_size += sizeof(int);
-
-	result =
-	    xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_CMD_SET_ATM, packet,
-				     packet->payload_size + payload_extra_size,
-				     isp->isp_rpu, MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
-		return RET_FAILURE;
-	kfree(packet);
-
-	return result;
-}
 
 static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 					    uint8_t port, uint8_t chn)
@@ -674,6 +567,8 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 
 ERR_TO_DESTROY_BUFPOOL:
 	media_isp_device_destroy_buf_pool(isp_dev, port, chn);
+	media_isp_device_camera_dis_connect(isp_dev, port, chn);
+	isp_destroy_pipeline(isp_dev, port, chn);
 
 	return ret_val;
 }
@@ -1396,6 +1291,11 @@ int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 	}
 	return ret_val;
 ERR_TO_CAMERA_DISCONNECT:
+	if (isp_dev->isp_ports[port].camera_connect_ref_cnt)
+		media_isp_device_camera_dis_connect(isp_dev, port, chn);
+
+	if (isp_dev->isp_ports[port].cam_device_handle)
+		isp_destroy_pipeline(isp_dev, port, chn);
 	return ret_val;
 }
 
@@ -1517,6 +1417,7 @@ int media_isp_device_sensor_open(struct visp_dev *isp_dev, uint8_t port)
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev, "%s: get sensor mode failed, ret is %d",
 			__func__, ret_val);
+		return ret_val;
 	}
 
 	ret_val = vsi_cam_device_sensor_open(
@@ -1526,6 +1427,7 @@ int media_isp_device_sensor_open(struct visp_dev *isp_dev, uint8_t port)
 		    isp_dev->dev,
 		    "CamDevice open sensor %s mode %d driver Failed, ret is %d",
 		    sensor_name, mode_index, ret_val);
+		return ret_val;
 	}
 
 	test_pattern.enable = false;
@@ -1703,6 +1605,7 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev,
 			"CamDevice camera connect failed, ret is %d", ret_val);
+		ret_val = VSI_ERR_ILLEGAL_PARAM;
 		goto ERR_TO_TERMINATE_MCM;
 	}
 
@@ -1724,7 +1627,7 @@ ERR_TO_CLOSE_SENSOR:
 
 ERR_TO_RELEASE_CAMCOMMON:
 	//    vsi_cam_common_destroy(&CamCommon);
-	return -EINVAL;
+	return ret_val;
 }
 
 int visp_buf_done(struct v4l2_subdev *sd, void *arg);
@@ -1795,6 +1698,7 @@ int read_dq_buf_info(void *data, struct visp_dev *isp_dev, struct Chn_info *info
 	return 0;
 }
 
+/* Fill to the struct , which should be sent to RPU*/
 int media_isp_set_format(struct visp_dev *isp_dev, uint32_t pad_index,
 			 media_fmt format_t)
 {
@@ -1805,6 +1709,114 @@ int media_isp_set_format(struct visp_dev *isp_dev, uint32_t pad_index,
 	       sizeof(media_fmt));
 
 	return VSI_SUCCESS;
+}
+
+static int media_isp_raw_format_v4l2_fmt(cam_device_raw_pattern_t bayer_pattern,
+					uint32_t bit_width,
+					uint32_t *fourcc,
+					uint32_t *pmfmt)
+{
+	uint32_t mfmt = 0;
+
+	switch (bayer_pattern) {
+	case CAMDEV_RAW_RGBIR_PAT_RGGIR:
+	case CAMDEV_RAW_RGBIR_PAT_RGIRB:
+	case CAMDEV_RAW_RGBIR_PAT_IRGGB:
+	case CAMDEV_RAW_RGBIR_PAT_RIRGB:
+	case CAMDEV_RAW_RGB_PAT_RGGB:
+		if (bit_width == 8) {
+			*fourcc = MEDIA_PIX_FMT_SRGGB8;
+			mfmt = MEDIA_BUS_FMT_SBGGR8_1X8;
+		} else if (bit_width == 10) {
+			*fourcc = MEDIA_PIX_FMT_SRGGB10;
+			mfmt = MEDIA_BUS_FMT_SBGGR10_1X10;
+		} else if (bit_width == 12) {
+			*fourcc = MEDIA_PIX_FMT_SRGGB12;
+			mfmt = MEDIA_BUS_FMT_SBGGR12_1X12;
+		} else if (bit_width == 14) {
+			*fourcc = MEDIA_PIX_FMT_SRGGB14;
+			mfmt = MEDIA_BUS_FMT_SBGGR14_1X14;
+		} else {
+			*fourcc = MEDIA_PIX_FMT_SRGGB16;
+			mfmt = MEDIA_BUS_FMT_SBGGR16_1X16;
+		}
+		break;
+	case CAMDEV_RAW_RGBIR_PAT_GRIRG:
+	case CAMDEV_RAW_RGBIR_PAT_GIRBG:
+	case CAMDEV_RAW_RGBIR_PAT_GRBIR:
+	case CAMDEV_RAW_RGBIR_PAT_IRRBG:
+	case CAMDEV_RAW_RGB_PAT_GRBG:
+		if (bit_width == 8) {
+			*fourcc = MEDIA_PIX_FMT_SGRBG8;
+			mfmt = MEDIA_BUS_FMT_SGRBG8_1X8;
+		} else if (bit_width == 10) {
+			*fourcc = MEDIA_PIX_FMT_SGRBG10;
+			mfmt = MEDIA_BUS_FMT_SGRBG10_1X10;
+		} else if (bit_width == 12) {
+			*fourcc = MEDIA_PIX_FMT_SGRBG12;
+			mfmt = MEDIA_BUS_FMT_SGRBG12_1X12;
+		} else if (bit_width == 14) {
+			*fourcc = MEDIA_PIX_FMT_SGRBG14;
+			mfmt = MEDIA_BUS_FMT_SGRBG14_1X14;
+		} else {
+			*fourcc = MEDIA_PIX_FMT_SGRBG16;
+			mfmt = MEDIA_BUS_FMT_SGRBG16_1X16;
+		}
+		break;
+	case CAMDEV_RAW_RGBIR_PAT_GBIRG:
+	case CAMDEV_RAW_RGBIR_PAT_GIRRG:
+	case CAMDEV_RAW_RGBIR_PAT_IRBRG:
+	case CAMDEV_RAW_RGBIR_PAT_GBRIR:
+	case CAMDEV_RAW_RGB_PAT_GBRG:
+		if (bit_width == 8) {
+			*fourcc = MEDIA_PIX_FMT_SGBRG8;
+			mfmt = MEDIA_BUS_FMT_SGBRG8_1X8;
+		} else if (bit_width == 10) {
+			*fourcc = MEDIA_PIX_FMT_SGBRG10;
+			mfmt = MEDIA_BUS_FMT_SGBRG10_1X10;
+		} else if (bit_width == 12) {
+			*fourcc = MEDIA_PIX_FMT_SGBRG12;
+			mfmt = MEDIA_BUS_FMT_SGBRG12_1X12;
+		} else if (bit_width == 14) {
+			*fourcc = MEDIA_PIX_FMT_SGBRG14;
+			mfmt = MEDIA_BUS_FMT_SGBRG14_1X14;
+		} else {
+			*fourcc = MEDIA_PIX_FMT_SGBRG16;
+			mfmt = MEDIA_BUS_FMT_SGBRG16_1X16;
+		}
+		break;
+	case CAMDEV_RAW_RGBIR_PAT_BGGIR:
+	case CAMDEV_RAW_RGBIR_PAT_IRGGR:
+	case CAMDEV_RAW_RGBIR_PAT_BIRGR:
+	case CAMDEV_RAW_RGBIR_PAT_BGIRR:
+	case CAMDEV_RAW_RGB_PAT_BGGR:
+		if (bit_width == 8) {
+			*fourcc = MEDIA_PIX_FMT_SBGGR8;
+			mfmt = MEDIA_BUS_FMT_SBGGR8_1X8;
+		} else if (bit_width == 10) {
+			*fourcc = MEDIA_PIX_FMT_SBGGR10;
+			mfmt = MEDIA_BUS_FMT_SBGGR10_1X10;
+		} else if (bit_width == 12) {
+			*fourcc = MEDIA_PIX_FMT_SBGGR12;
+			mfmt = MEDIA_BUS_FMT_SBGGR12_1X12;
+		} else if (bit_width == 14) {
+			*fourcc = MEDIA_PIX_FMT_SBGGR14;
+			mfmt = MEDIA_BUS_FMT_SBGGR14_1X14;
+		} else {
+			*fourcc = MEDIA_PIX_FMT_SBGGR16;
+			mfmt = MEDIA_BUS_FMT_SBGGR16_1X16;
+		}
+		break;
+	default:
+		pr_err("Not support pattern %d bitwidth %d\n",
+			bayer_pattern, bit_width);
+		return -1;
+	}
+
+	if (pmfmt)
+		*pmfmt = mfmt;
+
+	return 0;
 }
 
 static int media_isp_device_get_port_sink_info(struct visp_dev *isp_dev,
@@ -1832,79 +1844,89 @@ static int media_isp_device_get_port_sink_info(struct visp_dev *isp_dev,
 	sink_info->frmival_max.numerator = 30;
 	sink_info->frmival_max.denominator = 1;
 
-	switch (mode_info->bayer_pattern) {
-	case CAMDEV_RAW_RGBIR_PAT_RGGIR:
-	case CAMDEV_RAW_RGBIR_PAT_RGIRB:
-	case CAMDEV_RAW_RGBIR_PAT_IRGGB:
-	case CAMDEV_RAW_RGBIR_PAT_RIRGB:
-	case CAMDEV_RAW_RGB_PAT_RGGB:
-		if (mode_info->bit_width == 8)
-			sink_info->fourcc = MEDIA_PIX_FMT_SRGGB8;
-		else if (mode_info->bit_width == 10)
-			sink_info->fourcc = MEDIA_PIX_FMT_SRGGB10;
-		else if (mode_info->bit_width == 12)
-			sink_info->fourcc = MEDIA_PIX_FMT_SRGGB12;
-		else if (mode_info->bit_width == 14)
-			sink_info->fourcc = MEDIA_PIX_FMT_SRGGB14;
-		else
-			sink_info->fourcc = MEDIA_PIX_FMT_SRGGB16;
-		break;
-	case CAMDEV_RAW_RGBIR_PAT_GRIRG:
-	case CAMDEV_RAW_RGBIR_PAT_GIRBG:
-	case CAMDEV_RAW_RGBIR_PAT_GRBIR:
-	case CAMDEV_RAW_RGBIR_PAT_IRRBG:
-	case CAMDEV_RAW_RGB_PAT_GRBG:
-		if (mode_info->bit_width == 8)
-			sink_info->fourcc = MEDIA_PIX_FMT_SGRBG8;
-		else if (mode_info->bit_width == 10)
-			sink_info->fourcc = MEDIA_PIX_FMT_SGRBG10;
-		else if (mode_info->bit_width == 12)
-			sink_info->fourcc = MEDIA_PIX_FMT_SGRBG12;
-		else if (mode_info->bit_width == 14)
-			sink_info->fourcc = MEDIA_PIX_FMT_SGRBG14;
-		else
-			sink_info->fourcc = MEDIA_PIX_FMT_SGRBG16;
-		break;
-	case CAMDEV_RAW_RGBIR_PAT_GBIRG:
-	case CAMDEV_RAW_RGBIR_PAT_GIRRG:
-	case CAMDEV_RAW_RGBIR_PAT_IRBRG:
-	case CAMDEV_RAW_RGBIR_PAT_GBRIR:
-	case CAMDEV_RAW_RGB_PAT_GBRG:
-		if (mode_info->bit_width == 8)
-			sink_info->fourcc = MEDIA_PIX_FMT_SGBRG8;
-		else if (mode_info->bit_width == 10)
-			sink_info->fourcc = MEDIA_PIX_FMT_SGBRG10;
-		else if (mode_info->bit_width == 12)
-			sink_info->fourcc = MEDIA_PIX_FMT_SGBRG12;
-		else if (mode_info->bit_width == 14)
-			sink_info->fourcc = MEDIA_PIX_FMT_SGBRG14;
-		else
-			sink_info->fourcc = MEDIA_PIX_FMT_SGBRG16;
-		break;
-	case CAMDEV_RAW_RGBIR_PAT_BGGIR:
-	case CAMDEV_RAW_RGBIR_PAT_IRGGR:
-	case CAMDEV_RAW_RGBIR_PAT_BIRGR:
-	case CAMDEV_RAW_RGBIR_PAT_BGIRR:
-	case CAMDEV_RAW_RGB_PAT_BGGR:
-		if (mode_info->bit_width == 8)
-			sink_info->fourcc = MEDIA_PIX_FMT_SBGGR8;
-		else if (mode_info->bit_width == 10)
-			sink_info->fourcc = MEDIA_PIX_FMT_SBGGR10;
-		else if (mode_info->bit_width == 12)
-			sink_info->fourcc = MEDIA_PIX_FMT_SBGGR12;
-		else if (mode_info->bit_width == 14)
-			sink_info->fourcc = MEDIA_PIX_FMT_SBGGR14;
-		else
-			sink_info->fourcc = MEDIA_PIX_FMT_SBGGR16;
-		break;
-	default:
-		dev_err(isp_dev->dev, "Not support pattern %d bitwidth %d\n",
-			mode_info->bayer_pattern, mode_info->bit_width);
-		sink_info->fourcc = MEDIA_PIX_FMT_SRGGB12;
-		break;
-	}
+	ret_val = media_isp_raw_format_v4l2_fmt(mode_info->bayer_pattern,
+							mode_info->bit_width,
+							&(sink_info->fourcc),
+							NULL);
 
 	return ret_val;
+}
+
+enum sensor_mode_affinity {
+	SIZE_MATCH = 1 << 0,
+	FORMAT_MATCH = 1 << 1,
+	FRAMERATE_MATCH = 1 << 2,
+};
+
+static int media_isp_sink_fmt_match_sensor_mode(struct visp_dev *isp_dev,
+						uint8_t port,
+						cam_device_sensor_query_t *pquery_info,
+						uint8_t *mode)
+{
+	struct visp_pad_data *sink_pad;
+	int i;
+	int32_t ret;
+	uint32_t width, height;
+	uint32_t max_fps;
+	uint32_t fourcc = 0, mfmt = 0;
+	int32_t *mode_affinity;
+	int32_t max_affinity = -1;
+	int32_t max_affinity_index = -1;
+
+	sink_pad = &isp_dev->pad_data[port * VISP_PORT_PAD_NR];
+
+	if (sink_pad->sink_detected != 1)
+		return -1;
+
+	mode_affinity = kcalloc(pquery_info->number, sizeof(*mode_affinity),
+				GFP_KERNEL);
+	if (!mode_affinity)
+		return -ENOMEM;
+
+	for (i = 0; i < pquery_info->number; i++) {
+		/* width  and height is the most import value */
+		width = pquery_info->sensor_mode_info[i].size.width;
+		height = pquery_info->sensor_mode_info[i].size.height;
+		if (sink_pad->format.width != width ||
+		    sink_pad->format.height != height)
+			continue;
+		mode_affinity[i] |= SIZE_MATCH;
+
+		/* bayer patter */
+		/* bit width */
+		ret = media_isp_raw_format_v4l2_fmt(
+					pquery_info->sensor_mode_info[i].bayer_pattern,
+					pquery_info->sensor_mode_info[i].bit_width,
+					&fourcc, &mfmt);
+		if (ret)
+			continue;
+
+		if (sink_pad->format.code != mfmt)
+			continue;
+		mode_affinity[i] |= FORMAT_MATCH;
+
+		/* fps */
+		max_fps = pquery_info->sensor_mode_info[i].max_fps;
+		if (sink_pad->timeperframe.denominator != max_fps)
+			continue;
+		mode_affinity[i] |= FRAMERATE_MATCH;
+	}
+
+	for (i = 0; i < pquery_info->number; i++) {
+		if (mode_affinity[i] > 0 &&
+			mode_affinity[i] > max_affinity) {
+			max_affinity = mode_affinity[i];
+			max_affinity_index = i;
+		}
+	}
+
+	kfree(mode_affinity);
+
+	if (max_affinity_index == -1)
+		return -1;
+
+	*mode = max_affinity_index;
+	return 0;
 }
 
 int media_isp_calib_query_sensor(struct visp_dev *isp_dev, uint8_t port)
@@ -1924,13 +1946,6 @@ int media_isp_calib_query_sensor(struct visp_dev *isp_dev, uint8_t port)
 
 	isp_port = &isp_dev->isp_ports[port];
 
-	ret_val = media_isp_calib_get_sensor_mode(isp_dev, port, &sensor_mode);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev, "%s: port %d get sensor mode failed",
-			__func__, port);
-		return ret_val;
-	}
-
 	ret_val = vsi_cam_device_sensor_query(
 	    isp_dev, isp_port->cam_device_handle, QueryInfo);
 	if (ret_val != VSI_SUCCESS) {
@@ -1941,6 +1956,18 @@ int media_isp_calib_query_sensor(struct visp_dev *isp_dev, uint8_t port)
 		return ret_val;
 	}
 
+	/* use sink format to match mode first */
+	ret_val = media_isp_sink_fmt_match_sensor_mode(isp_dev, port,
+						QueryInfo, &sensor_mode);
+	if (ret_val) {
+		ret_val = media_isp_calib_get_sensor_mode(isp_dev, port, &sensor_mode);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev, "%s: port %d get sensor mode failed",
+				__func__, port);
+			return ret_val;
+		}
+	}
+
 	if (sensor_mode >= QueryInfo->number) {
 		ret_val = VSI_ERR_ILLEGAL_PARAM;
 		dev_err(isp_dev->dev,
@@ -1949,6 +1976,8 @@ int media_isp_calib_query_sensor(struct visp_dev *isp_dev, uint8_t port)
 		return ret_val;
 	}
 
+	dev_info(isp_dev->dev, "open %s sensor with mode %d\n",
+		isp_port->sensor_info.name, sensor_mode);
 	memcpy(&isp_port->sensor_info.mode_info,
 	       &QueryInfo->sensor_mode_info[sensor_mode],
 	       sizeof(QueryInfo->sensor_mode_info[sensor_mode]));
@@ -1984,8 +2013,8 @@ int media_isp_calib_load_isp_config(struct visp_dev *isp_dev, uint8_t port)
 
 	dev_dbg(isp_dev->dev, "%s: mode: %u", __func__,
 		isp_port->sensor_info.mode);
-	dev_dbg(isp_dev->dev, "%s: xml : %s", __func__,
-		isp_port->sensor_info.calib_xml);
+	dev_dbg(isp_dev->dev, "%s: calib: %s", __func__,
+		isp_port->sensor_info.calib);
 	dev_dbg(isp_dev->dev, "%s: manu_json: %s", __func__,
 		isp_port->sensor_info.manu_json);
 	dev_dbg(isp_dev->dev, "%s: auto_json: %s", __func__,
@@ -2037,16 +2066,61 @@ static int media_isp_hal_set_frame_rate(struct visp_dev *isp_dev, int pad,
 	return VSI_SUCCESS;
 }
 
+static int visp_set_compatability_flag(struct visp_dev *isp,
+						cam_device_handle_t h_cam_device,
+						uint32_t compat)
+{
+	int result = 0;
+	payload_packet *packet;
+	uint8_t *p_data;
+	cam_device_context_t *p_cam_dev_ctx =
+	    (cam_device_context_t *)h_cam_device;
+
+	if (!p_cam_dev_ctx)
+		return RET_WRONG_HANDLE;
+
+	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+	if (!packet)
+		return -ENOMEM;
+
+	p_data = packet->payload;
+	packet->cookie = 0x99;
+	packet->type = CMD;
+	packet->payload_size = 0;
+
+	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	packet->payload_size += sizeof(uint32_t);
+
+	memcpy(p_data, &compat, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+	packet->payload_size += sizeof(uint32_t);
+
+	result =
+	    xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_LINUX_COMPAT, packet,
+				     packet->payload_size + payload_extra_size,
+				     isp->isp_rpu, MBOX_CORE_APU);
+	if (result != RET_SUCCESS) {
+		kfree(packet);
+		return RET_FAILURE;
+	}
+
+	kfree(packet);
+
+	return 0;
+}
+
 int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 {
 	int ret_val = VSI_SUCCESS;
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 	cam_device_config_t CamConfig;
+	cam_device_sensor_module_map_cfg_t SensorMmoduleCfg;
 	media_fmt *format = NULL;
 	cam_device_sensor_drv_handle_t SensorDrvHandle = NULL;
-	cam_device_sensor_drv_cfg_t devSensorDrv = {NULL, 0};
 	char sensor_name[MEDIA_ISP_CHAR_LENGTH_MAX];
 	hal_i2c_config_t hal_i2c_config;
+	int apu_sensor = false;
 
 	/*Enter port Level Critical Section */
 
@@ -2094,17 +2168,9 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 		dev_err(isp_dev->dev,
 			"CamDevice Creat Isp Device Handle Failed, ret is %d",
 			ret_val);
+		isp_port->cam_device_handle = VSI_NULL;
+		ret_val = VSI_ERR_TIMEOUT;
 		return ret_val;
-	}
-
-	memset(&hal_i2c_config, 0, sizeof(hal_i2c_config));
-	hal_i2c_config.hal_i2c_mode = HAL_PS_I2C_MODE;
-	hal_i2c_config.i2c_bus_id = 0;
-
-	ret_val = hal_i2c_init(isp_dev, isp_port->cam_device_handle, &hal_i2c_config);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev, "I2C init Failed, ret is %d", ret_val);
-		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
 
 	memset(&sensor_name, 0, sizeof(sensor_name));
@@ -2117,36 +2183,57 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
 
+	/* apu sensor or rpu sensor */
+	if (strncmp(sensor_name, "virtual", 7) == 0)
+		apu_sensor = true;
+
+	dev_info(isp_dev->dev, "isp : %d Port :%d senosr in  %s",
+				isp_dev->id, port, apu_sensor ? "APU" : "RPU");
+
+	if (!apu_sensor) {
+		memset(&hal_i2c_config, 0, sizeof(hal_i2c_config));
+		hal_i2c_config.hal_i2c_mode = HAL_PS_I2C_MODE;
+		hal_i2c_config.i2c_bus_id = 0;
+
+		ret_val = hal_i2c_init(isp_dev, isp_port->cam_device_handle, &hal_i2c_config);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev, "I2C init Failed, ret is %d", ret_val);
+			ret_val = VSI_ERR_TIMEOUT;
+			goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
+		}
+	}
+
 	/*****Map the sensor*****/
+	memset(&SensorMmoduleCfg, 0, sizeof(SensorMmoduleCfg));
+	memcpy(SensorMmoduleCfg.module_name, sensor_name,
+	       sizeof(SensorMmoduleCfg.module_name));
+	SensorMmoduleCfg.sensor_dev_id = isp_port->sensor_info.sensor_id;
 	ret_val =
 	    vsi_cam_device_sensor_mapping(isp_dev, isp_port->cam_device_handle,
-					  sensor_name, &SensorDrvHandle);
+					  &SensorMmoduleCfg, &SensorDrvHandle);
 	if (ret_val != VSI_SUCCESS || SensorDrvHandle == VSI_NULL) {
-		// dev_err(isp_dev->dev ,"CamDevice sensor mapping %s Failed",
-		// SensorPortInfo.name);
 		dev_err(isp_dev->dev,
 			"CamDevice sensor mapping %s Failed ret is %d",
 			sensor_name, ret_val);
+		ret_val = VSI_ERR_TIMEOUT;
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
-
-	devSensorDrv.sensor_drv_handle = SensorDrvHandle;
-	devSensorDrv.sensor_dev_id = isp_port->sensor_info.sensor_id;
 
 	/***** FMC Config *****/
 	dev_info(
 	    isp_dev->dev,
 	    "Registering the SensorDrvHandle, this can take some time...\n");
 	ret_val = vsi_cam_device_sensor_drv_handle_register(
-	    isp_dev, isp_port->cam_device_handle, &devSensorDrv);
+	    isp_dev, isp_port->cam_device_handle, SensorDrvHandle);
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev,
 			"CamDevice register sensor %s driver Failed, ret is %d",
 			sensor_name, ret_val);
+		ret_val = VSI_ERR_TIMEOUT;
 		goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 	}
 
-	kfree(devSensorDrv.sensor_drv_handle);
+	kfree(SensorDrvHandle);
 
 	/***** Query Sensor *****/
 CHANGE_SENSOR_MODE:
@@ -2202,7 +2289,7 @@ CHANGE_SENSOR_MODE:
 
 	iba_init_send_command(isp_dev, isp_port->cam_device_handle);
 
-	isp_send_atm_prop_to_rpu(isp_dev, isp_port->cam_device_handle);
+	visp_set_compatability_flag(isp_dev, isp_port->cam_device_handle, 1);
 
 	return ret_val;
 
@@ -2214,7 +2301,7 @@ ERR_TO_DESTROY_CAMDEVICE_HANDLE:
 	dev_err(isp_dev->dev, "Error %s %d\n ", __func__, __LINE__);
 	vsi_cam_device_destroy(isp_dev, isp_port->cam_device_handle);
 	isp_port->cam_device_handle = VSI_NULL;
-	return -EINVAL;
+	return ret_val;
 }
 
 int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
@@ -2246,7 +2333,6 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 		if (ret == -EPIPE) {
 			dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
 				isp_dev->id, port);
-			ret = 0;
 		}
 #endif
 
@@ -2275,14 +2361,12 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 		if (ret == -EPIPE) {
 			dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
 				isp_dev->id, port);
-			ret = 0;
 		}
 #endif
 		}
 
 	/*Exit port Level Critical Section */
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
-
 	return ret;
 }
 

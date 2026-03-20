@@ -56,9 +56,18 @@
 
 #include "visp_ctrl.h"
 
-#define VISP_CID_GE_ENABLE (VISP_CID_GE_BASE + 0x0000)
-#define VISP_CID_GE_RESET (VISP_CID_GE_BASE + 0x0001)
-#define VISP_CID_GE_THRESHOLD (VISP_CID_GE_BASE + 0x0002)
+#define VISP_CID_GE_ENABLE                      (VISP_CID_GE_BASE + 0x0000)
+#define VISP_CID_GE_RESET                       (VISP_CID_GE_BASE + 0x0001)
+#define VISP_CID_GE_MANU_THRESHOLD              (VISP_CID_GE_BASE + 0x0002)
+#define VISP_CID_GE_STAT_THRESHOLD              (VISP_CID_GE_BASE + 0x0003)
+#define VISP_CID_GE_MODE                        (VISP_CID_GE_BASE + 0x0004)
+#define VISP_CID_GE_AUTO_LEVEL                  (VISP_CID_GE_BASE + 0x0005)
+#define VISP_CID_GE_AUTO_GAIN                   (VISP_CID_GE_BASE + 0x0006)
+#define VISP_CID_GE_AUTO_THRESHOLD              (VISP_CID_GE_BASE + 0x0007)
+
+#define VISP_CID_GE_ALL_CONFIG                  (VISP_CID_GE_BASE + 0x000A)
+#define VISP_CID_GE_ALL_STATUS                  (VISP_CID_GE_BASE + 0x000B)
+
 
 #ifdef __KERNEL__
 int visp_ge_ctrl_count(void);

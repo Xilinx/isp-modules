@@ -113,7 +113,6 @@ typedef enum cam_device_buf_mode_e {
 	// CAMDEV_BUFMODE_FLEXA,                  /**< The FLEXA share memory
 	// mode*/
 	CAMDEV_BUFMODE_MAX, /**< Maximum buffer mode */
-	DUMMY_CAMDEV_BUFMODE = 0xDEADFEED
 } cam_device_buf_mode_t;
 
 /******************************************************************************/
@@ -127,7 +126,6 @@ typedef enum cam_device_buf_que_block_type_e {
 	CAMDEV_BUFQUE_TIMEOUT_TYPE,	 /**< Time-blocking type*/
 	CAMDEV_BUFQUE_BLOCK_TYPE,	 /**< Blocking type */
 	CAMDEV_BUFQUE_BLOCK_TYPE_MAX,	 /**< Blocking type max */
-	DUMMY_CAMDEV_BUFQUE_BLOCK_TYPE = 0xDEADFEED
 } cam_device_buf_que_block_type_t;
 
 /******************************************************************************/

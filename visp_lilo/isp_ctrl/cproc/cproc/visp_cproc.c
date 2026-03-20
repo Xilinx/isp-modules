@@ -65,8 +65,7 @@ static int visp_cproc_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
+	switch (ctrl->id) {
 		case VISP_CID_CPROC_ENABLE:
 		case VISP_CID_CPROC_RESET:
 		case VISP_CID_CPROC_CHROMA_OUT_TYPE:
@@ -81,12 +80,16 @@ static int visp_cproc_s_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_CPROC_MANU_BRIGHT:
 		case VISP_CID_CPROC_MANU_SATURATION:
 		case VISP_CID_CPROC_MANU_HUE:
+		case VISP_CID_CPROC_CONV_MATRIX:
+		case VISP_CID_CPROC_RGB_TO_YUV:
+		case VISP_CID_CPROC_GAMUT:
 		case VISP_CID_CPROC_ALL_CONFIG:
+		case VISP_CID_CPROC_ALL_RANGE:
 			ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
 		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
 			return -EACCES;
 	}
 
@@ -99,10 +102,8 @@ static int visp_cproc_g_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
+	switch (ctrl->id) {
 		case VISP_CID_CPROC_ENABLE:
-		case VISP_CID_CPROC_RESET:
 		case VISP_CID_CPROC_CHROMA_OUT_TYPE:
 		case VISP_CID_CPROC_MODE:
 		case VISP_CID_CPROC_AUTO_LEVEL:
@@ -115,17 +116,26 @@ static int visp_cproc_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_CPROC_MANU_BRIGHT:
 		case VISP_CID_CPROC_MANU_SATURATION:
 		case VISP_CID_CPROC_MANU_HUE:
+		case VISP_CID_CPROC_CONV_MATRIX:
+		case VISP_CID_CPROC_RGB_TO_YUV:
+		case VISP_CID_CPROC_GAMUT:
 		case VISP_CID_CPROC_STAT_CONTRAST:
 		case VISP_CID_CPROC_STAT_BRIGHT:
 		case VISP_CID_CPROC_STAT_SATURATION:
 		case VISP_CID_CPROC_STAT_HUE:
+		case VISP_CID_CPROC_STAT_CONV_MATRIX:
+		case VISP_CID_CPROC_STAT_RGB_TO_YUV:
+		case VISP_CID_CPROC_STAT_CHROMA_OUT_TYPE:
+		case VISP_CID_CPROC_STAT_GAMUT:
 		case VISP_CID_CPROC_ALL_CONFIG:
 		case VISP_CID_CPROC_ALL_STATUS:
+		case VISP_CID_CPROC_ALL_RANGE:
+		case VISP_CID_CPROC_ALL_RANGE_STATUS:
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
 		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
 			return -EACCES;
 	}
 
@@ -289,6 +299,37 @@ const struct v4l2_ctrl_config visp_cproc_ctrls[] = {
 		.def = 0,
 	},
 	{
+		.ops = &visp_cproc_ctrl_ops,
+		.id = VISP_CID_CPROC_CONV_MATRIX,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_cproc_conv_matrix",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_cproc_ctrl_ops,
+		.id = VISP_CID_CPROC_RGB_TO_YUV,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_cproc_rgb_to_yuv",
+		.step = 1,
+		.min = 0,
+		.max = 0xffffffff,
+		.dims = {9}
+	},
+	{
+		.ops = &visp_cproc_ctrl_ops,
+		.id = VISP_CID_CPROC_GAMUT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_cproc_gamut",
+		.step = 1,
+		.min = 0,
+		.max = 2,
+	},
+	{
 		/* float [0,1.992] ratio 128:1 */
 		.ops = &visp_cproc_ctrl_ops,
 		.id = VISP_CID_CPROC_STAT_CONTRAST,
@@ -335,6 +376,48 @@ const struct v4l2_ctrl_config visp_cproc_ctrls[] = {
 		.def = 0,
 	},
 	{
+		.ops = &visp_cproc_ctrl_ops,
+		.id = VISP_CID_CPROC_STAT_CONV_MATRIX,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_cproc_stat_conv_matrix",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_cproc_ctrl_ops,
+		.id = VISP_CID_CPROC_STAT_RGB_TO_YUV,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_cproc_stat_rgb_to_yuv",
+		.step = 1,
+		.min = 0,
+		.max = 0xffffffff,
+		.dims = {9}
+	},
+	{
+		.ops = &visp_cproc_ctrl_ops,
+		.id = VISP_CID_CPROC_STAT_GAMUT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_cproc_stat_gamut",
+		.step = 1,
+		.min = 0,
+		.max = 2,
+	},
+	{
+		.ops = &visp_cproc_ctrl_ops,
+		.id = VISP_CID_CPROC_STAT_CHROMA_OUT_TYPE,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_cproc_stat_chroma_ot",
+		.step = 1,
+		.min = 1,
+		.max = 2,
+		.def  = 1,
+	},
+	{
 		/* uint8_t data of CamDeviceCprocConfig_t */
 		.ops = &visp_cproc_ctrl_ops,
 		.id = VISP_CID_CPROC_ALL_CONFIG,
@@ -344,7 +427,7 @@ const struct v4l2_ctrl_config visp_cproc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {424},
+		.dims = {0x1a8},
 	},
 	{
 		/* uint8_t data of CamDeviceCprocStatus_t */
@@ -356,7 +439,31 @@ const struct v4l2_ctrl_config visp_cproc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {24},
+		.dims = {0x18},
+	},
+	{
+		/* CamDeviceCprocYuvRangeS_t */
+		.ops = &visp_cproc_ctrl_ops,
+		.id = VISP_CID_CPROC_ALL_RANGE,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_cproc_all_range",
+		.step = 1,
+		.min = 0,
+		.max = 0xFF,
+		.dims = {0x30},
+	},
+	{
+		/* CamDeviceCprocYuvRangeS_t */
+		.ops = &visp_cproc_ctrl_ops,
+		.id = VISP_CID_CPROC_ALL_RANGE_STATUS,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_cproc_all_range_status",
+		.step = 1,
+		.min = 0,
+		.max = 0xFF,
+		.dims = {0x30},
 	},
 };
 

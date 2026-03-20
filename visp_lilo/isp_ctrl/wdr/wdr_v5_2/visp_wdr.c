@@ -65,8 +65,7 @@ static int visp_wdr_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
+	switch (ctrl->id) {
 		case VISP_CID_WDR_ENABLE:
 		case VISP_CID_WDR_RESET:
 		case VISP_CID_WDR_HALO_COLOR_FADING_ENABLE:
@@ -168,7 +167,7 @@ static int visp_wdr_s_ctrl(struct v4l2_ctrl *ctrl)
 			break;
 
 		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
 			return -EACCES;
 	}
 
@@ -181,8 +180,7 @@ static int visp_wdr_g_ctrl(struct v4l2_ctrl *ctrl)
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-	switch (ctrl->id)
-	{
+	switch (ctrl->id) {
 		case VISP_CID_WDR_ENABLE:
 		case VISP_CID_WDR_RESET:
 		case VISP_CID_WDR_HALO_COLOR_FADING_ENABLE:
@@ -344,7 +342,7 @@ static int visp_wdr_g_ctrl(struct v4l2_ctrl *ctrl)
 			break;
 
 		default:
-			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
+			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
 			return -EACCES;
 	}
 
@@ -1031,26 +1029,26 @@ const struct v4l2_ctrl_config visp_wdr_ctrls[] = {
 		.max = 300,
 	},
 	{
-		.ops = &visp_wdr_ctrl_ops,
-		.id = VISP_CID_WDR_MANU_MAX_GAIN,
-		.type = V4L2_CTRL_TYPE_U16,
+		/* double 0~4096.0 */
+		.ops  = &visp_wdr_ctrl_ops,
+		.id   = VISP_CID_WDR_MANU_MAX_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_wdr_manu_max_gain",
 		.step = 1,
-		.min = 0,
-		.max = 4096,
-		.dims = {1},
+		.min  = 0,
+		.max  = 40960,
 	},
 	{
-		.ops = &visp_wdr_ctrl_ops,
-		.id = VISP_CID_WDR_MANU_MIN_GAIN,
-		.type = V4L2_CTRL_TYPE_U16,
+		/* double 0~4096.0 */
+		.ops  = &visp_wdr_ctrl_ops,
+		.id   = VISP_CID_WDR_MANU_MIN_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_wdr_manu_min_gain",
 		.step = 1,
-		.min = 0,
-		.max = 4096,
-		.dims = {1},
+		.min  = 0,
+		.max  = 40960,
 	},
 	{
 		/* float 0~100.0 */
@@ -1675,26 +1673,26 @@ const struct v4l2_ctrl_config visp_wdr_ctrls[] = {
 		.max = 300,
 	},
 	{
-		.ops = &visp_wdr_ctrl_ops,
-		.id = VISP_CID_WDR_STAT_MAX_GAIN,
-		.type = V4L2_CTRL_TYPE_U16,
+		/* double 0~4096.0 */
+		.ops  = &visp_wdr_ctrl_ops,
+		.id   = VISP_CID_WDR_STAT_MAX_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_wdr_stat_max_gain",
 		.step = 1,
-		.min = 0,
-		.max = 4096,
-		.dims = {1},
+		.min  = 0,
+		.max  = 40960,
 	},
 	{
-		.ops = &visp_wdr_ctrl_ops,
-		.id = VISP_CID_WDR_STAT_MIN_GAIN,
-		.type = V4L2_CTRL_TYPE_U16,
+		/* double 0~4096.0 */
+		.ops  = &visp_wdr_ctrl_ops,
+		.id   = VISP_CID_WDR_STAT_MIN_GAIN,
+		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_wdr_stat_min_gain",
 		.step = 1,
-		.min = 0,
-		.max = 4096,
-		.dims = {1},
+		.min  = 0,
+		.max  = 40960,
 	},
 	{
 		/* float 0~100.0 */
@@ -2068,7 +2066,7 @@ const struct v4l2_ctrl_config visp_wdr_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {11372},
+		.dims = {0x35e8},
 	},
 	{
 		/* uint8_t data of CamDeviceWdrStatus_t */
@@ -2080,7 +2078,7 @@ const struct v4l2_ctrl_config visp_wdr_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {308},
+		.dims = {0x148},
 	},
 	{
 		/* uint8_t data of CamDeviceWdrGammaUpConfig_t */
@@ -2092,7 +2090,7 @@ const struct v4l2_ctrl_config visp_wdr_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {520},
+		.dims = {0x208},
 	},
 	{
 		/* uint8_t data of CamDeviceWdrGammaUpConfig_t */
@@ -2104,7 +2102,7 @@ const struct v4l2_ctrl_config visp_wdr_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {520},
+		.dims = {0x208},
 	},
 };
 

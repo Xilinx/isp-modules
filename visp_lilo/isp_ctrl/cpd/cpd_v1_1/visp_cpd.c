@@ -93,7 +93,6 @@ static int visp_cpd_g_ctrl(struct v4l2_ctrl *ctrl)
 	switch (ctrl->id)
 	{
 		case VISP_CID_CPD_ENABLE:
-		case VISP_CID_CPD_RESET:
 		case VISP_CID_CPD_CURVE_X:
 		case VISP_CID_CPD_CURVE_Y:
 		case VISP_CID_CPD_USE_OUT_Y_CURVE:
@@ -213,7 +212,7 @@ const struct v4l2_ctrl_config visp_cpd_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {516},
+		.dims = {0x204},
 	},
 	{
 		/* uint8_t data of CamDeviceCpdStatus_t */
@@ -225,7 +224,7 @@ const struct v4l2_ctrl_config visp_cpd_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {524},
+		.dims = {0x20c},
 	},
 };
 

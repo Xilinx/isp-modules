@@ -75,7 +75,7 @@ enum visp_vevent_id {
 };
 
 struct visp_plane {
-	uint32_t dma_addr;
+	uint64_t dma_addr;
 	uint32_t size;
 };
 

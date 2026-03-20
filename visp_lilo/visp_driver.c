@@ -88,7 +88,7 @@
 
 #define VISP_DEFAULT_SENSOR "ox03f10"
 #define VISP_DEFAULT_SENSOR_MODE 0
-#define VISP_DEFAULT_SENSOR_XML  "/usr/share/limo_example_jsons/OX03f10.xml"
+#define VISP_DEFAULT_SENSOR_CALIB "/usr/share/limo_example_jsons/OX03f10.json"
 #define VISP_DEFAULT_SENSOR_MANU_JSON "/usr/share/limo_example_jsons/manual_ext.json"
 #define VISP_DEFAULT_SENSOR_AUTO_JSON "/usr/share/limo_example_jsons/auto.json"
 
@@ -1471,6 +1471,13 @@ static struct v4l2_subdev_core_ops visp_core_ops = {
 	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
 };
 
+/*
+ * When the requested pad is the sink pad, the interval is applied directly and
+ * propagated to all source pads without calling media_isp_set_frame_rate().
+ * For source pads, the interval is clamped to the sink pad's time-per-frame
+ * if invalid. media_isp_set_frame_rate() updates the framerate changes in ISP
+ * structs which will be passed on to hardware.
+ */
 static int visp_set_frame_interval(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_state *sd_state,
 				   struct v4l2_subdev_frame_interval *fi)
@@ -1551,6 +1558,14 @@ static struct v4l2_subdev_video_ops visp_video_ops = {
 int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
 					uint32_t fourcc_code);
 
+/*
+ * Applications (v4l2/gst) send fourcc; media-ctl sends mbus code. These are
+ * agreed types between application and kernel, but the pixel_format is unique
+ * to the application and can change.
+ *
+ * With the passed values of code and fourcc, the corresponding pix format is
+ * identified and stored.
+ */
 static int visp_set_fmt(struct v4l2_subdev *sd,
 			struct v4l2_subdev_state *sd_state,
 			struct v4l2_subdev_format *format)
@@ -1666,6 +1681,7 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	memset(&format_media, 0, sizeof(format_media));
 
 	mbus_format = (struct v4l2_mbus_framefmt *)&format->format;
+	/* Fill the struct to be shared with ISP/RPU*/
 	format_media.width = mbus_format->width;
 	format_media.height = mbus_format->height;
 	format_media.color_space = mbus_format->colorspace;
@@ -2309,25 +2325,26 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	struct device_node *node = pdev->dev.of_node;
 
 	for (port = 0; port < VISP_PORT_NR; port++) {
-		strncpy(isp_dev->isp_ports[port].sensor_info.name,
-			VISP_DEFAULT_SENSOR, strlen(VISP_DEFAULT_SENSOR) + 1);
+		strscpy(isp_dev->isp_ports[port].sensor_info.name,
+			VISP_DEFAULT_SENSOR,
+			sizeof(isp_dev->isp_ports[port].sensor_info.name));
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.calib_xml,
-			VISP_DEFAULT_SENSOR_XML,
-			strlen(VISP_DEFAULT_SENSOR_XML) + 1);
+		strscpy(isp_dev->isp_ports[port].sensor_info.calib,
+			VISP_DEFAULT_SENSOR_CALIB,
+			sizeof(isp_dev->isp_ports[port].sensor_info.calib));
 
 		isp_dev->isp_ports[port].sensor_info.mode =
-			VISP_DEFAULT_SENSOR_MODE;
+		    VISP_DEFAULT_SENSOR_MODE;
 		isp_dev->isp_ports[port].sensor_info.sensor_id =
-			sensor_dev_id[port];
+		    sensor_dev_id[port];
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.manu_json,
+		strscpy(isp_dev->isp_ports[port].sensor_info.manu_json,
 			VISP_DEFAULT_SENSOR_MANU_JSON,
-			strlen(VISP_DEFAULT_SENSOR_MANU_JSON) + 1);
+			sizeof(isp_dev->isp_ports[port].sensor_info.manu_json));
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.auto_json,
+		strscpy(isp_dev->isp_ports[port].sensor_info.auto_json,
 			VISP_DEFAULT_SENSOR_AUTO_JSON,
-			strlen(VISP_DEFAULT_SENSOR_AUTO_JSON) + 1);
+			sizeof(isp_dev->isp_ports[port].sensor_info.auto_json));
 	}
 
 	fwnode_property_read_u32(of_fwnode_handle(node), "isp_id",

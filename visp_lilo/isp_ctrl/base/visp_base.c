@@ -51,46 +51,107 @@
  *
  *****************************************************************************/
 
-#ifndef __VISP_CPROC_H__
-#define __VISP_CPROC_H__
-
+#include <media/v4l2-ioctl.h>
 #include "visp_ctrl.h"
+#include "visp_driver.h"
+#include "visp_event.h"
+#include "visp_base.h"
 
-#define VISP_CID_CPROC_ENABLE               (VISP_CID_CPROC_BASE + 0x0000)
-#define VISP_CID_CPROC_RESET                (VISP_CID_CPROC_BASE + 0x0001)
-#define VISP_CID_CPROC_CHROMA_OUT_TYPE      (VISP_CID_CPROC_BASE + 0x0002)
-#define VISP_CID_CPROC_MODE                 (VISP_CID_CPROC_BASE + 0x0003)
-#define VISP_CID_CPROC_AUTO_LEVEL           (VISP_CID_CPROC_BASE + 0x0004)
-#define VISP_CID_CPROC_AUTO_GAIN            (VISP_CID_CPROC_BASE + 0x0005)
-#define VISP_CID_CPROC_AUTO_CONTRAST        (VISP_CID_CPROC_BASE + 0x0006)
-#define VISP_CID_CPROC_AUTO_BRIGHT          (VISP_CID_CPROC_BASE + 0x0007)
-#define VISP_CID_CPROC_AUTO_SATURATION      (VISP_CID_CPROC_BASE + 0x0008)
-#define VISP_CID_CPROC_AUTO_HUE             (VISP_CID_CPROC_BASE + 0x0009)
-#define VISP_CID_CPROC_MANU_CONTRAST        (VISP_CID_CPROC_BASE + 0x000A)
-#define VISP_CID_CPROC_MANU_BRIGHT          (VISP_CID_CPROC_BASE + 0x000B)
-#define VISP_CID_CPROC_MANU_SATURATION      (VISP_CID_CPROC_BASE + 0x000C)
-#define VISP_CID_CPROC_MANU_HUE             (VISP_CID_CPROC_BASE + 0x000D)
-#define VISP_CID_CPROC_CONV_MATRIX          (VISP_CID_CPROC_BASE + 0x000E)
-#define VISP_CID_CPROC_RGB_TO_YUV           (VISP_CID_CPROC_BASE + 0x000F)
-#define VISP_CID_CPROC_GAMUT                (VISP_CID_CPROC_BASE + 0x0010)
-#define VISP_CID_CPROC_STAT_CONTRAST        (VISP_CID_CPROC_BASE + 0x0011)
-#define VISP_CID_CPROC_STAT_BRIGHT          (VISP_CID_CPROC_BASE + 0x0012)
-#define VISP_CID_CPROC_STAT_SATURATION      (VISP_CID_CPROC_BASE + 0x0013)
-#define VISP_CID_CPROC_STAT_HUE             (VISP_CID_CPROC_BASE + 0x0014)
-#define VISP_CID_CPROC_STAT_CONV_MATRIX     (VISP_CID_CPROC_BASE + 0x0015)
-#define VISP_CID_CPROC_STAT_RGB_TO_YUV      (VISP_CID_CPROC_BASE + 0x0016)
-#define VISP_CID_CPROC_STAT_CHROMA_OUT_TYPE (VISP_CID_CPROC_BASE + 0x0017)
-#define VISP_CID_CPROC_STAT_GAMUT           (VISP_CID_CPROC_BASE + 0x0018)
+static int visp_base_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	int ret = 0;
+	struct visp_dev *isp_dev =
+		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-#define VISP_CID_CPROC_ALL_CONFIG           (VISP_CID_CPROC_BASE + 0x0020)
-#define VISP_CID_CPROC_ALL_STATUS           (VISP_CID_CPROC_BASE + 0x0021)
-#define VISP_CID_CPROC_ALL_RANGE            (VISP_CID_CPROC_BASE + 0x0022)
-#define VISP_CID_CPROC_ALL_RANGE_STATUS     (VISP_CID_CPROC_BASE + 0x0023)
+	switch (ctrl->id) {
+	case VISP_CID_BASE_REG_ADDR:
+		ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
 
+	case VISP_CID_BASE_REG_VAL:
+		ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
 
-#ifdef __KERNEL__
-int visp_cproc_ctrl_count(void);
-int visp_cproc_ctrl_create(struct visp_dev *isp_dev);
-#endif
+	default:
+		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
+		return -EACCES;
+	}
 
-#endif
+	return ret;
+}
+
+static int visp_base_g_ctrl(struct v4l2_ctrl *ctrl)
+{
+	int ret = 0;
+	struct visp_dev *isp_dev =
+		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
+
+	switch (ctrl->id) {
+	case VISP_CID_BASE_REG_ADDR:
+		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
+
+	case VISP_CID_BASE_REG_VAL:
+		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
+
+	default:
+		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
+		return -EACCES;
+	}
+
+	return ret;
+}
+
+static const struct v4l2_ctrl_ops visp_base_ctrl_ops = {
+	.s_ctrl = visp_base_s_ctrl,
+	.g_volatile_ctrl = visp_base_g_ctrl,
+};
+
+const struct v4l2_ctrl_config visp_base_ctrls[] = {
+	{
+		.ops = &visp_base_ctrl_ops,
+		.id = VISP_CID_BASE_REG_ADDR,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_base_reg_addr",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {1},
+	},
+	{
+		.ops = &visp_base_ctrl_ops,
+		.id = VISP_CID_BASE_REG_VAL,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_base_reg_val",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {1},
+	},
+};
+
+int visp_base_ctrl_count(void)
+{
+	return ARRAY_SIZE(visp_base_ctrls);
+}
+
+int visp_base_ctrl_create(struct visp_dev *isp_dev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(visp_base_ctrls); i++) {
+		v4l2_ctrl_new_custom(&isp_dev->ctrl_handler,
+				     &visp_base_ctrls[i], NULL);
+		if (isp_dev->ctrl_handler.error) {
+			dev_err(isp_dev->dev,
+				"reigster isp base ctrl %s failed %d.\n",
+				visp_base_ctrls[i].name,
+				isp_dev->ctrl_handler.error);
+		}
+	}
+
+	return 0;
+}

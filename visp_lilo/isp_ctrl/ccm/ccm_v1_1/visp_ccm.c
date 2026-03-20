@@ -51,7 +51,7 @@
  *
  *****************************************************************************/
 
-#include "visp_exp.h"
+#include "visp_ccm.h"
 
 #include <media/v4l2-ioctl.h>
 
@@ -59,27 +59,23 @@
 #include "visp_driver.h"
 #include "visp_event.h"
 
-static int visp_exp_s_ctrl(struct v4l2_ctrl *ctrl)
+static int visp_ccm_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	int ret = 0;
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
 	switch (ctrl->id) {
-	case VISP_CID_EXP_ENABLE:
-	case VISP_CID_EXP_RESET:
-		// case VISP_CID_EXP_R_WEIGHT:
-		// case VISP_CID_EXP_GR_WEIGHT:
-		// case VISP_CID_EXP_GB_WEIGHT:
-		// case VISP_CID_EXP_B_WEIGHT:
-		// case VISP_CID_EXP_SIZE_RATIO:
-	case VISP_CID_EXP_INPUT_SELECT:
-	case VISP_CID_EXP_MEASURE_WINDOW:
-	case VISP_CID_EXP_STATISTIC:
-	case VISP_CID_EXP_STATISTIC_TYPE:
-	case VISP_CID_EXP_WINDOW_CUSTOM_EN:
-	case VISP_CID_EXP_ALL_CONFIG:
-	case VISP_CID_EXP_ALL_MEASURE_WIN:
+	case VISP_CID_CCM_ENABLE:
+	case VISP_CID_CCM_RESET:
+	case VISP_CID_CCM_MODE:
+	case VISP_CID_CCM_AUTO_LEVEL:
+	case VISP_CID_CCM_AUTO_GAIN:
+	case VISP_CID_CCM_AUTO_DAMPING:
+	case VISP_CID_CCM_AUTO_STRENGTH:
+	case VISP_CID_CCM_MANU_MATRIX:
+	case VISP_CID_CCM_MANU_OFFSET:
+	case VISP_CID_CCM_ALL_CONFIG:
 		ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 		break;
 
@@ -91,28 +87,26 @@ static int visp_exp_s_ctrl(struct v4l2_ctrl *ctrl)
 	return ret;
 }
 
-static int visp_exp_g_ctrl(struct v4l2_ctrl *ctrl)
+static int visp_ccm_g_ctrl(struct v4l2_ctrl *ctrl)
 {
 	int ret = 0;
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
 	switch (ctrl->id) {
-	case VISP_CID_EXP_ENABLE:
-	case VISP_CID_EXP_RESET:
-		// case VISP_CID_EXP_R_WEIGHT:
-		// case VISP_CID_EXP_GR_WEIGHT:
-		// case VISP_CID_EXP_GB_WEIGHT:
-		// case VISP_CID_EXP_B_WEIGHT:
-		// case VISP_CID_EXP_SIZE_RATIO:
-	case VISP_CID_EXP_INPUT_SELECT:
-	case VISP_CID_EXP_MEASURE_WINDOW:
-	case VISP_CID_EXP_STATISTIC:
-	case VISP_CID_EXP_STATISTIC_TYPE:
-	case VISP_CID_EXP_WINDOW_CUSTOM_EN:
-	case VISP_CID_EXP_ALL_CONFIG:
-	case VISP_CID_EXP_ALL_STATISTICS:
-	case VISP_CID_EXP_ALL_MEASURE_WIN:
+	case VISP_CID_CCM_ENABLE:
+	case VISP_CID_CCM_RESET:
+	case VISP_CID_CCM_MODE:
+	case VISP_CID_CCM_AUTO_LEVEL:
+	case VISP_CID_CCM_AUTO_GAIN:
+	case VISP_CID_CCM_AUTO_DAMPING:
+	case VISP_CID_CCM_AUTO_STRENGTH:
+	case VISP_CID_CCM_MANU_MATRIX:
+	case VISP_CID_CCM_MANU_OFFSET:
+	case VISP_CID_CCM_STAT_MATRIX:
+	case VISP_CID_CCM_STAT_OFFSET:
+	case VISP_CID_CCM_ALL_CONFIG:
+	case VISP_CID_CCM_ALL_STATUS:
 		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 		break;
 
@@ -124,195 +118,178 @@ static int visp_exp_g_ctrl(struct v4l2_ctrl *ctrl)
 	return ret;
 }
 
-static const struct v4l2_ctrl_ops visp_exp_ctrl_ops = {
-	.s_ctrl = visp_exp_s_ctrl,
-	.g_volatile_ctrl = visp_exp_g_ctrl,
+static const struct v4l2_ctrl_ops visp_ccm_ctrl_ops = {
+	.s_ctrl = visp_ccm_s_ctrl,
+	.g_volatile_ctrl = visp_ccm_g_ctrl,
 };
 
-const struct v4l2_ctrl_config visp_exp_ctrls[] = {
+const struct v4l2_ctrl_config visp_ccm_ctrls[] = {
 	{
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_ENABLE,
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_ENABLE,
 		.type = V4L2_CTRL_TYPE_BOOLEAN,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_enable",
-		.step = 1,
-		.min = 0,
-		.max = 1,
-	},
-	{
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_RESET,
-		.type = V4L2_CTRL_TYPE_BOOLEAN,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_reset",
-		.step = 1,
-		.min = 0,
-		.max = 1,
-	},
-	/*{
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_R_WEIGHT,
-		.type = V4L2_CTRL_TYPE_U8,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_r_weight",
-		.step = 1,
-		.min = 0,
-		.max = 63,
-		.dims = {1, 0, 0, 0},
-	},
-	{
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_GR_WEIGHT,
-		.type = V4L2_CTRL_TYPE_U8,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_gr_weight",
-		.step = 1,
-		.min = 0,
-		.max = 63,
-		.dims = {1, 0, 0, 0},
-	},
-	{
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_GB_WEIGHT,
-		.type = V4L2_CTRL_TYPE_U8,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_gb_weight",
-		.step = 1,
-		.min = 0,
-		.max = 63,
-		.dims = {1, 0, 0, 0},
-	},
-	{
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_B_WEIGHT,
-		.type = V4L2_CTRL_TYPE_U8,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_b_weight",
-		.step = 1,
-		.min = 0,
-		.max = 63,
-		.dims = {1, 0, 0, 0},
-	},
-	{
-		.ops  = &visp_exp_ctrl_ops,
-		.id   = VISP_CID_EXP_SIZE_RATIO,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_size_ratio",
+		.name = "isp_ccm_enable",
 		.step = 1,
 		.min  = 0,
-		.max  = 100000,
-	},*/
-
-	{
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_INPUT_SELECT,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_input_select",
-		.step = 1,
-		.min = 0,
-		.max = 3,
+		.max  = 1,
 	},
 	{
-		/* uint16_t array 4x16bit */
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_MEASURE_WINDOW,
-		.type = V4L2_CTRL_TYPE_U16,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_measure_window",
-		.step = 1,
-		.min = 0,
-		.max = 65535,
-		.dims = {4, 0, 0, 0},
-	},
-	{
-		// uint32_t array 32*32*4*32bit
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_STATISTIC,
-		.type = V4L2_CTRL_TYPE_U32,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_statistic",
-		.step = 1,
-		.min = 0,
-		.max = 0xFFFFFFFF,
-		.dims = {32, 32, 4, 0},
-	},
-	{
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_STATISTIC_TYPE,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_statistic_type",
-		.step = 1,
-		.min = 0,
-		.max = 2,
-	},
-	{
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_WINDOW_CUSTOM_EN,
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_RESET,
 		.type = V4L2_CTRL_TYPE_BOOLEAN,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_window_custom_en",
+		.name = "isp_ccm_reset",
 		.step = 1,
-		.min = 0,
-		.max = 1,
+		.min  = 0,
+		.max  = 1,
 	},
 	{
-		/* uint8_t data of CamDeviceExpV2Config_t */
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_ALL_CONFIG,
+		/* manual/auto */
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_MODE,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ccm_mode",
+		.step = 1,
+		.min  = 0,
+		.max  = 1,
+	},
+	{
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_AUTO_LEVEL,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_all_config",
+		.name = "isp_ccm_auto_level",
+		.step = 1,
+		.min  = 1,
+		.max  = 20,
+		.def  = 1,
+		.dims = {1},
+	},
+	{
+		/* float array 20*32bit */
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_AUTO_GAIN,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ccm_auto_gain",
+		.step = 1,
+		.min  = 0,
+		.max  = 0xFFFFFFFF,
+		.dims = {20}
+	},
+	{
+		/* float [0, 1] */
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_AUTO_DAMPING,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ccm_auto_damping",
+		.step = 1,
+		.min  = 0,
+		.max  = 100,
+	},
+	{
+		/* float array 20*32bit  [0, 2]*/
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_AUTO_STRENGTH,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ccm_auto_strength",
+		.step = 1,
+		.min  = 0,
+		.max  = 0xFFFFFFFF,
+		.dims = {20}
+	},
+	{
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_MANU_MATRIX,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ccm_manu_matrix",
+		.step = 1,
+		.min  = 0,
+		.max  = 0xFFFFFFFF,
+		.dims = {3, 3, 0, 0},
+	},
+	{
+		/* float 3x array -2047~2047 */
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_MANU_OFFSET,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ccm_manu_offset",
+		.step = 1,
+		.min  = 0,
+		.max  = 0xFFFFFFFF,
+		.dims = {3},
+	},
+	{
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_STAT_MATRIX,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ccm_stat_matrix",
+		.step = 1,
+		.min  = 0,
+		.max  = 0xFFFFFFFF,
+		.dims = {3, 3, 0, 0},
+	},
+	{
+		/* float 3x array -2047~2047 */
+		.ops  = &visp_ccm_ctrl_ops,
+		.id   = VISP_CID_CCM_STAT_OFFSET,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ccm_stat_offset",
+		.step = 1,
+		.min  = 0,
+		.max  = 0xFFFFFFFF,
+		.dims = {3},
+	},
+	{
+		/* uint8_t data of CamDeviceCcmConfig_t */
+		.ops = &visp_ccm_ctrl_ops,
+		.id = VISP_CID_CCM_ALL_CONFIG,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ccm_all_config",
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {0x8},
+		.dims = {0xdc},
 	},
 	{
-		/* uint8_t data of CamDeviceExpV2Statistics_t */
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_ALL_STATISTICS,
+		/* uint8_t data of CamDeviceCcmStatus_t */
+		.ops = &visp_ccm_ctrl_ops,
+		.id = VISP_CID_CCM_ALL_STATUS,
 		.type = V4L2_CTRL_TYPE_U8,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_all_statistics",
+		.name = "isp_ccm_all_status",
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {0x4004},
-	},
-	{
-		/* CamDeviceWindow_t */
-		.ops = &visp_exp_ctrl_ops,
-		.id = VISP_CID_EXP_ALL_MEASURE_WIN,
-		.type = V4L2_CTRL_TYPE_U8,
-		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-		.name = "isp_exp_all_measure_win",
-		.step = 1,
-		.min = 0,
-		.max = 65535,
-		.dims = {0x8},
+		.dims = {0x38},
 	},
 };
 
-int visp_exp_ctrl_count(void)
+int visp_ccm_ctrl_count(void)
 {
-	return ARRAY_SIZE(visp_exp_ctrls);
+	return ARRAY_SIZE(visp_ccm_ctrls);
 }
 
-int visp_exp_ctrl_create(struct visp_dev *isp_dev)
+int visp_ccm_ctrl_create(struct visp_dev *isp_dev)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(visp_exp_ctrls); i++)
+	for (i = 0; i < ARRAY_SIZE(visp_ccm_ctrls); i++)
 	{
-		v4l2_ctrl_new_custom(&isp_dev->ctrl_handler, &visp_exp_ctrls[i], NULL);
+		v4l2_ctrl_new_custom(&isp_dev->ctrl_handler, &visp_ccm_ctrls[i], NULL);
 		if (isp_dev->ctrl_handler.error)
 		{
-			dev_err(isp_dev->dev, "reigster isp exp ctrl %s failed %d.\n",
-					visp_exp_ctrls[i].name, isp_dev->ctrl_handler.error);
+			dev_err(isp_dev->dev, "reigster isp ccm ctrl %s failed %d.\n",
+					visp_ccm_ctrls[i].name, isp_dev->ctrl_handler.error);
 		}
 	}
 

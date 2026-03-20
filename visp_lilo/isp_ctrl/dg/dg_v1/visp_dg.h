@@ -56,19 +56,19 @@
 
 #include "visp_ctrl.h"
 
-#define VISP_CID_DG_ENABLE (VISP_CID_DG_BASE + 0x0000)
-#define VISP_CID_DG_RESET (VISP_CID_DG_BASE + 0x0001)
-#define VISP_CID_DG_MANU_B_GAIN (VISP_CID_DG_BASE + 0x0002)
-#define VISP_CID_DG_MANU_GB_GAIN (VISP_CID_DG_BASE + 0x0003)
-#define VISP_CID_DG_MANU_GR_GAIN (VISP_CID_DG_BASE + 0x0004)
-#define VISP_CID_DG_MANU_R_GAIN (VISP_CID_DG_BASE + 0x0005)
-#define VISP_CID_DG_STAT_B_GAIN (VISP_CID_DG_BASE + 0x0006)
-#define VISP_CID_DG_STAT_GB_GAIN (VISP_CID_DG_BASE + 0x0007)
-#define VISP_CID_DG_STAT_GR_GAIN (VISP_CID_DG_BASE + 0x0008)
-#define VISP_CID_DG_STAT_R_GAIN (VISP_CID_DG_BASE + 0x0009)
+#define VISP_CID_DG_ENABLE                      (VISP_CID_DG_BASE + 0x0000)
+#define VISP_CID_DG_RESET                       (VISP_CID_DG_BASE + 0x0001)
+#define VISP_CID_DG_MANU_B_GAIN                 (VISP_CID_DG_BASE + 0x0002)
+#define VISP_CID_DG_MANU_GB_GAIN                (VISP_CID_DG_BASE + 0x0003)
+#define VISP_CID_DG_MANU_GR_GAIN                (VISP_CID_DG_BASE + 0x0004)
+#define VISP_CID_DG_MANU_R_GAIN                 (VISP_CID_DG_BASE + 0x0005)
+#define VISP_CID_DG_STAT_B_GAIN                 (VISP_CID_DG_BASE + 0x0006)
+#define VISP_CID_DG_STAT_GB_GAIN                (VISP_CID_DG_BASE + 0x0007)
+#define VISP_CID_DG_STAT_GR_GAIN                (VISP_CID_DG_BASE + 0x0008)
+#define VISP_CID_DG_STAT_R_GAIN                 (VISP_CID_DG_BASE + 0x0009)
 
-#define VISP_CID_DG_ALL_CONFIG (VISP_CID_DG_BASE + 0x0010)
-#define VISP_CID_DG_ALL_STATUS (VISP_CID_DG_BASE + 0x0011)
+#define VISP_CID_DG_ALL_CONFIG                  (VISP_CID_DG_BASE + 0x0010)
+#define VISP_CID_DG_ALL_STATUS                  (VISP_CID_DG_BASE + 0x0011)
 
 #ifdef __KERNEL__
 int visp_dg_ctrl_count(void);

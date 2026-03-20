@@ -291,6 +291,7 @@ static int visp_dmsc_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_DMSC_STAT_CAC_CENTER_V_OFFSET:
 		case VISP_CID_DMSC_ALL_CONFIG:
 		case VISP_CID_DMSC_ALL_STATUS:
+		case VISP_CID_DMSC_ALL_SUB_ENABLE:
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
@@ -1047,13 +1048,12 @@ const struct v4l2_ctrl_config visp_dmsc_ctrls[] = {
 	{
 		.ops = &visp_dmsc_ctrl_ops,
 		.id = VISP_CID_DMSC_MANU_DEPURPLE_CBCR_MODE,
-		.type = V4L2_CTRL_TYPE_U8,
+		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_dmsc_manu_dpl_cbcr_mode",
 		.step = 1,
 		.min = 0,
 		.max = 3,
-		.dims = {1, 0, 0, 0},
 	},
 	{
 		.ops = &visp_dmsc_ctrl_ops,
@@ -1152,7 +1152,7 @@ const struct v4l2_ctrl_config visp_dmsc_ctrls[] = {
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_dmsc_manu_cac_ctr_h_offset",
 		.step = 1,
-		.min = -32768,
+		.min = 0,
 		.max = 32767,
 	},
 	{
@@ -1163,7 +1163,7 @@ const struct v4l2_ctrl_config visp_dmsc_ctrls[] = {
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_dmsc_manu_cac_ctr_v_offset",
 		.step = 1,
-		.min = -32768,
+		.min = 0,
 		.max = 32767,
 	},
 	{
@@ -1573,13 +1573,12 @@ const struct v4l2_ctrl_config visp_dmsc_ctrls[] = {
 	{
 		.ops = &visp_dmsc_ctrl_ops,
 		.id = VISP_CID_DMSC_STAT_DEPURPLE_CBCR_MODE,
-		.type = V4L2_CTRL_TYPE_U8,
+		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_dmsc_stat_dpl_cbcr_mode",
 		.step = 1,
 		.min = 0,
 		.max = 3,
-		.dims = {1, 0, 0, 0},
 	},
 	{
 		.ops = &visp_dmsc_ctrl_ops,
@@ -1678,7 +1677,7 @@ const struct v4l2_ctrl_config visp_dmsc_ctrls[] = {
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_dmsc_stat_cac_ctr_h_offset",
 		.step = 1,
-		.min = -32768,
+		.min = 0,
 		.max = 32767,
 	},
 	{
@@ -1689,7 +1688,7 @@ const struct v4l2_ctrl_config visp_dmsc_ctrls[] = {
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
 		.name = "isp_dmsc_stat_cac_ctr_v_offset",
 		.step = 1,
-		.min = -32768,
+		.min = 0,
 		.max = 32767,
 	},
 	{
@@ -1702,7 +1701,7 @@ const struct v4l2_ctrl_config visp_dmsc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {848},
+		.dims = {0x354},
 	},
 	{
 		/* uint8_t data of CamDeviceDmscStatus_t */
@@ -1714,7 +1713,19 @@ const struct v4l2_ctrl_config visp_dmsc_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {132},
+		.dims = {0x88},
+	},
+	{
+		/* uint8_t data of CamDeviceDmscSubEnableConfig_t */
+		.ops = &visp_dmsc_ctrl_ops,
+		.id = VISP_CID_DMSC_ALL_SUB_ENABLE,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_dmsc_all_sub_enable",
+		.step = 1,
+		.min = 0,
+		.max = 0xFF,
+		.dims = {0x18},
 	},
 };
 

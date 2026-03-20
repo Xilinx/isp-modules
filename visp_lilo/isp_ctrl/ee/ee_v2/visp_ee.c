@@ -183,6 +183,9 @@ static int visp_ee_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_EE_STAT_DCI_INFLCT_2_X:
 		case VISP_CID_EE_STAT_DCI_INFLCT_2_Y:
 		case VISP_CID_EE_STAT_DCI_INFLCT_STOP_Y:
+		case VISP_CID_EE_CURVE_EN_CONFIG:
+		case VISP_CID_EE_CA_EN_CONFIG:
+		case VISP_CID_EE_DCI_EN_CONFIG:
 		case VISP_CID_EE_ALL_CONFIG:
 		case VISP_CID_EE_ALL_STATUS:
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
@@ -838,6 +841,36 @@ const struct v4l2_ctrl_config visp_ee_ctrls[] = {
 		.dims = {1},
 	},
 	{
+		.ops = &visp_ee_ctrl_ops,
+		.id = VISP_CID_EE_CURVE_EN_CONFIG,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ee_curve_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_ee_ctrl_ops,
+		.id = VISP_CID_EE_CA_EN_CONFIG,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ee_ca_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
+		.ops = &visp_ee_ctrl_ops,
+		.id = VISP_CID_EE_DCI_EN_CONFIG,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ee_dci_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+	},
+	{
 		/* uint8_t data of CamDeviceEeConfig_t */
 		.ops = &visp_ee_ctrl_ops,
 		.id = VISP_CID_EE_ALL_CONFIG,
@@ -847,7 +880,7 @@ const struct v4l2_ctrl_config visp_ee_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {6084},
+		.dims = {0x17c4},
 	},
 	{
 		/* uint8_t data of CamDeviceEeStatus_t */
@@ -859,7 +892,19 @@ const struct v4l2_ctrl_config visp_ee_ctrls[] = {
 		.step = 1,
 		.min = 0,
 		.max = 0xFF,
-		.dims = {336},
+		.dims = {0x150},
+	},
+	{
+		/* CamDeviceEeCurveEnConfig_t */
+		.ops = &visp_ee_ctrl_ops,
+		.id = VISP_CID_EE_ALL_CURVE_EN_CONFIG,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_ee_all_curve_enable",
+		.step = 1,
+		.min = 0,
+		.max = 1,
+		.dims = {0xc},
 	},
 };
 
