@@ -62,7 +62,7 @@
 #include <ebase/types.h>
 #include <common/return_codes.h>
 #include "cam_device_api.h"
-////*#include "visp_app.h"*/
+#include "visp_app.h"
 
 /**
  * @defgroup cam_device_buffer Cam Device Buffer Definitions
@@ -83,16 +83,20 @@ extern "C" {
  *
  *****************************************************************************/
 typedef enum cam_device_buf_chain_id_e {
-    CAMDEV_BUFCHAIN_MP        = 0,               /**< ISP output main path buffer chain index*/
-    CAMDEV_BUFCHAIN_SP1       = 1,               /**< ISP output self1 path buffer chain index*/
-    CAMDEV_BUFCHAIN_SP2       = 2,               /**< ISP output self2 path buffer chain index*/
-    CAMDEV_BUFCHAIN_RAW       = 3,               /**< ISP output RAW path buffer chain index*/
-    CAMDEV_BUFCHAIN_HDR_RAW   = 4,               /**< ISP output retiming HDR RAW path buffer chain index*/
-    CAMDEV_BUFCHAIN_METADATA  = 5,               /**< Warning: CAMDEV_BUFCHAIN_METADATA will be deleted in next release, don't use this index */
-    CAMDEV_BUFCHAIN_RDMA      = 6,               /**< ISP input read DMA path buffer chain index*/
-    CAMDEV_BUFCHAIN_RETIMING  = 7,               /**< ISP input retiming DMA path buffer chain index*/
-    CAMDEV_BUFCHAIN_MAX,                          /**< Maximum path buffer chain index */
-    CAMDEV_DUMMY_001 = 0xDEADFEED
+	CAMDEV_BUFCHAIN_MP = 0,	 /**< ISP output main path buffer chain index*/
+	CAMDEV_BUFCHAIN_SP1 = 1, /**< ISP output self1 path buffer chain index*/
+	CAMDEV_BUFCHAIN_SP2 = 2, /**< ISP output self2 path buffer chain index*/
+	CAMDEV_BUFCHAIN_RAW = 3, /**< ISP output RAW path buffer chain index*/
+	CAMDEV_BUFCHAIN_HDR_RAW =
+	    4, /**< ISP output Retiming HDR RAW path buffer chain index*/
+	CAMDEV_BUFCHAIN_METADATA = 5, /**< Vi200 metadata buffer chain index*/
+	CAMDEV_BUFCHAIN_RDMA =
+	    6, /**< ISP input read DMA path buffer chain index*/
+	CAMDEV_BUFCHAIN_RETIMING =
+	    7, /**< ISP input retiming DMA path buffer chain index*/
+	CAMDEV_BUFCHAIN_MAX,
+	DUMMY_CAMDEV_BUFCHAIN =
+	    0xDEADFEED /**< Maximum path buffer chain index */
 } cam_device_buf_chain_id_t;
 
 /******************************************************************************/
@@ -109,7 +113,6 @@ typedef enum cam_device_buf_mode_e {
 	// CAMDEV_BUFMODE_FLEXA,                  /**< The FLEXA share memory
 	// mode*/
 	CAMDEV_BUFMODE_MAX, /**< Maximum buffer mode */
-	DUMMY_CAMDEV_BUFMODE = 0xDEADFEED
 } cam_device_buf_mode_t;
 
 /******************************************************************************/
@@ -123,7 +126,6 @@ typedef enum cam_device_buf_que_block_type_e {
 	CAMDEV_BUFQUE_TIMEOUT_TYPE,	 /**< Time-blocking type*/
 	CAMDEV_BUFQUE_BLOCK_TYPE,	 /**< Blocking type */
 	CAMDEV_BUFQUE_BLOCK_TYPE_MAX,	 /**< Blocking type max */
-	DUMMY_CAMDEV_BUFQUE_BLOCK_TYPE = 0xDEADFEED
 } cam_device_buf_que_block_type_t;
 
 /******************************************************************************/
@@ -135,12 +137,14 @@ typedef struct cam_device_buf_pool_config_s {
 	cam_device_buf_mode_t buf_mode; /**< Buffer memory mode */
 	uint32_t buf_num;		/**< The number of buffer pool */
 	uint32_t buf_size;		/**< The buffer size*/
-	uint32_t
-	    *p_base_addr_list; /**< The physical base address list. If the
-			  buf_mode is set to USERPTR, this member must be set.
-			  The base address should be aligned with 1024. */
-	bool_t is_mapped;      /*new member: whether to map ISP platform virtual
-				  address.*/
+	uint32_t *p_base_addr_list; /* The physical base address list. If the
+				     * buf_mode is set to USERPTR, this member
+				     * must be set. The base address should be
+				     * aligned with 1024.
+				     */
+	bool_t is_mapped; /* New member: whether to map ISP platform virtual
+			   * address.
+			   */
 	void **p_ipl_addr_list;
 } cam_device_buf_pool_config_t;
 
@@ -150,11 +154,11 @@ typedef struct cam_device_buf_pool_config_s {
  *
  *****************************************************************************/
 typedef struct cam_device_buf_que_op_config_s {
-
 	cam_device_buf_que_block_type_t
 	    block_type;	    /**< The buffer queue block type */
 	uint32_t wait_time; /**< When the block_type is time-blocking, should
-			       set the wait time. unit:msec*/
+			     * set the wait time. unit:msec
+			     */
 } cam_device_buf_que_op_config_t;
 
 /******************************************************************************/
@@ -164,7 +168,8 @@ typedef struct cam_device_buf_que_op_config_s {
  *****************************************************************************/
 typedef struct cam_device_buf_chain_config_s {
 	uint32_t skip_interval; /**< Interval of skip frame, only enable for ISP
-				   output path */
+				 * output path
+				 */
 	uint32_t buf_que_length; /**< The empty and full buffer queue Length*/
 	cam_device_buf_que_op_config_t empty_que_op;
 	cam_device_buf_que_op_config_t full_que_op;

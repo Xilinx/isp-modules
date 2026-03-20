@@ -55,10 +55,10 @@
 #ifndef __CAMDEV_DEVICE_H__
 #define __CAMDEV_DEVICE_H__
 
-#include <linux/string.h>
 #include <linux/slab.h>
+#include <linux/string.h>
+
 #include "cam_device_common.h"
-// #include "cam_device_module_api.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,8 +75,6 @@ typedef struct cam_device_ispcore_s {
 					 [CAMDEV_VIRTUAL_ID_MAX];
 
 } cam_device_ispcore_t;
-
-// typedef HalMemHandle_t CamDeviceHalMemHandle_t;
 
 /**
  *@ispcore api define
@@ -95,7 +93,6 @@ RESULT cam_device_instance_id_mapping(uint32_t hw_id, uint32_t vt_id,
 				      uint32_t *p_instance_id);
 
 typedef struct cam_device_context_s {
-
 	uint32_t isp_hw_id;
 	uint32_t isp_vt_id;
 	uint32_t instance_id;

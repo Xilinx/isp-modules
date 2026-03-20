@@ -72,6 +72,7 @@
 #define CAMDEV_SENSOR_EXP_NUM_MAX 4 /**< Maximum exposure number of sensor*/
 #define CAMDEV_SENSOR_METADATA_WIN_NUM_MAX									 \
 	3 /**< Maximum sensor metedata window number */
+#define SENSOR_MODULE_NAME 50
 
 #ifdef __cplusplus
 extern "C" {
@@ -86,7 +87,6 @@ typedef enum cam_device_sensor_type_e {
 	CAMDEV_SENSOR_TYPE_LINEAR = 0,	  /**< Sensor type linear*/
 	CAMDEV_SENSOR_TYPE_STITCHING_HDR, /**< Sensor type stitching HDR */
 	CAMDEV_SENSOR_TYPE_NATIVE_HDR,	  /**< Sensor type native HDR */
-	DUMMY_CAMDEV_0035 = 0xdeadfeed
 } cam_device_sensor_type_t;
 
 /*****************************************************************************/
@@ -102,7 +102,6 @@ typedef enum cam_device_sensor_native_mode_e {
 	CAMDEV_SENSOR_NATIVE_MODE_4DOL,		  /**< 4DOL combined in sensor*/
 	CAMDEV_SENSOR_NATIVE_MODE_DCG_SPD_VS, /**< 4DOL combined in sensor*/
 	CAMDEV_SENSOR_NATIVE_MODE_MAX,
-	DUMMY_CAMDEV_0036 = 0xdeadfeed
 } cam_device_sensor_native_mode_t;
 
 /*****************************************************************************/
@@ -114,7 +113,6 @@ typedef enum cam_device_sensor_auto_focus_mode_s {
 	CAMDEV_SENSOR_AF_NOTSUPP,   /**< AF not support */
 	CAMDEV_SENSOR_AF_MODE_CDAF, /**< CDAF mode */
 	CAMDEV_SENSOR_AF_MODE_PDAF, /**< PDAF mode */
-	DUMMY_CAMDEV_0037 = 0xdeadfeed
 } cam_device_sensor_auto_focus_mode_t;
 
 /*****************************************************************************/
@@ -126,7 +124,6 @@ typedef enum cam_device_sensor_focus_pos_mode_e {
 	CAMDEV_SENSOR_FOCUS_POS_ABSOLUTE = 0, /**< Absolute focusing mode */
 	CAMDEV_SENSOR_FOCUS_POS_RELATIVE,	 /**< Relative focusing mode */
 	CAMDEV_SENSOR_FOCUS_POS_MAX,
-	DUMMY_CAMDEV_0038 = 0xdeadfeed
 } cam_device_sensor_focus_pos_mode_t;
 
 /******************************************************************************/
@@ -138,7 +135,6 @@ typedef enum cam_device_sensor_data_type_e {
 	CAMDEV_SENSOR_DATA_TYPE_BAYER = 0, /**< Bayer data type */
 	CAMDEV_SENSOR_DATA_TYPE_YUV = 1,   /**< YUV data type */
 	CAMDEV_SENSOR_DATA_TYPE_MAX,
-	DUMMY_CAMDEV_0039 = 0xdeadfeed
 } cam_device_sensor_data_type_t;
 
 /******************************************************************************/
@@ -152,7 +148,6 @@ typedef enum cam_device_sensor_itf_type_e {
 	CAMDEV_SENSOR_ITF_TYPE_MIPI_4LANES = 2, /**< 4 lane mipi mode */
 	CAMDEV_SENSOR_ITF_TYPE_BT601 = 3,	/**< BT.601 type */
 	CAMDEV_SENSOR_ITF_TYPE_MAX,
-	DUMMY_CAMDEV_0040 = 0xdeadfeed
 } cam_device_sensor_itf_type_t;
 
 /*****************************************************************************/
@@ -161,16 +156,6 @@ typedef enum cam_device_sensor_itf_type_e {
  *
  *****************************************************************************/
 typedef void *cam_device_sensor_drv_handle_t;
-
-/*****************************************************************************/
-/**
- * @brief   CamDevice isi sensor driver configuration.
- *
- *****************************************************************************/
-typedef struct cam_device_sensor_drv_cfg_s {
-	cam_device_sensor_drv_handle_t sensor_drv_handle;
-	uint32_t sensor_dev_id;
-} cam_device_sensor_drv_cfg_t;
 
 /*****************************************************************************/
 /**
@@ -361,36 +346,48 @@ typedef struct cam_device_sensor_exposure_control_s {
 
 /*****************************************************************************/
 /**
+ * @brief   CamDevice sensor bls configuration.
+ *
+ *****************************************************************************/
+typedef struct cam_device_sensor_bls_s {
+	/* BLS value.
+	 * Raw: BLS[0]=red, BLS[1]=greenRed, BLS[2]=greenBlue, BLS[3]=blue.
+	 * The bls order should follow the sensor Bayer pattern.
+	 * Rgbir: BLS[0]=red, BLS[1]=green, BLS[2]=blue, BLS[3]=ir.
+	 * Algorithm order: 0->r, 1->g, 2->b, 3->ir; no Bayer mapping required.
+	 */
+	uint32_t bls[CAMDEV_RAW_CHANNEL_NUM];
+} cam_device_sensor_bls_t;
+
+/*****************************************************************************/
+/**
+ * @brief   CamDevice sensor wb information.
+ *
+ *****************************************************************************/
+typedef struct cam_device_sensor_wb_s {
+	float32_t gain[CAMDEV_RAW_CHANNEL_NUM]; /**< WB gain */
+} cam_device_sensor_wb_t;
+
+/*****************************************************************************/
+/**
  * @brief   CamDevice sensor exposure time configuration.
  *
  *****************************************************************************/
 typedef union cam_device_sensor_metadata_attr_s {
 	struct {
-		uint32_t support : 1;	/**< bit 0: 0-disable 1-enable */
-		uint32_t reg_info : 1;	/**< bit 1: register information */
-		uint32_t exp_time : 1;	/**< bit 2: exposure time */
-		uint32_t again : 1;	/**< bit 3: Analogue agin */
-		uint32_t dgain : 1;	/**< bit 4: Digital gain */
-		uint32_t bls : 1;	/**< bit 5: BLS */
-		uint32_t hist : 1;	/**< bit 6: Histogram */
-		uint32_t mean_luma : 1; /**< bit 7: Mean luminance */
-		uint32_t reserved_enable : 24; /**< bit 8:31: Reserved bit */
-
-	} sub_attr;		/**< Sub-attribute */
-	uint32_t main_attr; /**< Main attribute */
+		uint32_t support  : 1;   /**< bit 0: 0-disable 1-enable */
+		uint32_t reg_info  : 1;   /**< bit 1: register information */
+		uint32_t exp_time  : 1;   /**< bit 2: exposure time */
+		uint32_t a_gain    : 1;   /**< bit 3: Analogue agin */
+		uint32_t d_gain    : 1;   /**< bit 4: Digital gain */
+		uint32_t bls      : 1;   /**< bit 5: BLS */
+		uint32_t hist     : 1;   /**< bit 6: Histogram */
+		uint32_t mean_luma : 1;   /**< bit 7: Mean luminance */
+		uint32_t frame_crc : 1;   /**< bit 8: Frame CRC */
+		uint32_t reserved_enable : 23;/**< bit 9:31: Reserved bit */
+	} sub_attr; /**< Sub-attribute */
+	uint32_t main_attr;  /**< Main attribute */
 } cam_device_sensor_metadata_attr_t;
-
-/*****************************************************************************/
-/**
- * @brief   CamDevice sensor meatdata window information.
- *
- *****************************************************************************/
-typedef struct cam_device_sensor_metadata_win_s {
-	uint8_t win_num; /**< The number of windows */
-	cam_device_window_t
-		meta_win[CAMDEV_SENSOR_METADATA_WIN_NUM_MAX]; /**< Metadata windows
-							   */
-} cam_device_sensor_metadata_win_t;
 
 /*****************************************************************************/
 /**
@@ -398,7 +395,6 @@ typedef struct cam_device_sensor_metadata_win_s {
  *
  *****************************************************************************/
 typedef struct cam_device_sensor_info_s {
-
 	char sensor_name[CAMDEV_INPUT_DEV_NAME_LEN]; /**< Sensor name */
 	uint32_t sensor_rev_id; /**< Sensor revision id register */
 	cam_device_raw_pattern_t
@@ -423,30 +419,26 @@ typedef struct cam_device_sensor_info_s {
 
 /*****************************************************************************/
 /**
- * @brief   CamDevice sensor one time program information structure.
+ * @brief   CamDevice sensor meatdata window information.
  *
  *****************************************************************************/
-typedef struct cam_device_sensor_otp_module_info_s {
-	uint16_t hw_version;		  /**< Module HW version */
-	uint16_t sensor_eeprom_revision;  /**< EEPROM revision */
-	uint16_t sensor_revision;	  /**< Image sensor revision */
-	uint16_t t_lens_revision;	  /**< Tlens revision */
-	uint16_t ircf_revision;		  /**< Ircf revision */
-	uint16_t lens_revision;		  /**< Lens revision */
-	uint16_t ca_revision;		  /**< Contact assembly revision */
-	uint16_t module_inte_id;	  /**< Module integrator id */
-	uint16_t factory_id;		  /**< Factory id */
-	uint16_t mirror_flip;		  /**< Image mirror and flip */
-	uint16_t t_lens_slave_id;	  /**< Tlens slave id */
-	uint16_t sensor_eeprom_slave_id;  /**< EEPROM slave id */
-	uint16_t sensor_slave_id;	  /**< Image sensor slave id */
-	uint8_t sensor_id[SENSOR_ID_LEN]; /**< Image sensor id */
-	uint16_t manu_date_year;	  /**< Manufacture date (Year) */
-	uint16_t manu_date_month;	  /**< Manufacture date (Month) */
-	uint16_t manu_date_day;		  /**< Manufacture date (Date) */
-	uint8_t barcode_module_sn[MODULE_SN_LEN]; /**< Barcode-Module SN */
-	uint16_t map_total_size; /**< Total size of EEPROM map */
-} cam_device_sensor_otp_module_info_t;
+typedef struct cam_device_sensor_metadata_win_s {
+	uint8_t win_num;  /**< The number of windows */
+	cam_device_window_t meta_win[CAMDEV_SENSOR_METADATA_WIN_NUM_MAX];  /**< Metadata windows */
+} cam_device_sensor_metadata_win_t;
+
+/*****************************************************************************/
+/**
+ * @brief   CamDevice sensor ae info information.
+ *
+ *****************************************************************************/
+typedef struct cam_device_sensor_ae_info_s {
+	cam_device_range_t intTimeRange[CAMDEV_SENSOR_EXP_NUM_MAX];
+	cam_device_gain_info_t aGainRange[CAMDEV_SENSOR_EXP_NUM_MAX];
+	cam_device_gain_info_t dGainRange[CAMDEV_SENSOR_EXP_NUM_MAX];
+	uint32_t int_time_delay_frame;
+	uint32_t gain_delay_frame;
+} cam_device_sensor_ae_info_t;
 
 /*****************************************************************************/
 /**
@@ -470,6 +462,7 @@ typedef struct cam_device_sensor_drv_mode_info_s {
 		af_mode; /**< Sensor auto focusing mode */
 	cam_device_sensor_data_type_t data_type; /**< Sensor data type */
 	cam_device_sensor_itf_type_t itf_type;	 /**< Sensor interface type */
+	cam_device_sensor_ae_info_t ae_info;   /**< Sensor AE info */
 } cam_device_sensor_drv_mode_info_t;
 
 /*****************************************************************************/
@@ -494,23 +487,90 @@ typedef struct cam_device_sensor_connect_port_info_s {
 	char name[20];	  /**< Pointer to sensor name */
 } cam_device_sensor_connect_port_info_t;
 
-/****************************************************************************/
+typedef enum hal_i2c_mode_e {
+	HAL_AXI_I2C_MODE	= 0x0000,
+	HAL_PS_I2C_MODE		= 0x0001,
+} hal_i2c_mode_t;
+
+typedef struct hal_i2c_config_s {
+	uint32_t	h_hal_i2c;
+	uint8_t	i2c_bus_id;
+	hal_i2c_mode_t	hal_i2c_mode;
+} hal_i2c_config_t;
+
+typedef enum sensor_drv_id_e {
+	SENSOR_DRV_ID_0, /**< Video input sensor index 0.*/
+	SENSOR_DRV_ID_1, /**< Video input sensor index 1.*/
+	SENSOR_DRV_ID_2, /**< Video input sensor index 2.*/
+	SENSOR_DRV_ID_3, /**< Video input sensor index 3.*/
+	SENSOR_DRV_ID_MAX,
+} sensor_drv_id_t;
+
+typedef struct cam_device_sensor_module_map_cfg_s {
+	char module_name[SENSOR_MODULE_NAME];
+	uint32_t sensor_dev_id;
+} cam_device_sensor_module_map_cfg_t;
+
+/*****************************************************************************/
 /**
- * @brief   Get the sensor information, e.g., sensor name, calibration file,
- *etc.
- *
- * @param   h_cam_device		  CamDevice driver handle
- * @param   p_sensor_info		 Pointer to sensor information structure
- *
- * @retval  RET_SUCCESS		 Operation succeeded
- * @retval  RET_WRONG_HANDLE	Invalid handle
- * @retval  RET_NULL_POINTER	Null pointer
- * @retval  RET_WRONG_STATE	 State machine in wrong state
- * @retval  RET_NOTSUPP		 Feature not supported
+ * @brief   CamDevice sensor meatdata parser information.
  *
  *****************************************************************************/
-RESULT vsi_cam_device_sensor_get_info(cam_device_handle_t h_cam_device,
-					  cam_device_sensor_info_t *p_sensor_info);
+typedef struct cam_device_sensor_metadata_parser_info_s {
+	cam_device_sensor_metadata_attr_t valid_mask;
+
+	uint32_t reg_num;
+	cam_device_sensor_register_t *p_reg;
+
+	uint8_t exp_frm_num;
+	uint32_t frm_crc;
+	cam_device_sensor_exposure_control_t exp_time;
+	cam_device_sensor_gain_t    a_gain;
+	cam_device_sensor_gain_t    d_gain;
+	cam_device_sensor_bls_t     blc;
+	// IsiSensorHist_t    hist;
+	// IsiSensorMeanLuma_t meanLuma;
+
+} cam_device_sensor_metadata_parser_info_t;
+
+/*****************************************************************************/
+/**
+ * @brief   CamDevice sensor meatdata information.
+ *
+ *****************************************************************************/
+typedef struct cam_device_sensor_metadata_s {
+	uint32_t chip_id;   //sensor version id
+	uint32_t frm_count;
+
+	cam_device_sensor_metadata_parser_info_t data;
+} cam_device_sensor_metadata_t;
+
+/*****************************************************************************/
+/**
+ * @brief   CamDevice sensor one time program information structure.
+ *
+ *****************************************************************************/
+typedef struct cam_device_sensor_otp_module_info_s {
+	uint16_t hw_version;                        /**< Module HW version */
+	uint16_t sensor_eeprom_revision;             /**< EEPROM revision */
+	uint16_t sensor_revision;                   /**< Image sensor revision */
+	uint16_t t_lens_revision;                    /**< Tlens revision */
+	uint16_t ircf_revision;                     /**< Ircf revision */
+	uint16_t lens_revision;                     /**< Lens revision */
+	uint16_t ca_revision;                       /**< Contact assembly revision */
+	uint16_t module_inte_id;                     /**< Module integrator ID */
+	uint16_t factory_id;                        /**< Factory ID */
+	uint16_t mirror_flip;                       /**< Image mirror and flip */
+	uint16_t t_lens_slave_id;                     /**< Tlens slave ID */
+	uint16_t sensor_eeprom_slave_id;              /**< EEPROM slave ID */
+	uint16_t sensor_slave_id;                    /**< Image sensor slave ID */
+	uint8_t  sensor_id[SENSOR_ID_LEN];          /**< Image sensor ID */
+	uint16_t manu_date_tear;                     /**< Manufacture Date (Year) */
+	uint16_t manu_date_month;                    /**< Manufacture Date (Month) */
+	uint16_t manu_date_day;                      /**< Manufacture Date (Date) */
+	uint8_t  barcode_module_sn[MODULE_SN_LEN];   /**< Barcode-Module SN */
+	uint16_t map_total_size;                     /**< Total size of EEPROM map */
+} cam_device_sensor_otp_module_info_t;
 
 /****************************************************************************/
 /**
@@ -561,7 +621,7 @@ RESULT vsi_cam_device_sensor_close(struct visp_dev *isp_dev,
  *****************************************************************************/
 RESULT vsi_cam_device_sensor_drv_handle_register(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
-	const cam_device_sensor_drv_cfg_t *p_sensor_drv);
+	const cam_device_sensor_drv_handle_t p_sensor_drv);
 
 /****************************************************************************/
 /**
@@ -598,7 +658,7 @@ RESULT vsi_cam_device_sensor_set_test_pattern(
  * @brief   Mapping the sensor driver.
  *
  * @param   h_cam_device		  Cam Device driver handle
- * @param   p_sensor_name		 Pointer to sensor driver name
+ * @param   pModuleInfo		  Pointer to sensor module
  * @param   p_sensor_drvhandle	Sensor driver handle pointer
  *
  * @retval  RET_SUCCESS		 Operation succeeded
@@ -612,7 +672,7 @@ RESULT vsi_cam_device_sensor_set_test_pattern(
  *****************************************************************************/
 RESULT vsi_cam_device_sensor_mapping(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
-	const char *p_sensor_name,
+	const cam_device_sensor_module_map_cfg_t *p_module_info,
 	cam_device_sensor_drv_handle_t *p_sensor_drvhandle);
 
 /****************************************************************************/
@@ -689,7 +749,7 @@ RESULT vsi_cam_device_sensor_get_frame_rate(cam_device_handle_t h_cam_device,
 /****************************************************************************/
 /**
  * @brief   Get the current working sensor mode, including the sensor working
-		status, (HDR/Linear, image width/height, etc.).
+			status, (HDR/Linear, image width/height, etc.).
  *
  * @param   h_cam_device		  Cam Device driver handle
  * @param   p_mode			   Pointer to sensor mode structure
@@ -951,14 +1011,13 @@ RESULT vsi_cam_device_sensor_get_metadata_win(
  * @retval  RET_SUCCESS		 Operation succeeded
  *
  *****************************************************************************/
-RESULT vsi_cam_device_sensor_get_number(cam_device_handle_t h_cam_device,
+RESULT vsi_cam_device_sensor_get_number(struct visp_dev *isp_dev,
 					uint16_t *p_number);
 
 /****************************************************************************/
 /**
  * @brief   Get all sensor mode information.
  *
- * @param   h_cam_device		  CamDevice driver handle
  * @param   p_sensor_list_info	 Pointer to sensor mode list
  * @param   sensor_num		   The number of sensors
  *
@@ -966,7 +1025,7 @@ RESULT vsi_cam_device_sensor_get_number(cam_device_handle_t h_cam_device,
  *
  *****************************************************************************/
 RESULT vsi_cam_device_sensor_get_list_info(
-	cam_device_handle_t h_cam_device,
+	struct visp_dev *isp_dev,
 	cam_device_sensor_list_info_t *p_sensor_list_info,
 	const uint16_t sensor_num);
 
@@ -984,8 +1043,11 @@ RESULT vsi_cam_device_sensor_get_list_info(
  *****************************************************************************/
 RESULT vsi_cam_device_sensor_get_connect_port_info(
 	struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
-	cam_device_mcm_port_id_t port_id,
+	sensor_drv_id_t sensor_drv_id,
 	cam_device_sensor_connect_port_info_t *p_port_info);
+
+RESULT hal_i2c_init(struct visp_dev *isp_dev, cam_device_handle_t h_cam_device,
+		    hal_i2c_config_t *p_hal_i2c_config);
 
 /* @} cam_device_sensor */
 

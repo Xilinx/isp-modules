@@ -67,13 +67,13 @@
 // #include <limits.h>
 #if 0
 #ifndef __cplusplus
-    /* Only C99 compilers know stdbool */
+	/* Only C99 compilers know stdbool */
 #if (__STDC_VERSION__ >= 199901L) || defined(CONFIG_HAVE_STDBOOL)
 #include <stdbool.h>
 #else
-//#define bool  unsigned  int
-//#define true    (1)
-//#define false   (0)
+		//#define bool  unsigned  int
+		//#define true    (1)
+		//#define false   (0)
 #endif
 #endif
 #endif

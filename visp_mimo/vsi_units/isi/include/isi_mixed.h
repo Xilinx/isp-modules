@@ -58,7 +58,8 @@
 typedef struct isi_cam_drv_config_mbox_s {
 	uint32_t camera_driver_id;
 	uint32_t p_isi_get_sensor_iss;
-	uint32_t camera_dev_id;
+	uint8_t i2c_bus_id;
+	uint32_t sensor_dev_id;
 	uint32_t instance_id;
 } isi_cam_drv_config_mbox_t;
 
