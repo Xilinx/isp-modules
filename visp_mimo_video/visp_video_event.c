@@ -217,3 +217,130 @@ int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event)
 
 	return ret;
 }
+
+
+int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
+		      struct v4l2_ctrl *ctrl)
+{
+	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
+	int ret;
+	struct visp_ctrl *isp_ctrl;
+	u8 *pdata;
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+	pr_err("%s %d\n", __func__, __LINE__);
+#if 0
+	struct visp_mimo_device *visp_vdev =
+		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+	pr_err(" #################### 1121 %s %d\n", __func__, __LINE__);
+	if (!event_pkg) {
+		dev_err(isp_dev->dev, "%s: event_shm not allocated\n", __func__);
+		return -ENOMEM;
+	}
+
+	if (!ctrl->p_new.p_u8) {
+		dev_err(isp_dev->dev, "%s: ctrl pointer invalid\n", __func__);
+		return -EINVAL;
+	}
+
+	pdata = event_pkg->data;
+
+	mutex_lock(&isp_dev->event_shm.event_lock);
+
+	/* Bounds check to prevent writing past buffer */
+	size_t required_size = sizeof(struct visp_event_pkg_head) + sizeof(struct visp_ctrl) +
+			       (ctrl->elem_size * ctrl->elems);
+	if (required_size > isp_dev->event_shm.size) {
+		dev_err(isp_dev->dev, "%s: ctrl data size %zu exceeds buffer size %u\n",
+			__func__, required_size, isp_dev->event_shm.size);
+		mutex_unlock(&isp_dev->event_shm.event_lock);
+		return -EOVERFLOW;
+	}
+
+	isp_ctrl = (struct visp_ctrl *)pdata;
+	isp_ctrl->cid = ctrl->id;
+	isp_ctrl->size = ctrl->elem_size * ctrl->elems;
+	memcpy(isp_ctrl->data, ctrl->p_new.p_u8, isp_ctrl->size);
+
+	event_pkg->head.pad = pad;
+	event_pkg->head.dev = isp_dev->id;
+	event_pkg->head.eid = VISP_EVENT_S_CTRL;
+	event_pkg->head.shm_fd = -1;  /* Not used with DMA-BUF */
+	event_pkg->head.shm_size = isp_dev->event_shm.size;
+	event_pkg->head.data_size = sizeof(struct visp_ctrl) + isp_ctrl->size;
+	event_pkg->ack = 0;
+	event_pkg->result = 0;
+
+	ret = visp_video_post_event(visp_vdev, event_pkg);
+
+	mutex_unlock(&isp_dev->event_shm.event_lock);
+#endif
+	return ret;
+}
+
+int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
+		      struct v4l2_ctrl *ctrl)
+{
+	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
+	int ret = 0;
+	struct visp_ctrl *isp_ctrl;
+	u8 *pdata;
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+	pr_err("%s %d\n", __func__, __LINE__);
+#if 0
+	struct visp_mimo_device *visp_vdev =
+		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+
+	if (!event_pkg) {
+		dev_err(isp_dev->dev, "%s: event_shm not allocated\n", __func__);
+		return -ENOMEM;
+	}
+
+	if (!ctrl->p_new.p_u8) {
+		dev_err(isp_dev->dev, "%s: ctrl pointer invalid\n", __func__);
+		return -EINVAL;
+	}
+
+	pdata = event_pkg->data;
+
+	mutex_lock(&isp_dev->event_shm.event_lock);
+
+	isp_ctrl = (struct visp_ctrl *)pdata;
+	isp_ctrl->cid = ctrl->id;
+	isp_ctrl->size = ctrl->elem_size * ctrl->elems;
+
+	event_pkg->head.pad = pad;
+	event_pkg->head.dev = isp_dev->id;
+	event_pkg->head.eid = VISP_EVENT_G_CTRL;
+	event_pkg->head.shm_fd = -1;  /* Not used with DMA-BUF */
+	event_pkg->head.shm_size = isp_dev->event_shm.size;
+	event_pkg->head.data_size = sizeof(struct visp_ctrl) + isp_ctrl->size;
+	event_pkg->ack = 0;
+	event_pkg->result = 0;
+
+	ret = visp_video_post_event(visp_vdev, event_pkg);
+
+	if (ret == 0) {
+		/* Bounds check to prevent reading past buffer */
+		size_t available_size = isp_dev->event_shm.size -
+					(sizeof(struct visp_event_pkg_head) + sizeof(struct visp_ctrl));
+		size_t copy_size = isp_ctrl->size;
+		if (copy_size > available_size) {
+			dev_err(isp_dev->dev, "%s: ctrl data size %zu exceeds buffer size %zu\n",
+				__func__, copy_size, available_size);
+			ret = -EOVERFLOW;
+		} else if (copy_size > ctrl->elem_size * ctrl->elems) {
+			dev_err(isp_dev->dev, "%s: returned size %zu exceeds ctrl size %u\n",
+				__func__, copy_size, ctrl->elem_size * ctrl->elems);
+			ret = -EOVERFLOW;
+		} else {
+			memcpy(ctrl->p_new.p_u8, pdata + sizeof(struct visp_ctrl),
+			       copy_size);
+		}
+	}
+
+	mutex_unlock(&isp_dev->event_shm.event_lock);
+#endif
+	return ret;
+}

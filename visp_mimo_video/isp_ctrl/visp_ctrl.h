@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -52,56 +51,53 @@
  *
  *****************************************************************************/
 
-#ifndef __VISP_VIDEO_EVENT_H__
-#define __VISP_VIDEO_EVENT_H__
+#ifndef __VISP_CTRL_H__
+#define __VISP_CTRL_H__
 
-#define VISP_VIDEO_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 1000)
+#ifdef __KERNEL__
+#include "visp_driver.h"
+#else
+#include <linux/videodev2.h>
+#endif
 
-#define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
-#define VISP_GET_EVENT_SHM_FD _IOR('I', BASE_VIDIOC_PRIVATE + 4, int32_t)
+#define VISP_CID_AE_BASE        (V4L2_CID_USER_BASE + 0x2000)
+#define VISP_CID_AWB_BASE       (V4L2_CID_USER_BASE + 0x2100)
+#define VISP_CID_GC_BASE        (V4L2_CID_USER_BASE + 0x2200)
+#define VISP_CID_2DNR_BASE      (V4L2_CID_USER_BASE + 0x2300)
+#define VISP_CID_3DNR_BASE      (V4L2_CID_USER_BASE + 0x2400)
+#define VISP_CID_BLS_BASE       (V4L2_CID_USER_BASE + 0x2500)
+#define VISP_CID_CCM_BASE       (V4L2_CID_USER_BASE + 0x2600)
+#define VISP_CID_CNR_BASE       (V4L2_CID_USER_BASE + 0x2700)
+#define VISP_CID_CPD_BASE       (V4L2_CID_USER_BASE + 0x2800)
+#define VISP_CID_CPROC_BASE     (V4L2_CID_USER_BASE + 0x2900)
+#define VISP_CID_DG_BASE        (V4L2_CID_USER_BASE + 0x2A00)
+#define VISP_CID_DMSC_BASE      (V4L2_CID_USER_BASE + 0x2B00)
+#define VISP_CID_DPCC_BASE      (V4L2_CID_USER_BASE + 0x2C00)
+#define VISP_CID_DPF_BASE       (V4L2_CID_USER_BASE + 0x2D00)
+#define VISP_CID_EE_BASE        (V4L2_CID_USER_BASE + 0x2E00)
+#define VISP_CID_GE_BASE        (V4L2_CID_USER_BASE + 0x2F00)
+#define VISP_CID_GTM_BASE       (V4L2_CID_USER_BASE + 0x3000)
+#define VISP_CID_HDR_BASE       (V4L2_CID_USER_BASE + 0x3100)
+#define VISP_CID_LSC_BASE       (V4L2_CID_USER_BASE + 0x3200)
+#define VISP_CID_LUT3D_BASE     (V4L2_CID_USER_BASE + 0x3300)
+#define VISP_CID_PDAF_BASE      (V4L2_CID_USER_BASE + 0x3400)
+#define VISP_CID_AF_BASE        (V4L2_CID_USER_BASE + 0x3500)
+#define VISP_CID_RGBIR_BASE     (V4L2_CID_USER_BASE + 0x3600)
+#define VISP_CID_WB_BASE        (V4L2_CID_USER_BASE + 0x3700)
+#define VISP_CID_WDR_BASE       (V4L2_CID_USER_BASE + 0x3800)
+#define VISP_CID_YNR_BASE       (V4L2_CID_USER_BASE + 0x3900)
+#define VISP_CID_AFM_BASE       (V4L2_CID_USER_BASE + 0x3A00)
+#define VISP_CID_EXP_BASE       (V4L2_CID_USER_BASE + 0x3B00)
+#define VISP_CID_GWDR_BASE      (V4L2_CID_USER_BASE + 0x3C00)
+#define VISP_CID_EXP_V3_BASE    (V4L2_CID_USER_BASE + 0x3D00)
+#define VISP_CID_SENSOR_BASE    (V4L2_CID_USER_BASE + 0x3E00)
+#define VISP_CID_HIST64_BASE    (V4L2_CID_USER_BASE + 0x3F00)
+#define VISP_CID_HIST256_BASE   (V4L2_CID_USER_BASE + 0x4000)
+#define VISP_CID_BASE_CTL_BASE  (V4L2_CID_USER_BASE + 0x4100)
 
-struct isp_rpu {
-	uint32_t rpu;
-	uint32_t isp;
-	uint32_t io_mode;
-};
+#ifdef __KERNEL__
+int visp_ctrl_init(struct visp_dev *isp_dev);
+int visp_ctrl_destroy(struct visp_dev *isp_dev);
+#endif
 
-enum visp_video_event_id {
-	VISP_VEVENT_CREATE_PIPELINE = 0,
-	VISP_VEVENT_DESTROY_PIPELINE,
-	VIDEO_EVENT_LOAD_CALIB,
-	VIDEO_EVENT_LOAD_JSON,
-	VISP_VEVENT_MAX,
-};
-
-struct visp_video_event_pkg_head {
-	uint32_t eid;
-	int32_t shm_fd;
-	uint32_t shm_size;
-	uint32_t data_size;
-};
-
-struct visp_video_event_pkg {
-	struct visp_video_event_pkg_head head;
-	uint8_t ack;
-	int32_t result;
-	uint8_t data[2048];
-};
-
-struct visp_video_dma_buf {
-	uint64_t pa;
-	int size;
-};
-
-#define VISP_VIDEO_IOC_DMABUF                                                  \
-	_IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_video_dma_buf)
-
-#include "visp_mimo_driver.h"
-int visp_video_create_pipeline_event(struct visp_mimo_device *visp_vdev);
-int visp_video_destroy_pipeline_event(struct visp_mimo_device *visp_vdev);
-int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event);
-
-int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
-
-int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
 #endif

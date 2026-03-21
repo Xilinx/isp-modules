@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -52,56 +51,62 @@
  *
  *****************************************************************************/
 
-#ifndef __VISP_VIDEO_EVENT_H__
-#define __VISP_VIDEO_EVENT_H__
+ISP_AE_V3 := 1
+ccflags-y += -DISP_AE_V3
 
-#define VISP_VIDEO_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 1000)
+ISP_AWB_V3 := 1
+ccflags-y += -DISP_AWB_V3
 
-#define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
-#define VISP_GET_EVENT_SHM_FD _IOR('I', BASE_VIDIOC_PRIVATE + 4, int32_t)
+ISP_GC_V2 := 1
+ccflags-y += -DISP_GC_V2
 
-struct isp_rpu {
-	uint32_t rpu;
-	uint32_t isp;
-	uint32_t io_mode;
-};
+ISP_2DNR_V5_2 := 1
+ccflags-y += -DISP_2DNR_V5_2
 
-enum visp_video_event_id {
-	VISP_VEVENT_CREATE_PIPELINE = 0,
-	VISP_VEVENT_DESTROY_PIPELINE,
-	VIDEO_EVENT_LOAD_CALIB,
-	VIDEO_EVENT_LOAD_JSON,
-	VISP_VEVENT_MAX,
-};
+ISP_EE_V2 := 1
+ccflags-y += -DISP_EE_V2
 
-struct visp_video_event_pkg_head {
-	uint32_t eid;
-	int32_t shm_fd;
-	uint32_t shm_size;
-	uint32_t data_size;
-};
+ISP_CPROC := 1
+ccflags-y += -DISP_CPROC
 
-struct visp_video_event_pkg {
-	struct visp_video_event_pkg_head head;
-	uint8_t ack;
-	int32_t result;
-	uint8_t data[2048];
-};
+ISP_WDR_V5_2 := 1
+ccflags-y += -DISP_WDR_V5_2
 
-struct visp_video_dma_buf {
-	uint64_t pa;
-	int size;
-};
+ISP_BLS := 1
+ccflags-y += -DISP_BLS
 
-#define VISP_VIDEO_IOC_DMABUF                                                  \
-	_IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_video_dma_buf)
+ISP_CCM := 1
+ccflags-y += -DISP_CCM
 
-#include "visp_mimo_driver.h"
-int visp_video_create_pipeline_event(struct visp_mimo_device *visp_vdev);
-int visp_video_destroy_pipeline_event(struct visp_mimo_device *visp_vdev);
-int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event);
+ISP_DPCC := 1
+ccflags-y += -DISP_DPCC
 
-int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
+ISP_GE := 1
+ccflags-y += -DISP_GE
 
-int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
-#endif
+ISP_LSC_V3 := 1
+ccflags-y += -DISP_LSC_V3
+
+ISP_WB_V1_1 := 1
+ccflags-y += -DISP_WB_V1_1
+
+ISP_DMSC_V2 := 1
+ccflags-y += -DISP_DMSC_V2
+
+ISP_EXP_V2 := 1
+ccflags-y += -DISP_EXP_V2
+
+ISP_GTM_V1 := 1
+ccflags-y += -DISP_GTM_V1
+
+ISP_HDR_V3_1 := 1
+ccflags-y += -DISP_HDR_V3_1
+
+ISP_RGBIR_V2_1 := 1
+ccflags-y += -DISP_RGBIR_V2_1
+
+ISP_DG_V1 := 1
+ccflags-y += -DISP_DG_V1
+
+ISP_CPD := 1
+ccflags-y += -DISP_CPD

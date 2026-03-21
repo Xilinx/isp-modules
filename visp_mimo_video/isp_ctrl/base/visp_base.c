@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -52,56 +51,107 @@
  *
  *****************************************************************************/
 
-#ifndef __VISP_VIDEO_EVENT_H__
-#define __VISP_VIDEO_EVENT_H__
+#include <media/v4l2-ioctl.h>
+#include "visp_ctrl.h"
+#include "visp_driver.h"
+#include "visp_event.h"
+#include "visp_base.h"
 
-#define VISP_VIDEO_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 1000)
+static int visp_base_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	int ret = 0;
+	struct visp_dev *isp_dev =
+		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
 
-#define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
-#define VISP_GET_EVENT_SHM_FD _IOR('I', BASE_VIDIOC_PRIVATE + 4, int32_t)
+	switch (ctrl->id) {
+	case VISP_CID_BASE_REG_ADDR:
+		ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
 
-struct isp_rpu {
-	uint32_t rpu;
-	uint32_t isp;
-	uint32_t io_mode;
+	case VISP_CID_BASE_REG_VAL:
+		ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
+
+	default:
+		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
+		return -EACCES;
+	}
+
+	return ret;
+}
+
+static int visp_base_g_ctrl(struct v4l2_ctrl *ctrl)
+{
+	int ret = 0;
+	struct visp_dev *isp_dev =
+		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
+
+	switch (ctrl->id) {
+	case VISP_CID_BASE_REG_ADDR:
+		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
+
+	case VISP_CID_BASE_REG_VAL:
+		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
+		break;
+
+	default:
+		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
+		return -EACCES;
+	}
+
+	return ret;
+}
+
+static const struct v4l2_ctrl_ops visp_base_ctrl_ops = {
+	.s_ctrl = visp_base_s_ctrl,
+	.g_volatile_ctrl = visp_base_g_ctrl,
 };
 
-enum visp_video_event_id {
-	VISP_VEVENT_CREATE_PIPELINE = 0,
-	VISP_VEVENT_DESTROY_PIPELINE,
-	VIDEO_EVENT_LOAD_CALIB,
-	VIDEO_EVENT_LOAD_JSON,
-	VISP_VEVENT_MAX,
+const struct v4l2_ctrl_config visp_base_ctrls[] = {
+	{
+		.ops = &visp_base_ctrl_ops,
+		.id = VISP_CID_BASE_REG_ADDR,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_base_reg_addr",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {1},
+	},
+	{
+		.ops = &visp_base_ctrl_ops,
+		.id = VISP_CID_BASE_REG_VAL,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_base_reg_val",
+		.step = 1,
+		.min = 0,
+		.max = 0xFFFFFFFF,
+		.dims = {1},
+	},
 };
 
-struct visp_video_event_pkg_head {
-	uint32_t eid;
-	int32_t shm_fd;
-	uint32_t shm_size;
-	uint32_t data_size;
-};
+int visp_base_ctrl_count(void)
+{
+	return ARRAY_SIZE(visp_base_ctrls);
+}
 
-struct visp_video_event_pkg {
-	struct visp_video_event_pkg_head head;
-	uint8_t ack;
-	int32_t result;
-	uint8_t data[2048];
-};
+int visp_base_ctrl_create(struct visp_dev *isp_dev)
+{
+	int i;
 
-struct visp_video_dma_buf {
-	uint64_t pa;
-	int size;
-};
+	for (i = 0; i < ARRAY_SIZE(visp_base_ctrls); i++) {
+		v4l2_ctrl_new_custom(&isp_dev->ctrl_handler,
+				     &visp_base_ctrls[i], NULL);
+		if (isp_dev->ctrl_handler.error) {
+			dev_err(isp_dev->dev,
+				"reigster isp base ctrl %s failed %d.\n",
+				visp_base_ctrls[i].name,
+				isp_dev->ctrl_handler.error);
+		}
+	}
 
-#define VISP_VIDEO_IOC_DMABUF                                                  \
-	_IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_video_dma_buf)
-
-#include "visp_mimo_driver.h"
-int visp_video_create_pipeline_event(struct visp_mimo_device *visp_vdev);
-int visp_video_destroy_pipeline_event(struct visp_mimo_device *visp_vdev);
-int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event);
-
-int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
-
-int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
-#endif
+	return 0;
+}

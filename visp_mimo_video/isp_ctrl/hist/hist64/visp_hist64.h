@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: MIT */
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -27,7 +26,7 @@
  *
  * The GPL License (GPL)
  *
- * Copyright (c) 2025 VeriSilicon Holdings Co., Ltd.
+ * Copyright (c) 2023 VeriSilicon Holdings Co., Ltd.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -52,56 +51,26 @@
  *
  *****************************************************************************/
 
-#ifndef __VISP_VIDEO_EVENT_H__
-#define __VISP_VIDEO_EVENT_H__
+#ifndef __VISP_HIST64_H__
+#define __VISP_HIST64_H__
 
-#define VISP_VIDEO_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 1000)
+#include "visp_ctrl.h"
 
-#define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
-#define VISP_GET_EVENT_SHM_FD _IOR('I', BASE_VIDIOC_PRIVATE + 4, int32_t)
+#define VISP_CID_HIST64_ENABLE              (VISP_CID_HIST64_BASE + 0x0000)
+#define VISP_CID_HIST64_RESET               (VISP_CID_HIST64_BASE + 0x0001)
+#define VISP_CID_HIST64_MODE                (VISP_CID_HIST64_BASE + 0x0002)
+#define VISP_CID_HIST64_CHANNEL             (VISP_CID_HIST64_BASE + 0x0003)
+#define VISP_CID_HIST64_WINDOW              (VISP_CID_HIST64_BASE + 0x0005)
+#define VISP_CID_HIST64_RCOEFF              (VISP_CID_HIST64_BASE + 0x0006)
+#define VISP_CID_HIST64_GCOEFF              (VISP_CID_HIST64_BASE + 0x0007)
+#define VISP_CID_HIST64_BCOEFF              (VISP_CID_HIST64_BASE + 0x0008)
+#define VISP_CID_HIST64_STATISTIC           (VISP_CID_HIST64_BASE + 0x0009)
 
-struct isp_rpu {
-	uint32_t rpu;
-	uint32_t isp;
-	uint32_t io_mode;
-};
+#define VISP_CID_HIST64_ALL_CONFIG          (VISP_CID_HIST64_BASE + 0x0010)
 
-enum visp_video_event_id {
-	VISP_VEVENT_CREATE_PIPELINE = 0,
-	VISP_VEVENT_DESTROY_PIPELINE,
-	VIDEO_EVENT_LOAD_CALIB,
-	VIDEO_EVENT_LOAD_JSON,
-	VISP_VEVENT_MAX,
-};
+#ifdef __KERNEL__
+int visp_hist64_ctrl_count(void);
+int visp_hist64_ctrl_create(struct visp_dev *isp_dev);
+#endif
 
-struct visp_video_event_pkg_head {
-	uint32_t eid;
-	int32_t shm_fd;
-	uint32_t shm_size;
-	uint32_t data_size;
-};
-
-struct visp_video_event_pkg {
-	struct visp_video_event_pkg_head head;
-	uint8_t ack;
-	int32_t result;
-	uint8_t data[2048];
-};
-
-struct visp_video_dma_buf {
-	uint64_t pa;
-	int size;
-};
-
-#define VISP_VIDEO_IOC_DMABUF                                                  \
-	_IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_video_dma_buf)
-
-#include "visp_mimo_driver.h"
-int visp_video_create_pipeline_event(struct visp_mimo_device *visp_vdev);
-int visp_video_destroy_pipeline_event(struct visp_mimo_device *visp_vdev);
-int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event);
-
-int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
-
-int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
 #endif

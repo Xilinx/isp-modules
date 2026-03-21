@@ -56,6 +56,7 @@
 #define __VISP_EVENT_H__
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
+#include "visp_video_event.h"
 
 #define VISP_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 2000)
 

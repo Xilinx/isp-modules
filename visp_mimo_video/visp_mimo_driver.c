@@ -57,6 +57,7 @@
 #include "visp_common.h"
 #include "visp_event.h"
 #include "cam_device.h"
+#include "visp_ctrl.h"
 
 #define DEBUG_ENABLE
 /* version 1.0 */
@@ -2586,16 +2587,6 @@ int visp_mimo_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = v4l2_device_register_subdev(&device->v4l2_dev, &device->subdev);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to register subdev\n");
-		goto err_v4l2;
-	}
-	ret = v4l2_device_register_subdev_nodes(&device->v4l2_dev);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to register subdev\n");
-		goto err_v4l2;
-	}
 	v4l2_dev = &device->v4l2_dev;
 	device->video_dev = visp_mimo_video_dev;
 	vfd = &device->video_dev;
@@ -2681,6 +2672,22 @@ int visp_mimo_probe(struct platform_device *pdev)
 		goto err_m2m;
 	}
 
+	/* Initialize V4L2 controls AFTER isp_dev is allocated */
+	visp_ctrl_init(device->isp_dev);
+
+	device->subdev.ctrl_handler = &device->isp_dev->ctrl_handler;
+
+	ret = v4l2_device_register_subdev(&device->v4l2_dev, &device->subdev);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to register subdev\n");
+		goto err_v4l2;
+	}
+	ret = v4l2_device_register_subdev_nodes(&device->v4l2_dev);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to register subdev\n");
+		goto err_v4l2;
+	}
+
 	/* Set DMA mask BEFORE any DMA allocations */
 	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
 	if (ret) {
@@ -2743,6 +2750,10 @@ void visp_mimo_remove(struct platform_device *pdev)
 		media_device_unregister(&device->mdev);
 		media_device_cleanup(&device->mdev);
 	}
+
+	/* Cleanup V4L2 controls */
+	if (device->isp_dev)
+		visp_ctrl_destroy(device->isp_dev);
 
 	/* Cleanup mutexes */
 	mutex_destroy(&device->lock);
