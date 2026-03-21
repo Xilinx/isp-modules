@@ -98,12 +98,12 @@ int visp_video_post_event(struct visp_mimo_device *visp_vdev,
 			  struct visp_event_pkg *event_pkg)
 {
 	struct v4l2_event event;
-	int timeout_ms = 400000;
+	int timeout_ms = 800000;
 	unsigned int i = 0;
 
 	memset(&event, 0, sizeof(event));
 
-	event.type = VISP_VIDEO_DEAMON_EVENT;
+	event.type = VISP_DEAMON_EVENT;
 	event.id = event_pkg->head.eid;
 	memcpy(event.u.data, &event_pkg->head, sizeof(event_pkg->head));
 /*

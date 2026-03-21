@@ -55,6 +55,7 @@
 #include <linux/miscdevice.h>
 #include "visp_mbox_driver.h"
 #include "visp_common.h"
+#include "visp_event.h"
 #include "cam_device.h"
 
 #define DEBUG_ENABLE
@@ -447,13 +448,13 @@ void visp_mimo_device_run(void *priv)
 	if (!on) {
 		visp_set_compatability_flag(device->isp_dev,
 			device->isp_dev->isp_ports[0].cam_device_handle, 1);
-		ret = visp_l_calib_event(device, 0, VIDEO_EVENT_LOAD_CALIB);
+		ret = visp_l_calib_event(device, 0, VISP_EVENT_LOAD_CALIB);
 		if (ret != 0)
 			pr_err("[EVENT_FAIL] %s %d\n", __func__, __LINE__);
 
 		media_isp_device_stream_on(device->isp_dev, 0, 0);
 
-		ret = visp_l_calib_event(device, 0, VIDEO_EVENT_LOAD_JSON);
+		ret = visp_l_calib_event(device, 0, VISP_EVENT_LOAD_JSON);
 		if (ret != 0)
 			pr_err("[EVENT_FAIL] %s %d\n", __func__, __LINE__);
 
@@ -2005,6 +2006,7 @@ static long visp_return_rpu_id(struct v4l2_subdev *sd, void *arg)
 
 	temp->rpu = device->isp_dev->isp_rpu;
 	temp->isp = device->isp_dev->id;
+	temp->io_mode = device->isp_dev->isp_mem;
 
 	return ret;
 }
