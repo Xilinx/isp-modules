@@ -103,6 +103,7 @@ struct visp_mimo_device {
 	struct mutex lock;
 	struct visp_dev *isp_dev;
 	struct media_device mdev;
+	struct media_pad pads[2];
 	struct visp_video_reserve_mem reserve_mem;
 	struct visp_video_event_shm event_shm;
 	struct work_struct event_work;
