@@ -65,21 +65,23 @@ struct visp_subdev_dma_buf {
 	int size;
 };
 
-static bool __maybe_unused visp_video_event_subscribed(struct visp_mimo_device *visp_vdev,
+static bool visp_subdev_event_subscribed(struct visp_mimo_device *visp_vdev,
 							uint32_t type, uint32_t id)
 {
 	struct v4l2_fh *fh;
 	unsigned long flags;
 	struct v4l2_subscribed_event *sev;
 	bool subscribed = false;
+	if (!visp_vdev->subdev.devnode) {
+		pr_err("%s: subdev devnode not initialized\n", __func__);
+		return false;
+	}
+	spin_lock_irqsave(&visp_vdev->subdev.devnode->fh_lock, flags);
 
-	spin_lock_irqsave(&visp_vdev->video_dev.fh_lock, flags);
-
-	list_for_each_entry(fh, &visp_vdev->video_dev.fh_list, list) {
+	list_for_each_entry(fh, &visp_vdev->subdev.devnode->fh_list, list) {
 		list_for_each_entry(sev, &fh->subscribed, list) {
 			if (sev->type == type && sev->id == id) {
 				subscribed = true;
-				pr_err(" %s %d\n", __func__, __LINE__);
 				break;
 			}
 		}
@@ -87,14 +89,14 @@ static bool __maybe_unused visp_video_event_subscribed(struct visp_mimo_device *
 			break;
 	}
 
-	spin_unlock_irqrestore(&visp_vdev->video_dev.fh_lock, flags);
+	spin_unlock_irqrestore(&visp_vdev->subdev.devnode->fh_lock, flags);
 
 	return subscribed;
 }
 
-int visp_video_post_event(struct visp_mimo_device *visp_vdev,
+int visp_subdev_post_event(struct visp_mimo_device *visp_vdev,
 			  struct visp_event_pkg *event_pkg);
-int visp_video_post_event(struct visp_mimo_device *visp_vdev,
+int visp_subdev_post_event(struct visp_mimo_device *visp_vdev,
 			  struct visp_event_pkg *event_pkg)
 {
 	struct v4l2_event event;
@@ -106,18 +108,15 @@ int visp_video_post_event(struct visp_mimo_device *visp_vdev,
 	event.type = VISP_DEAMON_EVENT;
 	event.id = event_pkg->head.eid;
 	memcpy(event.u.data, &event_pkg->head, sizeof(event_pkg->head));
-/*
- *	if (!visp_video_event_subscribed(visp_vdev, event.type, event.id)) {
- *		// return -EINVAL;
- *	}
- */
+
+	if (!visp_subdev_event_subscribed(visp_vdev, event.type, event.id)) {
+		return -EINVAL;
+	}
+
 	event_pkg->ack = 0;
 
 	v4l2_event_queue(visp_vdev->subdev.devnode, &event);
-/*
- *	if (event_pkg->ack) {
- *	}
- */
+
 	for (i = 0; i < timeout_ms; i++) {
 		if (event_pkg->ack)
 			break;
@@ -136,63 +135,18 @@ int visp_video_post_event(struct visp_mimo_device *visp_vdev,
 	return 0;
 }
 
-int visp_video_create_pipeline_event(struct visp_mimo_device *visp_vdev)
-{
-	struct visp_event_pkg *event_pkg = visp_vdev->event_shm.virt_addr;
-	int ret;
-
-	pr_err("%s %d\n", __func__, __LINE__);
-	mutex_lock(&visp_vdev->event_shm.event_lock);
-
-	event_pkg->head.eid = VISP_VEVENT_CREATE_PIPELINE;
-	event_pkg->head.shm_fd = -1;
-	event_pkg->head.shm_size = visp_vdev->event_shm.size;
-	event_pkg->head.data_size = 0;
-	event_pkg->ack = 0;
-	event_pkg->result = 0;
-
-	ret = visp_video_post_event(visp_vdev, event_pkg);
-
-	mutex_unlock(&visp_vdev->event_shm.event_lock);
-
-	return ret;
-}
-
-int visp_video_destroy_pipeline_event(struct visp_mimo_device *visp_vdev)
-{
-	struct visp_event_pkg *event_pkg = visp_vdev->event_shm.virt_addr;
-	int ret;
-
-	pr_err("%s %d\n", __func__, __LINE__);
-	mutex_lock(&visp_vdev->event_shm.event_lock);
-
-	event_pkg->head.eid = VISP_VEVENT_DESTROY_PIPELINE;
-	event_pkg->head.shm_fd = -1;
-	event_pkg->head.shm_size = visp_vdev->event_shm.size;
-	event_pkg->head.data_size = 0;
-	event_pkg->ack = 0;
-	event_pkg->result = 0;
-
-	ret = visp_video_post_event(visp_vdev, event_pkg);
-
-	mutex_unlock(&visp_vdev->event_shm.event_lock);
-
-	pr_err("%s %d\n", __func__, __LINE__);
-	return ret;
-}
-
-int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event)
+int visp_l_calib_event(struct visp_mimo_device *device, int pad, int event)
 {
 
-	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
+	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
 	int ret = 0;
 	uint8_t *pdata = event_pkg->data;
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 
-	mutex_lock(&isp_dev->event_shm.event_lock);
+	mutex_lock(&device->event_shm.event_lock);
 	event_pkg->head.eid = event;
 	event_pkg->head.shm_fd = -1;
-	event_pkg->head.shm_size = isp_dev->event_shm.size;
+	event_pkg->head.shm_size = device->event_shm.size;
 	event_pkg->head.data_size = 0;
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
@@ -203,17 +157,17 @@ int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event)
 
 	struct visp_subdev_dma_buf dma_buf;
 
-	dma_buf.pa = isp_dev->reserve_mem.pa;
-	dma_buf.size = isp_dev->reserve_mem.size;
+	dma_buf.pa = device->reserve_mem.pa;
+	dma_buf.size = device->reserve_mem.size;
 	memcpy(pdata, &dma_buf, sizeof(struct visp_subdev_dma_buf));
 	pdata += sizeof(struct visp_subdev_dma_buf);
 
 	event_pkg->head.data_size += sizeof(struct visp_subdev_dma_buf);
 
-	ret = visp_video_post_event(isp_dev, event_pkg);
+	ret = visp_subdev_post_event(device, event_pkg);
 	if (ret != 0)
 		pr_err("[FAIL] %s %d\n", __func__, __LINE__);
-	mutex_unlock(&isp_dev->event_shm.event_lock);
+	mutex_unlock(&device->event_shm.event_lock);
 
 	return ret;
 }
@@ -222,17 +176,12 @@ int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event)
 int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 		      struct v4l2_ctrl *ctrl)
 {
-	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
+	struct visp_mimo_device *device =
+		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
 	int ret;
 	struct visp_ctrl *isp_ctrl;
 	u8 *pdata;
-	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
-	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
-	pr_err("%s %d\n", __func__, __LINE__);
-#if 0
-	struct visp_mimo_device *visp_vdev =
-		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
-	pr_err(" #################### 1121 %s %d\n", __func__, __LINE__);
 	if (!event_pkg) {
 		dev_err(isp_dev->dev, "%s: event_shm not allocated\n", __func__);
 		return -ENOMEM;
@@ -245,15 +194,15 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 
 	pdata = event_pkg->data;
 
-	mutex_lock(&isp_dev->event_shm.event_lock);
+	mutex_lock(&device->event_shm.event_lock);
 
 	/* Bounds check to prevent writing past buffer */
 	size_t required_size = sizeof(struct visp_event_pkg_head) + sizeof(struct visp_ctrl) +
 			       (ctrl->elem_size * ctrl->elems);
-	if (required_size > isp_dev->event_shm.size) {
+	if (required_size > device->event_shm.size) {
 		dev_err(isp_dev->dev, "%s: ctrl data size %zu exceeds buffer size %u\n",
-			__func__, required_size, isp_dev->event_shm.size);
-		mutex_unlock(&isp_dev->event_shm.event_lock);
+			__func__, required_size, device->event_shm.size);
+		mutex_unlock(&device->event_shm.event_lock);
 		return -EOVERFLOW;
 	}
 
@@ -266,31 +215,26 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.dev = isp_dev->id;
 	event_pkg->head.eid = VISP_EVENT_S_CTRL;
 	event_pkg->head.shm_fd = -1;  /* Not used with DMA-BUF */
-	event_pkg->head.shm_size = isp_dev->event_shm.size;
+	event_pkg->head.shm_size = device->event_shm.size;
 	event_pkg->head.data_size = sizeof(struct visp_ctrl) + isp_ctrl->size;
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
-	ret = visp_video_post_event(visp_vdev, event_pkg);
+	ret = visp_subdev_post_event(device, event_pkg);
 
-	mutex_unlock(&isp_dev->event_shm.event_lock);
-#endif
+	mutex_unlock(&device->event_shm.event_lock);
 	return ret;
 }
 
 int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 		      struct v4l2_ctrl *ctrl)
 {
-	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
+	struct visp_mimo_device *device =
+		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
 	int ret = 0;
 	struct visp_ctrl *isp_ctrl;
 	u8 *pdata;
-	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
-	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
-	pr_err("%s %d\n", __func__, __LINE__);
-#if 0
-	struct visp_mimo_device *visp_vdev =
-		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
 
 	if (!event_pkg) {
 		dev_err(isp_dev->dev, "%s: event_shm not allocated\n", __func__);
@@ -304,7 +248,7 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 
 	pdata = event_pkg->data;
 
-	mutex_lock(&isp_dev->event_shm.event_lock);
+	mutex_lock(&device->event_shm.event_lock);
 
 	isp_ctrl = (struct visp_ctrl *)pdata;
 	isp_ctrl->cid = ctrl->id;
@@ -314,16 +258,16 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.dev = isp_dev->id;
 	event_pkg->head.eid = VISP_EVENT_G_CTRL;
 	event_pkg->head.shm_fd = -1;  /* Not used with DMA-BUF */
-	event_pkg->head.shm_size = isp_dev->event_shm.size;
+	event_pkg->head.shm_size = device->event_shm.size;
 	event_pkg->head.data_size = sizeof(struct visp_ctrl) + isp_ctrl->size;
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
-	ret = visp_video_post_event(visp_vdev, event_pkg);
+	ret = visp_subdev_post_event(device, event_pkg);
 
 	if (ret == 0) {
 		/* Bounds check to prevent reading past buffer */
-		size_t available_size = isp_dev->event_shm.size -
+		size_t available_size = device->event_shm.size -
 					(sizeof(struct visp_event_pkg_head) + sizeof(struct visp_ctrl));
 		size_t copy_size = isp_ctrl->size;
 		if (copy_size > available_size) {
@@ -340,7 +284,6 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 		}
 	}
 
-	mutex_unlock(&isp_dev->event_shm.event_lock);
-#endif
+	mutex_unlock(&device->event_shm.event_lock);
 	return ret;
 }

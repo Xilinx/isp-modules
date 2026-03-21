@@ -52,7 +52,6 @@
 #include <visp_mimo_driver.h>
 #include <visp_video_event.h>
 #include <visp_v4l2_std_exts.h>
-#include <linux/miscdevice.h>
 #include "visp_mbox_driver.h"
 #include "visp_common.h"
 #include "visp_event.h"
@@ -2013,7 +2012,14 @@ void visp_mimo_stop_streaming(struct vb2_queue *q)
 static int subdev_event_subscribe(struct v4l2_subdev *sd, struct v4l2_fh *fh,
 				  struct v4l2_event_subscription *sub)
 {
-	return v4l2_event_subscribe(fh, sub, 10, NULL);
+	switch (sub->type) {
+	case V4L2_EVENT_CTRL:
+		return v4l2_ctrl_subdev_subscribe_event(sd, fh, sub);
+	case VISP_DEAMON_EVENT:
+		return v4l2_event_subscribe(fh, sub, 10, NULL);
+	default:
+		return v4l2_event_subscribe(fh, sub, 10, NULL);
+	}
 }
 
 static int subdev_s_stream(struct v4l2_subdev *sd, int enable)
@@ -2108,13 +2114,29 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 }
 
 static const struct v4l2_subdev_core_ops subdev_core_ops = {
-	.ioctl = visp_priv_ioctl, .subscribe_event = subdev_event_subscribe,
-    //    .unsubscribe_event = subdev_event_unsubscribe,
+	.ioctl = visp_priv_ioctl,
+	.subscribe_event = subdev_event_subscribe,
+	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
 };
 
 static const struct v4l2_subdev_ops subdev_ops = {
 	.video = &subdev_video_ops,
 	.core = &subdev_core_ops,
+};
+
+static int visp_mimo_subdev_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	return 0;
+}
+
+static int visp_mimo_subdev_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+	return 0;
+}
+
+static const struct v4l2_subdev_internal_ops visp_mimo_internal_ops = {
+	.open = visp_mimo_subdev_open,
+	.close = visp_mimo_subdev_close,
 };
 
 /* DMA-BUF attachment structure to track per-attachment state */
@@ -2211,7 +2233,12 @@ static void visp_dmabuf_release(struct dma_buf *dmabuf)
 	/* Clear dmabuf pointer so it can be re-created on next use */
 	if (event_shm) {
 		event_shm->dmabuf = NULL;
-		dev_info(event_shm->dev, "DMA-BUF released, will re-export on next use\n");
+		if (event_shm->dev)
+			dev_info(event_shm->dev, "DMA-BUF released, will re-export on next use\n");
+		else
+			pr_info("DMA-BUF released (no device), will re-export on next use\n");
+	} else {
+		pr_warn("%s: event_shm is NULL\n", __func__);
 	}
 
 	/* Note: DMA memory is NOT freed here - it persists for re-use */
@@ -2221,6 +2248,16 @@ static void visp_dmabuf_release(struct dma_buf *dmabuf)
 static int visp_dmabuf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 {
 	struct visp_video_event_shm *event_shm = dmabuf->priv;
+
+	if (!event_shm) {
+		pr_err("%s: event_shm is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!event_shm->dev) {
+		pr_err("%s: event_shm->dev is NULL\n", __func__);
+		return -EINVAL;
+	}
 
 	return dma_mmap_coherent(event_shm->dev, vma, event_shm->virt_addr,
 				  event_shm->dma_handle, event_shm->size);
@@ -2576,6 +2613,7 @@ int visp_mimo_probe(struct platform_device *pdev)
 	device->subdev.owner = THIS_MODULE;
 	device->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	device->subdev.flags |= V4L2_SUBDEV_FL_HAS_EVENTS;
+	device->subdev.internal_ops = &visp_mimo_internal_ops;
 
 	v4l2_set_subdevdata(&device->subdev, device);
 	device->subdev.dev = &pdev->dev;
@@ -2643,6 +2681,16 @@ int visp_mimo_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto err_m2m;
 	}
+	/* Allocate extended structure */
+	device->isp_dev->extended_struct =
+	    devm_kzalloc(&pdev->dev, sizeof(struct visp_mimo_video_isp_dev_extended), GFP_KERNEL);
+	if (!device->isp_dev->extended_struct) {
+		ret = -ENOMEM;
+		goto err_m2m;
+	}
+
+	/* Set back-pointer for event handling */
+	ISP_DEV_EXTENDED_MIMO_VIDEO(device->isp_dev)->mimo_device = device;
 
 	/* Initialize isp_dq_out_index to a safe default value */
 	device->isp_dev->isp_dq_out_index = 0;
@@ -2730,7 +2778,7 @@ int visp_mimo_probe(struct platform_device *pdev)
 	}
 
 	/* Allocate DMA coherent memory for event shared memory */
-	device->event_shm.size = PAGE_SIZE;  /* 4KB (one page) */
+	device->event_shm.size = PAGE_SIZE * 8;  /* 32KB (8 pages) */
 	device->event_shm.dev = dev;
 	device->event_shm.virt_addr = dma_alloc_coherent(dev,
 							 device->event_shm.size,

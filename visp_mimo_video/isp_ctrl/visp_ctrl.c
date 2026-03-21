@@ -148,7 +148,6 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 	uint32_t ctrl_count = 0;
 
 #if defined(ISP_AE_V4)
-	pr_err("#### %s %d \n", __func__, __LINE__);
 	ctrl_count += visp_ae_ctrl_count();
 #endif
 
@@ -234,7 +233,6 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 
 	ctrl_count += visp_base_ctrl_count();
 
-	pr_err("#### %s %d \n", __func__, __LINE__);
 	v4l2_ctrl_handler_init(&isp_dev->ctrl_handler, ctrl_count);
 
 #if defined(ISP_AE_V4)
@@ -325,7 +323,6 @@ int visp_ctrl_init(struct visp_dev *isp_dev)
 
 	isp_dev->sd.ctrl_handler = &isp_dev->ctrl_handler;
 
-	pr_err("#### %s %d \n", __func__, __LINE__);
 	return 0;
 }
 

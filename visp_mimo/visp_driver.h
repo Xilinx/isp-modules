@@ -149,9 +149,12 @@ struct visp_pad_data {
 
 struct visp_event_shm {
 	struct mutex event_lock;
-	uint64_t phy_addr;
 	void *virt_addr;
 	uint32_t size;
+	dma_addr_t dma_handle;
+	struct dma_buf *dmabuf;
+	int dmabuf_fd;
+	struct device *dev;
 };
 
 #define MAX_IBA_PER_ISP 5
@@ -221,6 +224,10 @@ struct oba_info {
 	uint32_t ppc;
 	uint32_t bpp;
 	const char *data_format;
+};
+/* Extended structure for visp_mimo_video driver */
+struct visp_mimo_video_isp_dev_extended {
+	void *mimo_device;  /* Back-pointer to visp_mimo_device */
 };
 
 /*
@@ -335,6 +342,10 @@ struct visp_dev {
 	unsigned int isp_dq_out_index;
 	void *extended_struct;
 };
+
+/* Macro to access extended structure for visp_mimo_video */
+#define ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev) \
+	((struct visp_mimo_video_isp_dev_extended *)((isp_dev)->extended_struct))
 
 static inline int visp_get_num_pads(struct visp_dev *isp_dev)
 {

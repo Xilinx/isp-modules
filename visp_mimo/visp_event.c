@@ -155,7 +155,6 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	event_pkg->head.dev = isp_dev->id;
 	event_pkg->head.eid = VISP_EVENT_LOAD_CALIB;
 
-	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
 	event_pkg->head.data_size = 0;
 	// event_pkg->head.data_size = sizeof(media_isp_port_attr);
@@ -226,7 +225,6 @@ int visp_l_json_event(struct visp_dev *isp_dev, int pad)
 	event_pkg->head.dev = isp_dev->id;
 	event_pkg->head.eid = VISP_EVENT_LOAD_JSON;
 
-	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
 	event_pkg->head.data_size = 0;
 	// event_pkg->head.data_size = sizeof(media_isp_port_attr);
@@ -270,7 +268,6 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.pad = pad;
 	event_pkg->head.dev = isp_dev->id;
 	event_pkg->head.eid = VISP_EVENT_S_CTRL;
-	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
 	event_pkg->head.data_size = sizeof(isp_ctrl) + isp_ctrl->size;
 	event_pkg->ack = 0;
@@ -299,7 +296,6 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.pad = pad;
 	event_pkg->head.dev = isp_dev->id;
 	event_pkg->head.eid = VISP_EVENT_G_CTRL;
-	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
 	event_pkg->head.data_size = sizeof(isp_ctrl) + isp_ctrl->size;
 	event_pkg->ack = 0;
@@ -327,7 +323,6 @@ int visp_s_interval_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.pad = pad;
 	event_pkg->head.dev = isp_dev->id;
 	event_pkg->head.eid = VISP_EVENT_S_INTERVAL;
-	event_pkg->head.shm_addr = isp_dev->event_shm.phy_addr;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
 	event_pkg->head.data_size = sizeof(struct v4l2_fract);
 	event_pkg->ack = 0;

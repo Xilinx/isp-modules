@@ -48,7 +48,6 @@
 #include "visp_mbox_driver.h"
 #include <media/v4l2-device.h>
 #include <media/v4l2-subdev.h>
-#include <linux/miscdevice.h>
 
 #define MAX_SUPPORTED_DEVICE_COUNT 6
 #define MEM2MEM_NAME "isp_m2m"
@@ -106,7 +105,6 @@ struct visp_mimo_device {
 	struct media_pad pads[2];
 	struct visp_video_reserve_mem reserve_mem;
 	struct visp_video_event_shm event_shm;
-	struct work_struct event_work;
 };
 
 struct visp_mimo_ctx {

@@ -2286,8 +2286,6 @@ static int visp_probe(struct platform_device *pdev)
 	isp_dev->event_shm.virt_addr = (void *)__get_free_pages(GFP_KERNEL, 3);
 	isp_dev->event_shm.size = PAGE_SIZE * 8;
 	memset(isp_dev->event_shm.virt_addr, 0, isp_dev->event_shm.size);
-	isp_dev->event_shm.phy_addr =
-		virt_to_phys(isp_dev->event_shm.virt_addr);
 	mutex_init(&isp_dev->event_shm.event_lock);
 
 	visp_ctrl_init(isp_dev);
