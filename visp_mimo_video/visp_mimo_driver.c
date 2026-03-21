@@ -2521,7 +2521,6 @@ int visp_mimo_probe(struct platform_device *pdev)
 {
 	struct visp_mimo_device *device;
 	struct device *dev = &pdev->dev;
-	struct resource *res;
 	struct video_device *vfd;
 	struct v4l2_device *v4l2_dev;
 	int ret = 0;
@@ -2534,7 +2533,6 @@ int visp_mimo_probe(struct platform_device *pdev)
 	if (!device)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	v4l2_subdev_init(&device->subdev, &subdev_ops);
 	strscpy(device->subdev.name, "visp-mimo-video-subdev",
 		sizeof(device->subdev.name));
@@ -2609,7 +2607,7 @@ int visp_mimo_probe(struct platform_device *pdev)
 	    devm_kzalloc(&pdev->dev, sizeof(struct visp_dev), GFP_KERNEL);
 	if (!device->isp_dev) {
 		ret = -ENOMEM;
-		goto err_v4l2;
+		goto err_m2m;
 	}
 
 	/* Initialize isp_dq_out_index to a safe default value */
@@ -2627,21 +2625,21 @@ int visp_mimo_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "failed to parse params\n");
 		ret = -EINVAL;
-		goto err_v4l2;
+		goto err_m2m;
 	}
 
 	ret = xlnx_link_mbox(device->isp_dev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to init mbox\n");
 		ret = -EINVAL;
-		goto err_v4l2;
+		goto err_m2m;
 	}
 	num_mems = of_count_phandle_with_args(pdev->dev.of_node,
 					      "memory-region", NULL);
 	if (num_mems < 0) {
 		pr_err("%s no memory for calibration\n", __func__);
 		ret = -ENOMEM;
-		goto err_v4l2;
+		goto err_m2m;
 	}
 
 	device->isp_dev->frameout_cb = handle_frameout_buffer_mimo;
@@ -2653,18 +2651,20 @@ int visp_mimo_probe(struct platform_device *pdev)
 		node = of_parse_phandle(pdev->dev.of_node, "memory-region", i);
 		if (!node) {
 			ret = -EINVAL;
-			goto err_v4l2;
+			goto err_m2m;
 		}
 
 		rmem = of_reserved_mem_lookup(node);
 		if (!rmem) {
+			of_node_put(node);
 			ret = -EINVAL;
-			goto err_v4l2;
+			goto err_m2m;
 		}
 		pr_debug("reserve name:%s base:%llx size:%llx\n", rmem->name,
 			 rmem->base, rmem->size);
 		device->reserve_mem.pa = rmem->base;
 		device->reserve_mem.size = rmem->size;
+		of_node_put(node);
 	}
 	ret = video_register_device(vfd, VFL_TYPE_VIDEO, 0);
 	if (ret) {
@@ -2717,10 +2717,21 @@ int visp_mimo_probe(struct platform_device *pdev)
 
 	device->reserve_mem.va =
 	    ioremap_wc(device->reserve_mem.pa, device->reserve_mem.size);
+	if (!device->reserve_mem.va) {
+		dev_err(dev, "Failed to ioremap reserved memory\n");
+		ret = -ENOMEM;
+		goto err_ioremap;
+	}
 
 	probe_cnt += 1;
 
 	return 0;
+
+err_ioremap:
+	mutex_destroy(&device->event_shm.event_lock);
+	dma_free_coherent(dev, device->event_shm.size,
+			  device->event_shm.virt_addr,
+			  device->event_shm.dma_handle);
 
 err_alloc_event_shm:
 	video_unregister_device(&device->video_dev);
@@ -2732,6 +2743,11 @@ err_v4l2:
 	media_device_unregister(&device->mdev);
 	media_device_cleanup(&device->mdev);
 	v4l2_device_unregister(&device->v4l2_dev);
+	if (device->isp_dev) {
+		mutex_destroy(&device->isp_dev->ctrl_lock);
+		mutex_destroy(&device->isp_dev->mlock);
+	}
+	mutex_destroy(&device->lock);
 
 	return ret;
 }
@@ -2743,23 +2759,11 @@ void visp_mimo_remove(struct platform_device *pdev)
 	if (!device)
 		return;
 
-	/* Unregister subdev */
-	if (pdev->id >= 0) {
-		v4l2_async_unregister_subdev(&device->subdev);
-		media_entity_cleanup(&device->subdev.entity);
-		media_device_unregister(&device->mdev);
-		media_device_cleanup(&device->mdev);
-	}
-
-	/* Cleanup V4L2 controls */
+	/* Cleanup V4L2 controls before unregistering subdev */
 	if (device->isp_dev)
 		visp_ctrl_destroy(device->isp_dev);
 
-	/* Cleanup mutexes */
-	mutex_destroy(&device->lock);
-	mutex_destroy(&device->event_shm.event_lock);
-
-	/* Unmap reserved memory */
+	/* Unmap reserved memory (reverse of ioremap_wc) */
 	if (device->reserve_mem.va) {
 		iounmap(device->reserve_mem.va);
 		device->reserve_mem.va = NULL;
@@ -2784,10 +2788,23 @@ void visp_mimo_remove(struct platform_device *pdev)
 	}
 
 	if (pdev->id >= 0) {
+		/* Reverse order of probe */
 		video_unregister_device(&device->video_dev);
 		v4l2_m2m_release(device->m2m_dev);
+		v4l2_device_unregister_subdev(&device->subdev);
+		media_entity_cleanup(&device->subdev.entity);
+		media_device_unregister(&device->mdev);
+		media_device_cleanup(&device->mdev);
 		v4l2_device_unregister(&device->v4l2_dev);
 	}
+
+	/* Cleanup mutexes last */
+	mutex_destroy(&device->event_shm.event_lock);
+	if (device->isp_dev) {
+		mutex_destroy(&device->isp_dev->ctrl_lock);
+		mutex_destroy(&device->isp_dev->mlock);
+	}
+	mutex_destroy(&device->lock);
 
 	probe_cnt--;
 }
