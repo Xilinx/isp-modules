@@ -414,15 +414,12 @@ static int visp_set_compatability_flag(struct visp_dev *isp,
 	return 0;
 }
 
-static int on;
 void visp_mimo_device_run(void *priv)
 {
 	struct visp_mimo_ctx *ctx = priv;
 	struct visp_mimo_device *device = ctx->device;
 	struct vb2_v4l2_buffer *src_vb, *dst_vb;
 	dma_addr_t input_addr[2], output_addr[4];
-	struct vb2_v4l2_buffer *src_buf, *dst_buf;
-	int s_cnt, d_cnt;
 	struct visp_mimo_ctx *curr_ctx = ctx;
 	media_buffer_t *p_media_buffer = NULL;
 	mbox_post_msg *msg = NULL;
@@ -430,13 +427,6 @@ void visp_mimo_device_run(void *priv)
 	const int port = 0;
 	struct Chn_info info;
 	int ret;
-
-
-	s_cnt = v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx);
-	d_cnt = v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx);
-
-	src_buf = v4l2_m2m_next_src_buf(ctx->fh.m2m_ctx);
-	dst_buf = v4l2_m2m_next_dst_buf(ctx->fh.m2m_ctx);
 
 	inspect_source_buffers(ctx->fh.m2m_ctx, input_addr, output_addr);
 
@@ -446,26 +436,49 @@ void visp_mimo_device_run(void *priv)
 	device->isp_dev->op_a[1] = output_addr[1];
 	device->isp_dev->op_a[2] = output_addr[2];
 	device->isp_dev->op_a[3] = output_addr[3];
-	if (!on) {
-		visp_set_compatability_flag(device->isp_dev,
+	if (!device->isp_dev->streamon[port]) {
+		ret = visp_set_compatability_flag(device->isp_dev,
 			device->isp_dev->isp_ports[0].cam_device_handle, 1);
-		ret = visp_l_calib_event(device, 0, VISP_EVENT_LOAD_CALIB);
-		if (ret != 0)
-			pr_err("[EVENT_FAIL] %s %d\n", __func__, __LINE__);
+		if (ret != 0) {
+			dev_err(device->isp_dev->dev, "set_compatability_flag failed: %d\n", ret);
+			goto destroy_instance;
+		}
 
-		media_isp_device_stream_on(device->isp_dev, 0, 0);
+		ret = visp_l_calib_event(device, 0, VISP_EVENT_LOAD_CALIB);
+		if (ret != 0) {
+			dev_err(device->isp_dev->dev, "LOAD_CALIB event failed: %d\n", ret);
+			goto destroy_instance;
+		}
+
+		ret = media_isp_device_stream_on(device->isp_dev, 0, 0);
+		if (ret != 0) {
+			dev_err(device->isp_dev->dev, "stream_on failed: %d\n", ret);
+			goto destroy_instance;
+		}
 
 		ret = visp_l_calib_event(device, 0, VISP_EVENT_LOAD_JSON);
-		if (ret != 0)
-			pr_err("[EVENT_FAIL] %s %d\n", __func__, __LINE__);
+		if (ret != 0) {
+			dev_err(device->isp_dev->dev, "LOAD_JSON event failed: %d\n", ret);
+			goto clean_input_buffer_pool;
+		}
 
-		media_isp_device_stream_on_out(device->isp_dev, 0, 0);
-		on = 1;
+		ret = media_isp_device_stream_on_out(device->isp_dev, 0, 0);
+		if (ret != 0) {
+			dev_err(device->isp_dev->dev, "stream_on_out failed: %d\n", ret);
+			goto clean_input_buffer_pool;
+		}
+
+		/* Only set flag if all initialization steps succeeded */
+		device->isp_dev->streamon[port] = 1;
 	}
 
 	device->isp_dev->apu_wait_for_isp_frame_done = 1;
 
-	media_isp_device_deque(device->isp_dev, 0);
+	ret = media_isp_device_deque(device->isp_dev, 0);
+	if (ret != 0) {
+		dev_err(device->isp_dev->dev, "media_isp_device_deque failed: %d\n", ret);
+		goto stream_off;
+	}
 
 	wait_event_interruptible(device->isp_dev->wq_frame_done_finished,
 				 !device->isp_dev->apu_wait_for_isp_frame_done);
@@ -475,24 +488,29 @@ void visp_mimo_device_run(void *priv)
 	device->isp_dev->pending_frameout_msg[port] = NULL;
 	spin_unlock_irqrestore(&device->isp_dev->frameout_lock[port], flags);
 	if (!msg)
-		goto skip_isp_dequeue;
+		goto stream_off;
 
 	/* Allocate memory for the buffer */
 	p_media_buffer = kzalloc(sizeof(media_buffer_t), GFP_KERNEL);
 	if (!p_media_buffer) {
 		dev_err(device->isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__,
 			__LINE__);
-		goto skip_isp_dequeue;
+		if (device->isp_dev->rpu && device->isp_dev->rpu->rx_msg_cache && msg)
+			kmem_cache_free(device->isp_dev->rpu->rx_msg_cache, msg);
+		goto stream_off;
 	}
 
 	/* Dequeue buffer from the ISP device*/
 	ret = media_isp_device_dq_buf_out(device->isp_dev, &info, (void *)msg->payload,
 					 p_media_buffer);
-	if (ret != VSI_SUCCESS) {
+	/* Issue in DQ , This below check to be reenabled*/
+	/*if (ret != VSI_SUCCESS) {
 		dev_err(device->isp_dev->dev,
 			"MediaIspDeviceDqbuf failed with error %d\n",
 			ret);
-	}
+		kfree(p_media_buffer);
+		goto stream_off;
+	}*/
 
 	/* Free allocated buffer after successful processing*/
 	kfree(p_media_buffer);
@@ -517,6 +535,7 @@ void visp_mimo_device_run(void *priv)
 		dst_vb->timecode = src_vb->timecode;
 		dst_vb->flags &= ~V4L2_BUF_FLAG_TSTAMP_SRC_MASK;
 		dst_vb->flags |= src_vb->flags & V4L2_BUF_FLAG_TSTAMP_SRC_MASK;
+		src_vb->sequence = dst_vb->sequence = curr_ctx->sequence++;
 		v4l2_m2m_buf_done(src_vb, VB2_BUF_STATE_DONE);
 		v4l2_m2m_buf_done(dst_vb, VB2_BUF_STATE_DONE);
 	} else {
@@ -530,11 +549,25 @@ void visp_mimo_device_run(void *priv)
 		dev_err(device->isp_dev->dev, "Buffer removal failed: src_vb=%p, dst_vb=%p, dq_index=%d\n",
 			src_vb, dst_vb, device->isp_dev->isp_dq_out_index);
 	}
-	src_vb->sequence = dst_vb->sequence = curr_ctx->sequence++;
-skip_isp_dequeue:
+
+
 	if (device->isp_dev->rpu && device->isp_dev->rpu->rx_msg_cache && msg)
 		kmem_cache_free(device->isp_dev->rpu->rx_msg_cache, msg);
 	v4l2_m2m_job_finish(device->m2m_dev, curr_ctx->fh.m2m_ctx);
+
+	return;
+
+stream_off:
+	if (device->isp_dev->rpu && device->isp_dev->rpu->rx_msg_cache && msg)
+		kmem_cache_free(device->isp_dev->rpu->rx_msg_cache, msg);
+
+	if(device->isp_dev->streamon[port])
+		media_isp_device_stream_off(device->isp_dev, port, CAMDEV_BUFCHAIN_MP);
+clean_input_buffer_pool:
+	media_isp_device_destroy_buf_pool(device->isp_dev, port, CAMDEV_BUFCHAIN_RDMA);
+destroy_instance:
+	isp_destroy_pipeline(device->isp_dev, port, CAMDEV_BUFCHAIN_MP);
+
 }
 
 static const struct v4l2_format_info *visp_video_vfmt_info(u32 format)
@@ -1806,10 +1839,11 @@ int visp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 #else
 	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 #endif
+	const int port = 0;
 
-	if (on) {
+	if (ctx->device->isp_dev->streamon[port]) {
 		media_isp_stream_off(ctx->device->isp_dev, 0, 0);
-		on = 0;
+		ctx->device->isp_dev->streamon[port] = 0;
 	}
 	return v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, type);
 }

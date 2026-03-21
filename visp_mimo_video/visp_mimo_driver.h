@@ -131,6 +131,12 @@ extern int media_isp_device_mcm_set_format(struct visp_dev *isp_dev,
 					   uint8_t port);
 extern int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 				       uint8_t chn);
+extern int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
+					uint8_t chn);
+extern int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
+					      uint8_t port, uint8_t chn);
+extern int isp_destroy_pipeline(struct visp_dev *isp_dev, uint8_t port,
+				uint8_t chn);
 
 int xlnx_link_mbox(struct visp_dev *isp_dev);
 int isp_device_create_m_i_m_o(struct visp_dev *isp_dev, uint8_t port);

@@ -76,6 +76,9 @@ int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
 			    void *packet_from_rpu,
 			    media_buffer_t *p_media_buffer);
 
+int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
+				      uint8_t port, uint8_t chn);
+
 #define ENABLE_LOG 1
 
 #ifdef ENABLE_LOG

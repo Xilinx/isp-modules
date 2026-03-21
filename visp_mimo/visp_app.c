@@ -145,8 +145,8 @@ int media_isp_hal_free_buf(struct visp_dev *isp_dev, int port,
 	return VSI_SUCCESS;
 }
 
-static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
-						 uint8_t port, uint8_t chn)
+int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
+					       uint8_t port, uint8_t chn)
 {
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 	int ret_val = VSI_SUCCESS;
@@ -187,6 +187,7 @@ static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 
 	return ret_val;
 }
+EXPORT_SYMBOL_GPL(media_isp_device_destroy_buf_pool);
 
 int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 				uint8_t chn);
@@ -211,6 +212,7 @@ int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 
 	return ret_val;
 }
+EXPORT_SYMBOL_GPL(media_isp_device_stream_off);
 
 RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 					 cam_device_handle_t h_cam_device);
@@ -660,6 +662,7 @@ int isp_destroy_pipeline(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 
 	return VSI_SUCCESS;
 }
+EXPORT_SYMBOL_GPL(isp_destroy_pipeline);
 
 int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 {
