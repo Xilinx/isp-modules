@@ -2708,17 +2708,15 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 				__func__, __LINE__, isp_dev->id, port);
 			ret = -ENOMEM;
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			isp_device_destroy(isp_dev, port, chn);
+			return ret;
 		}
 		if (ret == -EPIPE) {
 			dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
 				isp_dev->id, port);
 		}
 
-		if (ret) {
-			mutex_unlock(&isp_dev->rpu->rpu_lock);
-			isp_device_destroy(isp_dev, port, chn);
-			return ret;
-		}
 #endif
 
 		ret = media_isp_device_camera_connect(isp_dev, pad);
@@ -2739,20 +2737,20 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 				__func__, __LINE__, isp_dev->id, port);
 			ret = -ENOMEM;
-		}
-		if (ret == -EPIPE) {
-			dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
-				isp_dev->id, port);
-		}
-
-		if (ret) {
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
 			media_isp_device_camera_dis_connect(isp_dev, port, chn);
 			isp_device_destroy(isp_dev, port, chn);
 			return ret;
 		}
-		/* indicate json is loaded, and 3a lib is registered */
-		isp_dev->isp_ports[port].load_json = (bool_t)true;
+		if (ret == -EPIPE) {
+			dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
+				isp_dev->id, port);
+		}
+		if (!ret)
+		{
+			/* indicate json is loaded, and 3a lib is registered */
+			isp_dev->isp_ports[port].load_json = (bool_t)true;
+		}
 #endif
 	}
 	mutex_unlock(&isp_dev->rpu->rpu_lock);
