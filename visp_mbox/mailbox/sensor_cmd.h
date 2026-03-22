@@ -526,6 +526,7 @@ typedef enum {
 	MB_CMD_RES_TIMEOUT,
 	MB_CMD_END,
 	MB_CMD_BUF_RET,
+	APU_2_RPU_MB_CMD_SWITCH_TO_LLP,
 
 	DUMMY_MB_CMD = 0xdeadfeed,
 } mb_cmd_id_e;

@@ -11,6 +11,7 @@ $(TARGET)-objs += visp_procfs.o
 $(TARGET)-objs += isp_ctrl/visp_ctrl.o
 $(TARGET)-objs += visp_app.o
 $(TARGET)-objs += iba.o
+$(TARGET)-objs += oba.o
 
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device_api.o
 $(TARGET)-objs += vsi_units/source/cam_device/cam_device.o

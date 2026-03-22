@@ -144,6 +144,41 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 				   isp_dev->isp_ports[port].bufmode);
 			seq_printf(sfile, "hw_mcm      : %s\n",
 					isp_dev->isp_ports[port].hw_mcm ? "1 / Enable" : "0 / Disable" );
+
+			/* Display LLP status, capability, and which path it's enabled for */
+			{
+				int llp_path = -1;
+				int capable_path = -1;
+				int i;
+				const char *path_names[] = {"MP", "SP1", "SP2", "RAW"};
+
+				/* Find which path is enabled */
+				for (i = 0; i < 4; i++) {
+					if (ISP_DEV_EXTENDED(isp_dev)->llp[i]) {
+						llp_path = i;
+						break;
+					}
+				}
+
+				/* Find which path is capable (from device tree) */
+				for (i = 0; i < 4; i++) {
+					if (ISP_DEV_EXTENDED(isp_dev)->llp_capable[i]) {
+						capable_path = i;
+						break;
+					}
+				}
+
+				/* Display status */
+				if (llp_path >= 0) {
+					seq_printf(sfile, "llp         : Enabled (Path: %s/%d, Capable: %s)\n",
+						path_names[llp_path], llp_path,
+						capable_path >= 0 ? path_names[capable_path] : "None");
+				} else {
+					seq_printf(sfile, "llp         : Disabled (Capable: %s)\n",
+						capable_path >= 0 ? path_names[capable_path] : "None");
+				}
+			}
+
 			seq_printf(sfile,
 				   "#################################\n\n\n");
 		}
@@ -344,6 +379,72 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 						isp_dev->isp_ports[port].hw_mcm=(bool)false;
 					}
 				}
+			} else if (strcmp(val, "llp") == 0) {
+			    val = strsep(&kv_cur, kv_delim);
+			    if (val) {
+				    int i;
+				    int path = -1;
+				    const char *path_names[] = {"MP", "SP1", "SP2", "RAW"};
+
+				    /* Check for "off" or "disable" to disable all capable paths */
+				    if (strcasecmp(val, "off") == 0 || strcasecmp(val, "disable") == 0) {
+					    for (i = 0; i < 4; i++) {
+						    if (ISP_DEV_EXTENDED(isp_dev)->llp_capable[i]) {
+							    ISP_DEV_EXTENDED(isp_dev)->llp[i] = 0;
+						    }
+					    }
+					    dev_info(isp_dev->dev, "LLP disabled for all capable paths\n");
+				    }
+				    /* Check for path names (case-insensitive) */
+				    else if (strcasecmp(val, "mp") == 0 || strcasecmp(val, "main") == 0) {
+					    path = 0;
+				    }
+				    else if (strcasecmp(val, "sp") == 0 || strcasecmp(val, "sp1") == 0 ||
+					     strcasecmp(val, "self") == 0 || strcasecmp(val, "self1") == 0) {
+					    path = 1;
+				    }
+				    else if (strcasecmp(val, "sp2") == 0 || strcasecmp(val, "self2") == 0) {
+					    path = 2;
+				    }
+				    else if (strcasecmp(val, "raw") == 0) {
+					    path = 3;
+				    }
+				    /* Check for numeric value (0-3) to enable specific path */
+				    else if (isdigit(*val)) {
+					    path = simple_strtoul(val, &end, 0);
+					    if (path >= 4) {
+						    dev_warn(isp_dev->dev,
+							    "Invalid LLP path %d (must be 0-3)\n", path);
+						    path = -1;
+					    }
+				    }
+				    else {
+					    dev_warn(isp_dev->dev,
+						    "Invalid LLP value '%s' (use: mp/sp1/sp2/raw, 0-3, or off)\n",
+						    val);
+				    }
+
+				    /* Enable the selected path if valid and capable */
+				    if (path >= 0 && path < 4) {
+					    /* Check if this path is LLP-capable from device tree */
+					    if (!ISP_DEV_EXTENDED(isp_dev)->llp_capable[path]) {
+						    dev_warn(isp_dev->dev,
+							    "LLP path %d (%s) is not capable (not configured in device tree)\n",
+							    path, path_names[path]);
+					    } else {
+						    /* First disable all capable paths */
+						    for (i = 0; i < 4; i++) {
+							    if (ISP_DEV_EXTENDED(isp_dev)->llp_capable[i]) {
+								    ISP_DEV_EXTENDED(isp_dev)->llp[i] = 0;
+							    }
+						    }
+						    /* Then enable the specified path */
+						    ISP_DEV_EXTENDED(isp_dev)->llp[path] = 1;
+						    dev_info(isp_dev->dev, "LLP enabled for path %d (%s)\n",
+							    path, path_names[path]);
+					    }
+				    }
+			    }
 			}
 }
 	}

@@ -56,6 +56,7 @@
 #include "cam_device_buffer_api.h"
 #include "cam_device_sensor_api.h"
 #include "iba.h"
+#include "oba.h"
 #include "media_isp.h"
 #include "media_isp_calib.h"
 #include "sensor_cmd.h"
@@ -564,13 +565,80 @@ ERR_TO_DEINIT_CHAIN:
 
 	return ret_val;
 }
+int inform_llp_config_to_rpu(struct visp_dev *isp_dev, uint8_t port,
+				cam_device_handle_t h_cam_device, uint8_t chn)
+{
+	RESULT result = RET_SUCCESS;
+	uint8_t *p_data = NULL;
+	payload_packet *packet = NULL;
+
+	cam_device_context_t *p_cam_dev_ctx =
+	    (cam_device_context_t *)h_cam_device;
+	if (p_cam_dev_ctx == NULL)
+		return RET_WRONG_HANDLE;
+
+	p_cam_dev_ctx->cookie++;
+
+	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
+	if (!packet) {
+		dev_err(isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__,
+			__LINE__);
+		return -ENOMEM;
+	}
+
+	packet->cookie = p_cam_dev_ctx->cookie;
+	packet->type = CMD;
+	packet->payload_size = 0;
+
+	p_data = packet->payload;
+
+	memcpy(packet->payload, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
+	packet->payload_size += sizeof(uint32_t);
+	p_data += sizeof(uint32_t);
+
+	uint8_t llp_value = (chn < 4 && ISP_DEV_EXTENDED(isp_dev)->llp[chn]) ? 1 : 0;
+	dev_info(isp_dev->dev, "LLP Value of isp : %d channel: %d value : %d cmd:APU_2_RPU_MB_CMD_SWITCH_TO_LLP:%d\n", isp_dev->id, chn, llp_value,APU_2_RPU_MB_CMD_SWITCH_TO_LLP);
+	*(p_data) = llp_value;
+	packet->payload_size += sizeof(uint8_t);
+	p_data += sizeof(uint8_t);
+
+	*(p_data) = chn;
+	packet->payload_size += sizeof(uint8_t);
+	p_data += sizeof(uint8_t);
+	/* RPU will fill powner of output buffer*/
+	packet->payload_size += sizeof(uint32_t);
+
+	if (packet->payload_size > MAX_ITEM) {
+		kfree(packet);
+		return RET_OUTOFRANGE;
+	}
+
+	result = xlnx_send_mbox_data_cmd(
+	    isp_dev, APU_2_RPU_MB_CMD_SWITCH_TO_LLP, packet,
+	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
+	    MBOX_CORE_APU);
+	if (result != RET_SUCCESS)
+	{
+		kfree(packet);
+		return RET_FAILURE;
+	}
+	output_buffer_t *p_media_buffer = VSI_NULL;
+	p_media_buffer = isp_dev->isp_ports[port]
+			    .isp_chns[0]
+			    .cam_device_bufs[0];
+	memcpy(&(p_media_buffer->p_owner), p_data, sizeof(uint32_t));
+
+	kfree(packet);
+	return result;
+
+}
 
 int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 			       uint8_t chn)
 {
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 	int ret_val = VSI_SUCCESS;
-	int pad_index = -1;
+	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 	cam_device_path_streaming_cfg_t PathStatus;
 
 	/*Create Buffer pool*/
@@ -595,6 +663,36 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 	PathStatus.out_path_enable |= (1 << chn);
 
 	isp_send_atm_prop_to_rpu(isp_dev, isp_port->cam_device_handle);
+       /* LLP specififc stream on flow*/
+	if (chn < 4 && ISP_DEV_EXTENDED(isp_dev)->llp[chn])
+	{
+		inform_llp_config_to_rpu(isp_dev, port, isp_port->cam_device_handle, chn);
+
+		ret_val = oba_init_send_command(isp_dev, isp_port->cam_device_handle, chn);
+		if (ret_val != RET_SUCCESS) {
+			dev_err(isp_dev->dev,
+				"port %d chn %d OBA init failed, ret is %d",
+				port, chn, ret_val);
+			goto ERR_TO_DESTROY_BUFPOOL;
+		}
+		int RetVal = media_isp_hal_buf_done(&isp_dev->sd, pad_index,
+							&(isp_dev->isp_ports[port]
+							 .isp_chns[chn]
+							 .bufs[0]));
+
+		if (RetVal != 0)
+		{
+			dev_dbg(
+			       isp_dev->dev,
+			       "Handle_Frameout_Buffer: MediaIspHalBufDone failed with error %d\n",
+			       RetVal);
+			dev_dbg(isp_dev->dev,
+				"Skip Buf: RetVal=%d, ISP=%d, BUF=0x%llx\n",
+				 RetVal, isp_dev->id,
+				 isp_dev->isp_ports[port].isp_chns[chn].bufs[0].planes[0].dma_addr);
+		}
+	}
+
 	/*Set streaming state*/
 	ret_val = vsi_cam_device_set_path_streaming(
 	    isp_dev, isp_port->cam_device_handle, &PathStatus);
@@ -607,7 +705,6 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 		goto ERR_TO_DESTROY_BUFPOOL;
 	}
 
-	pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 	isp_dev->streamon[pad_index] = 1;
 	return ret_val;
 

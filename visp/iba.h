@@ -27,9 +27,9 @@
 
 #include "cam_device_calibration.h"
 #include "cam_device_common.h"
-#include "iba.h"
 #include "visp_driver.h"
 #define MAX_IBA_PER_TILE 5UL
+#define MAX_IBA_PER_ISP 5
 
 #define VISP_PLATFORM
 typedef enum iba_id {

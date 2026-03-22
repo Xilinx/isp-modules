@@ -88,6 +88,7 @@
 #include "visp_app.h"
 #include "visp_common.h"
 #include "visp_mbox_driver.h"
+#include "oba.h"
 
 #define VISP_DEFAULT_SENSOR "ox03f10"
 #define VISP_DEFAULT_SENSOR_MODE 0
@@ -2752,6 +2753,52 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	if (parse_iba(isp_dev, node)) {
 		dev_err(&pdev->dev, "Failed to parse IBA parameters\n");
 		return -EINVAL;
+	}
+
+	/* Read LLP (Low Latency Path) device tree parameters - optional */
+	{
+		u32 llpath0_iba = 0;
+		u32 llpath0_oba = 0;
+		bool llpath0_tile0_enabled = false;
+		unsigned int i;
+
+		/* Initialize all LLP arrays to 0 (no capability, disabled) */
+		for (i = 0; i < 4; i++) {
+			ISP_DEV_EXTENDED(isp_dev)->llp_capable[i] = 0;
+			ISP_DEV_EXTENDED(isp_dev)->llp[i] = 0;
+		}
+
+		/* Read xlnx,llpath0-iba (optional, no error if missing) */
+		ret = of_property_read_u32(node, "xlnx,llpath0-iba", &llpath0_iba);
+		if (!ret) {
+			dev_info(&pdev->dev, "xlnx,llpath0-iba: %u\n", llpath0_iba);
+		} else {
+			dev_dbg(&pdev->dev, "xlnx,llpath0-iba not found (optional)\n");
+		}
+
+		/* Read xlnx,llpath0-oba (optional, no error if missing) */
+		ret = of_property_read_u32(node, "xlnx,llpath0-oba", &llpath0_oba);
+		if (!ret) {
+			dev_info(&pdev->dev, "xlnx,llpath0-oba: %u\n", llpath0_oba);
+
+			/* Check if xlnx,llpath0-tile0-enabled is present (boolean property) */
+			llpath0_tile0_enabled = of_property_read_bool(node, "xlnx,llpath0-tile0-enabled");
+
+			/* If enabled flag is set and OBA index is valid, mark path as LLP-capable and enable it */
+			if (llpath0_tile0_enabled && llpath0_oba < 4) {
+				ISP_DEV_EXTENDED(isp_dev)->llp_capable[llpath0_oba] = 1;
+				ISP_DEV_EXTENDED(isp_dev)->llp[llpath0_oba] = 1;
+				dev_info(&pdev->dev,
+					"LLP capable and enabled for OBA path %u (llpath0-tile0-enabled is set)\n",
+					llpath0_oba);
+			} else if (llpath0_tile0_enabled && llpath0_oba >= 4) {
+				dev_warn(&pdev->dev,
+					"Invalid OBA index %u (must be 0-3), LLP not enabled\n",
+					llpath0_oba);
+			}
+		} else {
+			dev_dbg(&pdev->dev, "xlnx,llpath0-oba not found (optional)\n");
+		}
 	}
 
 	uint32_t num_mems = of_count_phandle_with_args(pdev->dev.of_node,

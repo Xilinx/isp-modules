@@ -74,6 +74,7 @@
 #include <linux/mailbox_controller.h>
 #include <linux/skbuff.h>
 #include <linux/kfifo.h>
+#include "oba.h"
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
 #define VISP_NAME "visp-isp-subdev"
@@ -233,6 +234,8 @@ enum isp_mode {
 struct visp_limo_isp_dev_extended {
 	int id;
 	int subdev_streamon_count[VISP_PORT_PAD_NR];
+	uint8_t llp[4]; /* LLP mode per path: 0=MP, 1=SP1, 2=SP2, 3=RAW (CAMDEV_BUFCHAIN_RAW) */
+	uint8_t llp_capable[4]; /* LLP capability from device tree (which paths can have LLP) */
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
@@ -252,11 +255,6 @@ static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
 
 #define MAX_OBA_PER_ISP 2UL
 
-struct oba_info {
-	uint32_t ppc;
-	uint32_t bpp;
-	const char *data_format;
-};
 
 /*
  * Increased from 16 to 64 to prevent frame drops at 30fps.
