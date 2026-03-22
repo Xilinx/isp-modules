@@ -61,6 +61,8 @@
 #include <linux/spinlock.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
+#include <linux/dma-buf.h>
+#include <linux/dma-mapping.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
@@ -1624,6 +1626,159 @@ int visp_buffer_free_public(struct visp_dev *isp_dev,
 	return ret;
 }
 
+/* DMA-BUF attachment structure to track per-attachment state */
+struct visp_dmabuf_attachment {
+	struct sg_table *sgt;
+	enum dma_data_direction dir;
+};
+
+static int visp_dmabuf_attach(struct dma_buf *dmabuf,
+			      struct dma_buf_attachment *attachment)
+{
+	struct visp_dmabuf_attachment *visp_attach;
+
+	/* Prevent module unload while dmabuf is attached/mapped */
+	if (!try_module_get(THIS_MODULE))
+		return -ENODEV;
+
+	visp_attach = kzalloc(sizeof(*visp_attach), GFP_KERNEL);
+	if (!visp_attach) {
+		module_put(THIS_MODULE);
+		return -ENOMEM;
+	}
+
+	visp_attach->dir = DMA_NONE;
+	attachment->priv = visp_attach;
+	return 0;
+}
+
+static void visp_dmabuf_detach(struct dma_buf *dmabuf,
+			       struct dma_buf_attachment *attachment)
+{
+	struct visp_dmabuf_attachment *visp_attach = attachment->priv;
+
+	if (visp_attach) {
+		/* If mapped, unmap first */
+		if (visp_attach->sgt && visp_attach->dir != DMA_NONE)
+			dma_buf_unmap_attachment(attachment, visp_attach->sgt, visp_attach->dir);
+
+		if (visp_attach->sgt) {
+			sg_free_table(visp_attach->sgt);
+			kfree(visp_attach->sgt);
+		}
+		kfree(visp_attach);
+		attachment->priv = NULL;
+	}
+
+	/* Allow module unload after detach */
+	module_put(THIS_MODULE);
+}
+
+static struct sg_table *visp_dmabuf_map(struct dma_buf_attachment *attachment,
+					enum dma_data_direction dir)
+{
+	struct visp_event_shm *event_shm = attachment->dmabuf->priv;
+	struct visp_dmabuf_attachment *visp_attach = attachment->priv;
+	struct sg_table *sgt;
+	struct page *page;
+	int ret;
+
+	if (!visp_attach)
+		return ERR_PTR(-EINVAL);
+
+	if (!event_shm || !event_shm->virt_addr) {
+		pr_err("visp: dmabuf_map failed - event_shm invalid\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	sgt = kzalloc(sizeof(*sgt), GFP_KERNEL);
+	if (!sgt)
+		return ERR_PTR(-ENOMEM);
+
+	ret = sg_alloc_table(sgt, 1, GFP_KERNEL);
+	if (ret) {
+		kfree(sgt);
+		return ERR_PTR(ret);
+	}
+
+	page = virt_to_page(event_shm->virt_addr);
+	sg_set_page(sgt->sgl, page, event_shm->size, 0);
+	sg_dma_address(sgt->sgl) = event_shm->dma_handle;
+	sg_dma_len(sgt->sgl) = event_shm->size;
+
+	visp_attach->sgt = sgt;
+	visp_attach->dir = dir;
+	return sgt;
+}
+
+static void visp_dmabuf_unmap(struct dma_buf_attachment *attachment,
+			      struct sg_table *sgt,
+			      enum dma_data_direction dir)
+{
+	/* No-op: memory is DMA coherent, no sync needed */
+}
+
+static void visp_dmabuf_release(struct dma_buf *dmabuf)
+{
+	struct visp_event_shm *event_shm = dmabuf->priv;
+
+	/* Clear dmabuf pointer so it can be re-created on next use */
+	if (event_shm) {
+		event_shm->dmabuf = NULL;
+		dev_info(event_shm->dev, "DMA-BUF released, will re-export on next use\n");
+	}
+
+	/* Note: DMA memory is NOT freed here - it persists for re-use */
+	/* DMA memory will be freed in visp_remove() when module unloads */
+}
+
+static int visp_dmabuf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
+{
+	struct visp_event_shm *event_shm = dmabuf->priv;
+
+	if (!event_shm || !event_shm->virt_addr || !event_shm->dev) {
+		pr_err("visp: dmabuf_mmap failed - event_shm invalid\n");
+		return -EINVAL;
+	}
+
+	return dma_mmap_coherent(event_shm->dev, vma, event_shm->virt_addr,
+				  event_shm->dma_handle, event_shm->size);
+}
+
+static const struct dma_buf_ops visp_dmabuf_ops = {
+	.attach = visp_dmabuf_attach,
+	.detach = visp_dmabuf_detach,
+	.map_dma_buf = visp_dmabuf_map,
+	.unmap_dma_buf = visp_dmabuf_unmap,
+	.release = visp_dmabuf_release,
+	.mmap = visp_dmabuf_mmap,
+};
+
+static int visp_export_dmabuf(struct device *dev, struct visp_event_shm *event_shm)
+{
+	DEFINE_DMA_BUF_EXPORT_INFO(exp_info);
+	struct dma_buf *dmabuf;
+
+	exp_info.ops = &visp_dmabuf_ops;
+	exp_info.size = event_shm->size;
+	exp_info.flags = O_RDWR | O_CLOEXEC;
+	exp_info.priv = event_shm;
+
+	dmabuf = dma_buf_export(&exp_info);
+	if (IS_ERR(dmabuf)) {
+		dev_err(dev, "Failed to export DMA-BUF: %ld\n", PTR_ERR(dmabuf));
+		return PTR_ERR(dmabuf);
+	}
+
+	event_shm->dmabuf = dmabuf;
+	event_shm->dmabuf_fd = -1; /* fd created per-process via ioctl */
+
+	dev_info(dev, "DMA-BUF exported successfully: virt=%p dma=%pad size=%d\n",
+		 event_shm->virt_addr, &event_shm->dma_handle, event_shm->size);
+
+	return 0;
+}
+
 static long visp_return_rpu_id(struct v4l2_subdev *sd, void *arg)
 {
 	long ret = 0;
@@ -1636,6 +1791,7 @@ static long visp_return_rpu_id(struct v4l2_subdev *sd, void *arg)
 
 	temp->rpu = isp_dev->isp_rpu;
 	temp->isp = isp_dev->id;
+	temp->io_mode = isp_dev->isp_mem;
 
 	dev_dbg(isp_dev->dev, "%s %d returning RPU id: %d for ISP : %d\n",
 		__func__, __LINE__, isp_dev->isp_rpu, isp_dev->id);
@@ -1701,6 +1857,40 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 	case VISP_GET_RPU_ID:
 		ret = visp_return_rpu_id(sd, arg);
 		break;
+	case VISP_GET_EVENT_SHM_FD: {
+		struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+
+		if (!isp_dev->event_shm.virt_addr) {
+			dev_err(isp_dev->event_shm.dev,
+				"VISP_GET_EVENT_SHM_FD: event_shm memory not allocated\n");
+			ret = -EINVAL;
+			break;
+		}
+
+		/* Lazy creation: export DMA-BUF on first FD request */
+		if (!isp_dev->event_shm.dmabuf) {
+			ret = visp_export_dmabuf(isp_dev->event_shm.dev, &isp_dev->event_shm);
+			if (ret) {
+				dev_err(isp_dev->event_shm.dev,
+					"VISP_GET_EVENT_SHM_FD: dmabuf export failed: %d\n", ret);
+				break;
+			}
+			dev_info(isp_dev->event_shm.dev, "DMA-BUF exported on first use\n");
+		}
+
+		/* Create per-process fd - dma_buf_fd() takes the reference from export */
+		*(int *)arg = dma_buf_fd(isp_dev->event_shm.dmabuf, O_RDWR | O_CLOEXEC);
+		if (*(int *)arg < 0) {
+			dev_err(isp_dev->event_shm.dev,
+				"VISP_GET_EVENT_SHM_FD: dma_buf_fd failed: %d\n", *(int *)arg);
+			ret = *(int *)arg;
+		} else {
+			dev_info(isp_dev->event_shm.dev,
+				 "VISP_GET_EVENT_SHM_FD: returned fd=%d\n", *(int *)arg);
+			ret = 0;
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -2719,12 +2909,25 @@ static int visp_probe(struct platform_device *pdev)
 		goto err_register_procfs;
 	}
 
-	isp_dev->event_shm.virt_addr = (void *)__get_free_pages(GFP_KERNEL, 3);
-	isp_dev->event_shm.size = PAGE_SIZE * 8;
+	/* Allocate DMA coherent memory for event shared memory */
+	isp_dev->event_shm.size = PAGE_SIZE * 8;  /* 32KB (8 pages) */
+	isp_dev->event_shm.dev = dev;
+	isp_dev->event_shm.virt_addr = dma_alloc_coherent(dev,
+							 isp_dev->event_shm.size,
+							 &isp_dev->event_shm.dma_handle,
+							 GFP_KERNEL);
+	if (!isp_dev->event_shm.virt_addr) {
+		dev_err(dev, "Failed to allocate DMA coherent memory for event_shm\n");
+		ret = -ENOMEM;
+		goto err_alloc_event_shm;
+	}
+
 	memset(isp_dev->event_shm.virt_addr, 0, isp_dev->event_shm.size);
-	isp_dev->event_shm.phy_addr =
-	    virt_to_phys(isp_dev->event_shm.virt_addr);
 	mutex_init(&isp_dev->event_shm.event_lock);
+
+	/* DMA-BUF will be exported lazily on first VISP_GET_EVENT_SHM_FD ioctl */
+	isp_dev->event_shm.dmabuf = NULL;
+	isp_dev->event_shm.dmabuf_fd = -1;
 
 	isp_dev->reserve_mem.va =
 	    ioremap_wc(isp_dev->reserve_mem.pa, isp_dev->reserve_mem.size);
@@ -2774,6 +2977,17 @@ static int visp_probe(struct platform_device *pdev)
 err_destroy_enq_wq:
 	visp_destroy_enq_wqs(isp_dev);
 
+	/* Free DMA memory if it was allocated */
+	if (isp_dev->event_shm.virt_addr) {
+		dma_free_coherent(isp_dev->event_shm.dev, isp_dev->event_shm.size,
+				  isp_dev->event_shm.virt_addr,
+				  isp_dev->event_shm.dma_handle);
+		isp_dev->event_shm.virt_addr = NULL;
+	}
+
+err_alloc_event_shm:
+	visp_procfs_unregister(isp_dev->pde);
+
 err_register_procfs:
 	v4l2_async_unregister_subdev(&isp_dev->sd);
 
@@ -2809,7 +3023,26 @@ static void visp_remove(struct platform_device *pdev)
 	v4l2_async_notifier_cleanup(&isp_dev->notifier);
 #endif
 	media_entity_cleanup(&isp_dev->sd.entity);
-	free_pages((unsigned long)isp_dev->event_shm.virt_addr, 3);
+
+	/* Free DMA coherent memory for event_shm */
+	if (isp_dev->event_shm.virt_addr) {
+		/* If dmabuf still exists (fds still open), release it first */
+		if (isp_dev->event_shm.dmabuf) {
+			dev_warn(isp_dev->event_shm.dev,
+				 "Dmabuf still active during remove - cleaning up\n");
+			dma_buf_put(isp_dev->event_shm.dmabuf);
+			isp_dev->event_shm.dmabuf = NULL;
+			/* visp_dmabuf_release() will be called, but it won't free memory anymore */
+		}
+		/* Free the underlying DMA memory */
+		dma_free_coherent(isp_dev->event_shm.dev, isp_dev->event_shm.size,
+				  isp_dev->event_shm.virt_addr,
+				  isp_dev->event_shm.dma_handle);
+		dev_info(isp_dev->event_shm.dev, "Freed DMA coherent memory: %u bytes\n",
+			 isp_dev->event_shm.size);
+		isp_dev->event_shm.virt_addr = NULL;
+	}
+
 	visp_ctrl_destroy(isp_dev);
 	dev_info(&pdev->dev, "visp isp driver remove\n");
 
@@ -2860,3 +3093,4 @@ module_exit(visp_exit_module);
 MODULE_DESCRIPTION("Verisilicon isp v4l2 driver");
 MODULE_AUTHOR("Verisilicon ISP SW Team");
 MODULE_LICENSE("GPL");
+MODULE_INFO(import_ns, "DMA_BUF");
