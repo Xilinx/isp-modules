@@ -8,8 +8,4 @@ $(TARGET)-objs += visp_video_register.o
 ccflags-y  += -I$(PWD)/common/
 ccflags-y  += -g -DDEBUG
 
-ifneq ($(ALIGN_BYTES),)
-EXTRA_CFLAGS += -DALIGN_BYTES=$(ALIGN_BYTES)
-endif
-
 PWD := $(shell pwd)

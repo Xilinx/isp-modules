@@ -187,10 +187,5 @@ USER_INC += $(PWD)/visp/isp_ctrl/base/*.h
 
 EXTRA_CFLAGS += -DDEBUG -O2
 
-ifneq ($(ALIGN_BYTES),)
-EXTRA_CFLAGS += -DALIGN_BYTES=$(ALIGN_BYTES)
-endif
-
-
 PWD := $(shell pwd)
 

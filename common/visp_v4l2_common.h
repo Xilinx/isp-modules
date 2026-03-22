@@ -54,9 +54,15 @@
 #ifndef __VISP_V4L2_COMMON_H__
 #define __VISP_V4L2_COMMON_H__
 #include <linux/videodev2.h>
+#include <linux/compiler.h>
+
+/* Runtime configurable alignment bytes (default 16)
+ * Use READ_ONCE() for thread-safe access from multiple modules
+ */
+extern unsigned int visp_align_bytes;
 
 #ifndef ALIGN_BYTES
-#define ALIGN_BYTES	16
+#define ALIGN_BYTES	READ_ONCE(visp_align_bytes)
 #endif
 
 struct format_reserved {

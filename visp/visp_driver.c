@@ -95,6 +95,34 @@
 #define VISP_DEFAULT_SENSOR_MANU_JSON "/usr/share/limo_example_jsons/manual_ext.json"
 #define VISP_DEFAULT_SENSOR_AUTO_JSON "/usr/share/limo_example_jsons/auto.json"
 
+/* Runtime configurable alignment bytes for stride calculation (default 16) */
+unsigned int visp_align_bytes = 16;
+
+/* Validate power of 2, range 4-1024 */
+static int visp_align_bytes_set(const char *val, const struct kernel_param *kp)
+{
+	unsigned int n;
+
+	if (kstrtouint(val, 0, &n) || n < 4 || n > 1024 || (n & (n - 1))) {
+		pr_err("visp: Invalid align_bytes=%s (must be power of 2, range 4-1024). "
+		       "Keeping current value: %u\n", val, visp_align_bytes);
+		return -EINVAL;
+	}
+
+	visp_align_bytes = n;
+	pr_info("visp: align_bytes updated to %u\n", n);
+	return 0;
+}
+
+static const struct kernel_param_ops visp_align_ops = {
+	.set = visp_align_bytes_set,
+	.get = param_get_uint,
+};
+
+module_param_cb(align_bytes, &visp_align_ops, &visp_align_bytes, 0644);
+MODULE_PARM_DESC(align_bytes, "DMA buffer stride alignment (power of 2, 4-1024, default 16)");
+EXPORT_SYMBOL_GPL(visp_align_bytes);
+
 static uint32_t sensor_dev_id[VISP_PORT_NR] = {2, 6, 5, 10};
 
 struct visp_format visp_mp_fmts[] = {

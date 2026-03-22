@@ -345,7 +345,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					}
 				}
 			}
-		}
+}
 	}
 
 	mutex_unlock(&isp_proc->lock);
