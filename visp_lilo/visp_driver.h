@@ -151,9 +151,12 @@ struct visp_pad_data {
 
 struct visp_event_shm {
 	struct mutex event_lock;
-	uint64_t phy_addr;
 	void *virt_addr;
 	uint32_t size;
+	dma_addr_t dma_handle;
+	struct dma_buf *dmabuf;
+	int dmabuf_fd;
+	struct device *dev;
 };
 
 typedef struct iba_info {

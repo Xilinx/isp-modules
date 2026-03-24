@@ -98,7 +98,7 @@ struct visp_event_pkg_head {
 	uint32_t pad;
 	uint8_t dev;
 	uint32_t eid;
-	uint64_t shm_addr;
+	int32_t shm_fd;
 	uint32_t shm_size;
 	uint32_t data_size;
 };
@@ -118,6 +118,7 @@ struct visp_ext_buf_info {
 struct isp_rpu {
 	uint32_t rpu;
 	uint32_t isp;
+	uint32_t io_mode;
 };
 
 #define VISP_IOC_BUFDONE _IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_buf)
@@ -127,6 +128,7 @@ struct isp_rpu {
 	_IOWR('I', BASE_VIDIOC_PRIVATE + 2, struct visp_ext_buf_info)
 
 #define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
+#define VISP_GET_EVENT_SHM_FD _IOR('I', BASE_VIDIOC_PRIVATE + 4, int)
 
 #ifdef __KERNEL__
 #include "visp_driver.h"
