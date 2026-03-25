@@ -73,7 +73,7 @@
 #include "visp_v4l2_common.h"
 #include "visp_driver.h"
 #include "visp_event.h"
-#include "visp_ctrl.h"
+/*#include "visp_ctrl.h"*/
 #include "visp_procfs.h"
 #include "visp_v4l2_std_exts.h"
 #include <linux/interrupt.h>
@@ -2288,7 +2288,7 @@ static int visp_probe(struct platform_device *pdev)
 	memset(isp_dev->event_shm.virt_addr, 0, isp_dev->event_shm.size);
 	mutex_init(&isp_dev->event_shm.event_lock);
 
-	visp_ctrl_init(isp_dev);
+	/*visp_ctrl_init(isp_dev);*/
 
 	for (port = 0; port < VISP_PORT_NR; port++) {
 		mutex_init(&isp_dev->port_lock[port]);
@@ -2337,7 +2337,7 @@ static void visp_remove(struct platform_device *pdev)
 #endif
 	media_entity_cleanup(&isp_dev->sd.entity);
 	free_pages((unsigned long)isp_dev->event_shm.virt_addr, 3);
-	visp_ctrl_destroy(isp_dev);
+	/*visp_ctrl_destroy(isp_dev);*/
 	dev_info(&pdev->dev, "vvcam isp driver remove\n");
 
 }

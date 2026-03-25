@@ -19,7 +19,7 @@ $(TARGET)-objs-y += -Wconversion -Wsign-conversion -Wextra -Wall
 $(TARGET)-objs += visp_driver.o
 $(TARGET)-objs += visp_event.o
 $(TARGET)-objs += visp_procfs.o
-$(TARGET)-objs += isp_ctrl/visp_ctrl.o
+##$(TARGET)-objs += isp_ctrl/visp_ctrl.o
 $(TARGET)-objs += visp_app.o
 #$(TARGET)-objs += iba.o
 #$(TARGET)-objs += mailbox/mbox_cmd.o
@@ -41,8 +41,8 @@ ccflags-y += -I$(PWD)/common/
 #ccflags-y += -I$(PWD)/mbox/
 ccflags-y += -I$(PWD)/visp_mbox/mailbox/
 ccflags-y += -I$(PWD)/visp_mbox/
-ccflags-y += -I$(PWD)/visp_mimo/isp_ctrl/
-ccflags-y += -I$(PWD)/visp_mimo/isp_ctrl/ae/aev2/
+##ccflags-y += -I$(PWD)/visp_mimo/isp_ctrl/
+##ccflags-y += -I$(PWD)/visp_mimo/isp_ctrl/ae/aev2/
 ccflags-y += -I$(PWD)/visp_mimo/vsi_units/include/
 ccflags-y += -I$(PWD)/visp_mimo/vsi_units/include/cam_device/
 ccflags-y += -I$(PWD)/visp_mimo/include/
@@ -53,7 +53,7 @@ ccflags-y += -I$(PWD)/visp_mimo/vsi_units/
 ccflags-y += -I$(PWD)/visp_mimo/vsi_units/isi/
 
 
-USER_INC:=$(PWD)/visp_mimo/isp_ctrl/visp_ctrl.h
+##USER_INC:=$(PWD)/visp_mimo/isp_ctrl/visp_ctrl.h
 #USER_INC+=$(PWD)/isp_ctrl/visp_app.h
 #USER_INC+=$(PWD)/user_lib/source/vsi_units/include/cam_device/*h
 USER_INC += $(PWD)/visp_mbox/mailbox/*.h
@@ -497,9 +497,9 @@ ccflags-y += -I$(PWD)/visp_mimo/isp_ctrl/lut3d/lut3d_v1
 USER_INC += $(PWD)/visp_mimo/isp_ctrl/lut3d/lut3d_v1/*.h
 endif
 
-$(TARGET)-objs += isp_ctrl/sensor/visp_sensor.o
-ccflags-y += -I$(PWD)/visp_mimo/isp_ctrl/sensor
-USER_INC += $(PWD)/visp_mimo/isp_ctrl/sensor/*.h
+##$(TARGET)-objs += isp_ctrl/sensor/visp_sensor.o
+##ccflags-y += -I$(PWD)/visp_mimo/isp_ctrl/sensor
+##USER_INC += $(PWD)/visp_mimo/isp_ctrl/sensor/*.h
 
 ccflags-y += -DDEBUG -O2
 
