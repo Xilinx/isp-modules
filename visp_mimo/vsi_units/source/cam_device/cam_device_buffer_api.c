@@ -67,6 +67,7 @@ extern uint32_t cookie;
 #include <linux/ktime.h>
 #include <linux/time.h>
 #include <linux/timekeeping.h>
+#define APU_META_DATA_SIZE 1024
 
 RESULT vsi_cam_device_init_buf_chain(struct visp_dev *isp_dev,
 				     cam_device_handle_t h_cam_device,
@@ -436,7 +437,7 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 	 * size has allocated with 1024
 	 */
 	(*p_media_buf)->p_meta_data =
-	    kzalloc(1024, GFP_KERNEL);
+	    kzalloc(APU_META_DATA_SIZE, GFP_KERNEL);
 
 	packet->cookie = p_cam_dev_ctx->cookie;
 	packet->type = CMD;
@@ -535,9 +536,9 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 	p_data += sizeof(uint32_t);
 
 	memcpy((*p_media_buf)->p_meta_data, p_data,
-	       1024);
-	packet->payload_size += 1024;
-	p_data += 1024;
+	       APU_META_DATA_SIZE);
+	packet->payload_size += APU_META_DATA_SIZE;
+	p_data += APU_META_DATA_SIZE;
 
 #if 0
 	p_data += (sizeof(uint32_t) + sizeof(cam_device_buf_chain_id_t));
@@ -671,7 +672,9 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
-		return RET_FAILURE;
+		dev_err(isp_dev->dev, "%s:%d enque_buffer failed, result=%d\n",
+			__func__, __LINE__, result);
+
 	kfree(packet);
 	return result;
 }

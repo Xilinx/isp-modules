@@ -1692,15 +1692,19 @@ static int read_dq_buf_info(void *data, media_buffer_t *p_media_buffer,
 	memcpy(info, p_data, sizeof(struct Chn_info));
 	p_data += sizeof(struct Chn_info);
 	p_media_buffer->p_meta_data =
-		kzalloc(sizeof(pic_buf_meta_data_t), GFP_KERNEL);
+		kzalloc(APU_META_DATA_SIZE, GFP_KERNEL);
 	if (!(p_media_buffer->p_meta_data)) {
 		loge("FAILED TO KZALLOC %s %d\n", __func__, __LINE__);
 		return -ENOMEM;
 	}
 
-	memcpy(p_media_buffer->p_meta_data, p_data,
-		   sizeof(pic_buf_meta_data_t));
-	p_data += sizeof(pic_buf_meta_data_t);
+	/* memcpy(p_media_buffer->p_meta_data, p_data,
+	 * sizeof(pic_buf_meta_data_t));
+	 * p_data += sizeof(pic_buf_meta_data_t);
+	 */
+
+	memcpy(p_media_buffer->p_meta_data, p_data, APU_META_DATA_SIZE);
+	p_data += APU_META_DATA_SIZE;
 
 	memcpy(&(p_media_buffer->base_address), p_data, sizeof(uint32_t));
 	p_data += sizeof(uint32_t);

@@ -60,7 +60,6 @@
 #include <common/buf_defs.h>
 #include <common/return_codes.h>
 #include <ebase/types.h>
-#include <common/return_codes.h>
 #include "cam_device_api.h"
 #include "visp_app.h"
 

@@ -121,6 +121,7 @@ RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 #define VSI_FAILURE (-1)
 #define VSI_NULL ((void *)0)
 #define VSI_RPU_NOT_SUPPORT (0xFFFF)
+#define APU_META_DATA_SIZE 1024
 
 typedef enum ErrCode_E {
 	VSI_ERR_INVALID_DEVID = 1,
