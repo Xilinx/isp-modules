@@ -64,6 +64,12 @@
 #include <linux/delay.h>
 
 /*
+ * Enable sanity checks for stale completion detection.
+ * Disable in production to eliminate minimal overhead.
+ */
+//#define DEBUG_MBOX_SANITY_CHECKS
+
+/*
  * Process up to 32 messages per work execution.
  *
  * FIFO: 30 messages → drained in a single work cycle (<=32 msgs)
@@ -631,67 +637,64 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		return -EINVAL;
 	}
 
-	/* Extract instance_id, path, and buffer_index from payload */
+	/* Extract instance_id from payload (common to all commands) */
 	p_data = ((payload_packet *)data)->payload;
 	memcpy(&instance_id, p_data, sizeof(uint32_t));
 	p_data += sizeof(uint32_t);
-	memcpy(&path, p_data, sizeof(uint32_t));
-	p_data += sizeof(uint32_t);
-	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER)
-		memcpy(&buffer_index, p_data, sizeof(uint8_t));
-	path_idx = path;
-	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER && path == 6 &&
-	    isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0)
-		path_idx = 1; /* Firmware reports path 6 in MIMO; map to 1 */
 
-	/* Map instance_id to port: 4 instances per port (16 instances / 4 ports) */
+	/* Map instance_id to port: 4 instances per port (common to all commands) */
 	port = instance_id % MAX_PORTS;
 
 	if (port >= 4) {
-		pr_err("%s: Invalid port %u (max 95)\n", __func__, port);
+		pr_err("%s: Invalid port %u (max 3)\n", __func__, port);
 		return -EINVAL;
-	}
-
-	/* Validate path and buffer_index for ENQUE_BUFFER to prevent array out of bounds */
-	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
-		if (path_idx != 0 && path_idx != 1) {
-			pr_err("%s: Invalid path %u for ENQUE_BUFFER"
-			       "(expected 0 or 1)\n", __func__, path);
-			return -EINVAL;
-		}
-		if (buffer_index >= 32) {
-			pr_err("%s: Invalid buffer_index %u for ENQUE_BUFFER"
-			       "(max 31)\n", __func__, buffer_index);
-			return -EINVAL;
-		}
 	}
 
 	rpu = isp_dev->rpu;
 
-	/*
-	 * CRITICAL: Drain any stale completions and messages BEFORE posting command.
-	 * This prevents race where RPU responds before we reinitialize completion,
-	 * and ensures no leaked messages accumulate in FIFOs.
-	 * No lock needed here because:
-	 * 1. Completion APIs (reinit_completion, complete, wait_for_completion_*)
-	 *    are internally thread-safe
-	 * 2. Each [instance_id][path][buffer_index] represents a unique buffer
-	 * 3. Buffer management ensures same buffer isn't queued concurrently
-	 */
 	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
-		/* Drain stale completion - no FIFO drain needed with direct error code storage */
+		/* Extract path and buffer_index from payload */
+		memcpy(&path, p_data, sizeof(uint32_t));
+		p_data += sizeof(uint32_t);
+		memcpy(&buffer_index, p_data, sizeof(uint8_t));
+
+		/* Initialize path_idx for MIMO mapping */
+		path_idx = path;
+
+		/* MIMO path mapping: firmware reports path=6, map to path=1 */
+		if (path == 6 && isp_dev->ss_mode_i0 &&
+		    strcmp(isp_dev->ss_mode_i0, "mimo") == 0)
+			path_idx = 1;
+
+		/* Validate path for array bounds (only 0 and 1 supported) */
+		if (path_idx != 0 && path_idx != 1) {
+			pr_err("%s: Invalid path %u for ENQUE_BUFFER "
+			       "(expected 0 or 1)\n", __func__, path);
+			return -EINVAL;
+		}
+
+		/* Validate buffer_index for array bounds */
+		if (buffer_index >= 32) {
+			pr_err("%s: Invalid buffer_index %u for ENQUE_BUFFER "
+			       "(max 31)\n", __func__, buffer_index);
+			return -EINVAL;
+		}
+
+#ifdef DEBUG_MBOX_SANITY_CHECKS
+		/* Sanity check: Should never happen if buffer management is correct */
 		if (try_wait_for_completion(&isp_dev->apu_wait_for_enq_ack
 				    [port][path_idx][buffer_index])) {
-			dev_warn_ratelimited(rpu->dev,
-					     "Drained stale ENQUE_BUFFER"
-					     " completion (instance=%u path=%u"
-					     " buf=%u)\n", instance_id, path_idx,
-					     buffer_index);
+			dev_err(rpu->dev,
+				"BUG: Stale ENQUE_BUFFER completion detected! "
+				"Buffer %u already in use (instance=%u path=%u)\n",
+				buffer_index, instance_id, path_idx);
 		}
+#endif
 		reinit_completion(&isp_dev->apu_wait_for_enq_ack[port]
 				  [path_idx][buffer_index]);
 	} else {
-		/* Drain stale completion and its associated message - use port-level */
+#ifdef DEBUG_MBOX_SANITY_CHECKS
+		/* Sanity check: Drain stale completion and message */
 		if (try_wait_for_completion(&isp_dev->apu_wait_for_cmd_ack
 		    [port])) {
 			/* Also drain any stale message from FIFO */
@@ -700,11 +703,13 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 			mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
 			if (kfifo_out(&isp_dev->cmd_ack_fifo[port], &stale_msg, 1)) {
 				kmem_cache_free(rpu->rx_msg_cache, stale_msg);
-				dev_warn_ratelimited(rpu->dev, "Drained stale"
-						     "cmd ACK (port=%u)\n", port);
+				dev_err(rpu->dev,
+					"BUG: Stale cmd ACK detected (port=%u)\n",
+					port);
 			}
 			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
 		}
+#endif
 		reinit_completion(&isp_dev->apu_wait_for_cmd_ack[port]);
 	}
 
@@ -750,10 +755,6 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 	uint32_t port;
 	uint32_t path_idx = path;
 
-	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER && path == 6 &&
-	    isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0)
-		path_idx = 1; /* Firmware reports path 6 in MIMO; map to 1 */
-
 	if (!isp_dev) {
 		pr_err("%s : Invalid ISP device (NULL pointer).\n", __func__);
 		ret = -EINVAL;
@@ -770,16 +771,6 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 		goto ERROR;
 	}
 
-	/* Validate path for ENQUE_BUFFER to prevent array out of bounds */
-	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
-		if (path_idx != 0 && path_idx != 1) {
-			pr_err("%s: Invalid path %u for ENQUE_BUFFER (expected 0/1)\n",
-			       __func__, path);
-			ret = -EINVAL;
-			goto ERROR;
-		}
-	}
-
 	rpu = isp_dev->rpu;
 	if (!rpu) {
 		dev_err(isp_dev->dev, "RPU device is NULL in %s.\n", __func__);
@@ -787,112 +778,96 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 		goto ERROR;
 	}
 
-	/* Wait for acknowledgment completion */
-	/* Timeout selection rationale:
-	 *
-	 * ENQUE_BUFFER (fast-path): 20s timeout
-	 *   - Conservative guard under heavy multi-ISP contention and backlog
-	 *     recovery
-	 *   - Avoids premature drain of valid late ACKs while keeping a bound
-	 *   - Mainly needed during pipeline init; steady state should be faster
-	 *
-	 * Pipeline commands: 120s (2 minutes) timeout
-	 *   - Sensor init (slowest): observed max 50-60s
-	 *   - Stream start / calibration: typically <30s
-	 *   - 120s gives 2x safety margin on the slowest observed case
-	 *   - Detects true RPU hangs 33% faster than a 180s timeout
-	 */
-	long timeout_jiffies;
-
 	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
-		/* 20s for ENQ - wide margin for congested multi-ISP scheduling */
-		timeout_jiffies = msecs_to_jiffies(20000);
-		/* For ENQUE_BUFFER: use 3D array-based completion with
-		 *interruptible wait
-		 */
+		/* ENQUE_BUFFER: 20s timeout for fast-path */
 		result = wait_for_completion_interruptible_timeout(
 		    &isp_dev->apu_wait_for_enq_ack[port][path_idx]
-		    [buffer_index], timeout_jiffies);
-	} else {
-		/* 2 minutes for pipeline init/config commands */
-		timeout_jiffies = msecs_to_jiffies(120000);
-		/* For other commands: use port-level completion with interruptible wait */
-		result = wait_for_completion_interruptible_timeout(
-		    &isp_dev->apu_wait_for_cmd_ack[port], timeout_jiffies);
-	}
-	if (result == 0) {
-		/* Timeout occurred */
-		if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+		    [buffer_index], msecs_to_jiffies(20000));
+
+		if (result == 0) {
+			/* Timeout */
 			dev_err_ratelimited(rpu->dev,
-					    "ENQUEUE TIMEOUT: No ACK in 500ms "
+					    "ENQUEUE TIMEOUT: No ACK in 20s "
 					    "(instance_id=%u->port=%u, path=%u, "
 					    "buf=%u) - RPU overwhelmed or RX "
 					    "workqueue stalled. Check 'Bdgt "
 					    "exhausted' logs.\n",
 				instance_id, port, path, buffer_index);
-		} else {
+			ret = -ETIMEDOUT;
+			goto ERROR;
+		} else if (result < 0) {
+			/* Interrupted - no FIFO cleanup needed */
+			dev_err(rpu->dev, "Wait interrupted for ENQUE_BUFFER\n");
+			ret = -EINTR;
+			goto ERROR;
+		}
+
+		/* Success: read error code directly from storage */
+		ret = isp_dev->enq_ack_error[port][path_idx][buffer_index];
+
+	} else {
+		/* Regular commands: 120s timeout for pipeline operations */
+		result = wait_for_completion_interruptible_timeout(
+		    &isp_dev->apu_wait_for_cmd_ack[port],
+		    msecs_to_jiffies(120000));
+
+		if (result == 0) {
+			/* Timeout - drain FIFO to prevent leak */
 			dev_err(rpu->dev, "Timeout waiting for APU ACK "
 				"(cmd=%d, instance_id=%u->port=%u)\n",
 				cmd, instance_id, port);
-			/* Drain FIFO to prevent leak */
+
 			mbox_post_msg *leaked_msg = NULL;
 
 			mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
-			if (kfifo_out(&isp_dev->cmd_ack_fifo[port], &leaked_msg, 1)) {
+			if (kfifo_out(&isp_dev->cmd_ack_fifo[port],
+				      &leaked_msg, 1)) {
 				kmem_cache_free(rpu->rx_msg_cache, leaked_msg);
-				dev_warn(rpu->dev, "Drned late ACK cmd_fifo[%u]"
+				dev_warn(rpu->dev,
+					 "Drained late ACK cmd_fifo[%u] "
 					 "after timeout\n", port);
 			}
 			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
-		}
-		ret = -ETIMEDOUT;
-		goto ERROR;
-	} else if (result < 0) {
-		dev_err(rpu->dev, "Wait interrupted for cmd=%d\n", cmd);
-		/* Drain FIFO on interrupt only for non-ENQUE commands */
-		if (cmd != APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+			ret = -ETIMEDOUT;
+			goto ERROR;
+		} else if (result < 0) {
+			/* Interrupted - drain FIFO */
+			dev_err(rpu->dev, "Wait interrupted for cmd=%d\n", cmd);
+
 			mbox_post_msg *leaked_msg = NULL;
 
 			mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
-			if (kfifo_out(&isp_dev->cmd_ack_fifo[port], &leaked_msg, 1))
+			if (kfifo_out(&isp_dev->cmd_ack_fifo[port],
+				      &leaked_msg, 1))
 				kmem_cache_free(rpu->rx_msg_cache, leaked_msg);
 			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
-		}
-		ret = -EINTR;
-		goto ERROR;
-	}
-
-	/* Read error code directly - no FIFO overhead */
-	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
-		/* Validate path for ENQUE_BUFFER */
-		if (path_idx != 0 && path_idx != 1) {
-			pr_err("Invalid path %u for ENQUE_BUFFER ACK\n", path);
-			ret = -EINVAL;
+			ret = -EINTR;
 			goto ERROR;
 		}
-		/* Read error code stored by RX handler - no message allocation needed */
-		ret = isp_dev->enq_ack_error[port][path_idx][buffer_index];
-	} else {
-		/* Other commands use port-level FIFO */
+
+		/* Success: dequeue message and extract error code */
 		mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
 		if (!kfifo_out(&isp_dev->cmd_ack_fifo[port], &msg, 1)) {
 			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
-			pr_err("Failed to dequeue from cmd_ack_fifo[%u]\n", port);
+			pr_err("Failed to dequeue from cmd_ack_fifo[%u]\n",
+			       port);
 			ret = -ENOMSG;
 			goto ERROR;
 		}
 		mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
+
 		if (!msg) {
 			pr_err("Received invalid message\n");
 			ret = -EINVAL;
 			goto ERROR;
 		}
-		/* Extract error_subcode from received message payload */
+
 		payload_packet *pkt = (payload_packet *)msg->payload;
 
 		ret = pkt->resp_field.error_subcode_t;
 		kmem_cache_free(rpu->rx_msg_cache, msg);
 	}
+
 	return ret;
 ERROR:
 	return ret;

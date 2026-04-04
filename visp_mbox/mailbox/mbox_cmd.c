@@ -120,7 +120,8 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 
 	/*
 	 * LOCK SCOPE OPTIMIZATION: Only protect FIFO write operation.
-	 * Message preparation (memset, memcpy) done lock-free above to reduce contention.
+	 * Message preparation (memset, memcpy) done lock-free above to
+	 * reduce contention.
 	 * Critical section: ~1µs (FIFO write only) vs ~3-5µs (entire TX path).
 	 * Benefit: 6 ISPs at 30fps → reduced serialization from 15µs to 6µs.
 	 */
@@ -168,8 +169,21 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	}
 
 	mutex_lock(&rpu->read_lock);
-	vpi_mbox_read(rpu->apu_rx_ctrl, msg_copy, rpu->core_id);
+	ret = vpi_mbox_read(rpu->apu_rx_ctrl, msg_copy, rpu->core_id);
 	mutex_unlock(&rpu->read_lock);
+	/* Check if read was successful */
+	if (ret != VPI_SUCCESS) {
+		if (ret == VPI_ERR_EMPTY) {
+			/* FIFO empty - race condition between check and read */
+			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+			return 0; /* Not an error, just empty */
+		}
+		/* Other read errors */
+		pr_err("%s: vpi_mbox_read failed with error: %d\n", __func__,
+		       ret);
+		kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+		return ret;
+	}
 
 	/* Extract fields from the copy */
 	cmd = msg_copy->msg_id;
@@ -178,15 +192,6 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	memcpy(&instance_id, payload_ptr, sizeof(uint32_t));
 	payload_ptr += sizeof(uint32_t);
 	memcpy(&path, payload_ptr, sizeof(uint32_t));
-	payload_ptr += sizeof(uint32_t);
-
-	/* Extract buffer_index for ENQUE_BUFFER commands */
-	uint32_t buffer_index = 0;
-	payload_packet *pkt = (payload_packet *)msg_copy->payload;
-	mb_cmd_id_e resp_cmd = pkt->resp_field.processed_cmdid;
-
-	if (resp_cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER)
-		memcpy(&buffer_index, payload_ptr, sizeof(uint8_t));
 
 	/* Extract instance_id from bits 0-7 */
 	instance_id = instance_id & 0xFF;
@@ -204,8 +209,9 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	isp_id = instance_id / INSTANCES_PER_ISP;
 	/*
 	 * Map instance_id to port (0-3) for array indexing.
-	 * Each ISP has 4 ports with 4 instances per port (16 instances / 4 ports).
-	 * instance_id 0-3 → port 0, 4-7 → port 1, 8-11 → port 2, 12-15 → port 3
+	 * Each ISP has 4 ports with 4 instances per port
+	 * (16 instances / 4 ports).
+	 * instance_id 0-3→port_0,4-7→ port_1,8-11→port_2,12-15→port_3
 	 */
 	port = instance_id % MAX_PORTS;
 
@@ -213,19 +219,10 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES) {
 		dev_err(rpu->dev,
 			"%s: FATAL - Invalid isp_id %u out of range [0-%d] "
-			"(instance_id=%u, rpu_id=%d). Firmware or memory corruption.\n",
-			__func__, isp_id, MAX_ISP_INSTANCES - 1, instance_id, rpu->rpu_id);
-		dev_err(rpu->dev,
-			"       FIFO Debug: read_offset=%u, phys_addr_at_offset=0x%llx\n"
-			"       FIFO buffer: virt=%p, phys_base=0x%llx, size=%u\n"
-			"       Message: virt=%pK, cmd_id=0x%x, flags=%u\n",
-			rpu->apu_rx_ctrl->fifo->read_offset,
-			(unsigned long long)(rpu->apu_rx_ctrl->buffer_address_phy +
-					      rpu->apu_rx_ctrl->fifo->read_offset),
-			(void *)rpu->apu_rx_ctrl->buffer_address_virt,
-			(unsigned long long)rpu->apu_rx_ctrl->buffer_address_phy,
-			rpu->apu_rx_ctrl->fifo->buffer_size,
-			msg_copy, msg_copy->msg_id, msg_copy->media_server_flags);
+			"(instance_id=%u, rpu_id=%d). "
+			"Firmware or memory corruption.\n",
+			__func__, isp_id, MAX_ISP_INSTANCES - 1,
+			instance_id, rpu->rpu_id);
 		kmem_cache_free(rpu->rx_msg_cache, msg_copy);
 		return -EINVAL;
 	}
@@ -233,22 +230,24 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	isp_dev = rpu->isp_dev[isp_id];
 	if (!isp_dev) {
 		dev_err(rpu->dev,
-			"%s: FATAL - ISP%d device not registered (instance_id=%u, cmd=%d, rpu_id=%d)\n"
-			"       Ensure all ISP modules loaded before streaming. Rejecting message.\n",
+			"%s: FATAL - ISP%d device not registered "
+			"(instance_id=%u, cmd=%d, rpu_id=%d)\n"
+			"Ensure all ISP modules loaded before "
+			"streaming. Rejecting message.\n",
 			__func__, isp_id, instance_id, cmd, rpu->rpu_id);
 		kmem_cache_free(rpu->rx_msg_cache, msg_copy);
-		/* Return immediately - no further processing for unregistered ISP */
+		/* Return immediately - no further processing */
 		return -ENODEV;
 	}
 
-	if (resp_cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER && path == 6 &&
-	    isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0)
-		path = 1; /* Firmware reports path 6 in MIMO; map to 1 */
-
-	/* Handle application-specific messages (flags == 1) */
 	if (msg_copy->media_server_flags == 1) {
 		if (kfifo_is_full(&rpu->app_fifo)) {
-			dev_err(rpu->dev, "app_fifo is full, dropping message\n");
+			dev_err(rpu->dev,
+				"app_fifo is FULL (%u/%u), dropping message"
+				" cmd=%u (RPU%d)! Userspace not reading fast"
+				" enough!\n",
+				kfifo_len(&rpu->app_fifo), RPU_CMD_KFIFO_SIZE,
+				cmd, rpu->rpu_id);
 			ret = -ENOSPC;
 			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
 			goto ERROR;
@@ -257,7 +256,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		if (!kfifo_in(&rpu->app_fifo, &msg_copy, 1)) {
 			mutex_unlock(&rpu->app_fifo_lock);
 			dev_err(rpu->dev,
-				"Failed to queue into app_fifo (race condition)\n");
+				"Failed to queue into app_fifo\n");
 			ret = -ENOMEM;
 			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
 			goto ERROR;
@@ -265,125 +264,146 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		mutex_unlock(&rpu->app_fifo_lock);
 		complete(&rpu->mailbox_completion);
 		goto DONE;
-	} /* end if (msg_copy->flags == 1) */
-
-	/* Handle command responses and display buffer messages */
-	if (cmd == MB_CMD_RES_SUCCESS) {
-		if (port >= 4) {
-			dev_err(rpu->dev,
-				"FATAL - Invalid port %u (max 3) from instance_id=%u. "
-				"Memory corruption or calculation error.\n",
-				port, instance_id);
-			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
-			return -EINVAL;
-		}
-		/* Debug logging and validation for ENQUE_BUFFER commands */
-		if (resp_cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
-			if (path != 0 && path != 1) {
+	} else {
+		/* Handle command responses and display buffer messages */
+		if (cmd == MB_CMD_RES_SUCCESS) {
+			if (port >= 4) {
 				dev_err(rpu->dev,
-					"ENQUE_BUFFER ACK: unexpected path=%u "
-					"for port=%u (expected 0 or 1)\n",
-					path, port);
-			}
-			if (buffer_index >= 32) {
-				dev_err(rpu->dev,
-					"FATAL - ENQUE_BUFFER ACK: invalid buffer_index=%u "
-					"for port=%u path=%u (max 31). Array bounds violation!\n",
-					buffer_index, port, path);
+					"FATAL - Invalid port %u (max 3) "
+					"instance_id=%u. Memory corruption\n",
+					port, instance_id);
 				kmem_cache_free(rpu->rx_msg_cache, msg_copy);
 				return -EINVAL;
 			}
-		}
-		/* Route to appropriate FIFO based on command and path */
-		if (resp_cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
-			/* Derive port from instance_id for port-level FIFO */
-			/* Extract error code from payload and store directly -
-			 * eliminates FIFO overhead
-			 */
-			int error_code = pkt->resp_field.error_subcode_t;
+			/* Extract command type for routing decisions */
+			payload_packet *pkt = (payload_packet *)
+					msg_copy->payload;
+			mb_cmd_id_e resp_cmd = pkt->resp_field.processed_cmdid;
+			/* Debug logging and validation for ENQUE_BUFFER commands */
+			if (resp_cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+				uint32_t buffer_index = 0;
+				uint8_t *payload_ptr;
 
-			/* Store error code for direct access by waiting function */
-			isp_dev->enq_ack_error[port][path][buffer_index] = error_code;
-			/* Free message immediately - no FIFO needed */
-			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
-			/* Signal 3D completion after error code is stored */
-			complete(&isp_dev->apu_wait_for_enq_ack[port][path][buffer_index]);
-		} else {
-			/* Other commands - use port-level FIFO */
-			/* Use already-calculated port from line 196 */
+				if (path != 0 && path != 1 && path != 6) {
+					dev_err(rpu->dev,
+						"ENQUE_BUFFER ACK: unexpected path=%u "
+						"for port=%u (expected 0, 1, or 6)\n",
+						path, port);
+				}
+				/* Extract buffer_index from payload */
+				payload_ptr = ((payload_packet *)
+					msg_copy->payload)->payload;
 
-			if (kfifo_is_full(&isp_dev->cmd_ack_fifo[port])) {
-				dev_err_ratelimited(rpu->dev,
-					"cmd_ack_fifo[%u] FULL (128 entries), dropping ACK for "
-					"instance_id=%u - command responses not consumed\n",
-					port, instance_id);
-				ret = -ENOSPC;
+				payload_ptr += sizeof(uint32_t);
+				payload_ptr += sizeof(uint32_t);
+				memcpy(&buffer_index, payload_ptr,
+				       sizeof(uint8_t));
+				/* Validate buffer_index */
+				if (buffer_index >= 32) {
+					dev_err(rpu->dev,
+						"FATAL-ENQUE_BUFFER ACK:invalid"
+						" buffer_index=%u "
+						"for port=%u path=%u (max 31)."
+						" Array bounds violation!\n",
+						buffer_index, port, path);
+					kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+					return -EINVAL;
+				}
+				/* MIMO mode: Firmware reports path=6, but
+				 * arrays only have 2 paths (0,1)
+				 */
+				if (path == 6 && isp_dev->ss_mode_i0 &&
+				    strcmp(isp_dev->ss_mode_i0, "mimo") == 0) {
+					path = 1; /* Map path 6 to 1 for array indexing */
+				}
+				/* Extract error code from ACK and store before signaling */
+				int error_code = pkt->resp_field.error_subcode_t;
+				isp_dev->enq_ack_error[port][path][buffer_index] = error_code;
+				/* Signal 3D completion */
+				complete(&isp_dev->apu_wait_for_enq_ack
+					[port][path][buffer_index]);
+				/* Free message immediately - no FIFO needed */
 				kmem_cache_free(rpu->rx_msg_cache, msg_copy);
-				goto ERROR;
-			}
-			mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
-			if (!kfifo_in(&isp_dev->cmd_ack_fifo[port], &msg_copy, 1)) {
+			} else {
+				if (kfifo_is_full(&isp_dev->cmd_ack_fifo[port])) {
+					dev_err_ratelimited(rpu->dev,
+						"cmd_ack_fifo[%u] FULL,"
+						" dropping ACK for "
+						"instance_id=%u - command"
+						" responses not consumed\n",
+						port, instance_id);
+					ret = -ENOSPC;
+					kmem_cache_free(rpu->rx_msg_cache,
+							msg_copy);
+					goto ERROR;
+				}
+				mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
+				if (!kfifo_in(&isp_dev->cmd_ack_fifo[port],
+					      &msg_copy, 1)) {
+					mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
+					dev_err(rpu->dev,
+						"Failed to queue into cmd_ack_fifo"
+						"[%u] (race condition)\n", port);
+					ret = -ENOMEM;
+					kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+					goto ERROR;
+				}
 				mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
-				dev_err(rpu->dev,
-					"Failed to queue into cmd_ack_fifo[%u]"
-					"(race condition)\n", port);
+				complete(&isp_dev->apu_wait_for_cmd_ack[port]);
+			}
+			goto DONE;
+		}
+
+		/* Handle data response */
+		if (cmd == MB_CMD_GET_SUCCESS) {
+			mutex_lock(&rpu->data_fifo_lock);
+			if (!kfifo_in(&rpu->data_fifo, &msg_copy, 1)) {
+				mutex_unlock(&rpu->data_fifo_lock);
+				dev_err(rpu->dev, "Failed to queue into apu data kfifo\n");
 				ret = -ENOMEM;
 				kmem_cache_free(rpu->rx_msg_cache, msg_copy);
 				goto ERROR;
 			}
-			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
-			complete(&isp_dev->apu_wait_for_cmd_ack[port]);
-		}
-		goto DONE;
-	}
-
-	/* Handle data response */
-	if (cmd == MB_CMD_GET_SUCCESS) {
-		mutex_lock(&rpu->data_fifo_lock);
-		if (!kfifo_in(&rpu->data_fifo, &msg_copy, 1)) {
 			mutex_unlock(&rpu->data_fifo_lock);
-			pr_err("Failed to queue into apu data kfifo\n");
-			ret = -ENOMEM;
-			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
-			goto ERROR;
+			complete(&isp_dev->apu_wait_for_data);
+			goto DONE;
 		}
-		mutex_unlock(&rpu->data_fifo_lock);
-		complete(&isp_dev->apu_wait_for_data);
-		goto DONE;
+
+		/* Handle display buffer notification from RPU */
+		if (cmd == RPU_2_APU_CMD_DISPLAY_BUFFER) {
+			if (!isp_dev->frameout_cb) {
+				dev_err(rpu->dev, "CALLBACK IS NULL\n");
+				ret = -EINVAL;
+				kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+				goto ERROR;
+			}
+
+			/*
+			 * Direct callback - no FIFO overhead.
+			 * Frameout processing happens synchronously in mailbox context.
+			 * Message ownership transferred to callback, which must free it.
+			 */
+			ret = isp_dev->frameout_cb(isp_dev, port, msg_copy);
+			if (ret != 0) {
+				dev_err(rpu->dev,
+					"Frameout callback failed for port %u: %d\n",
+					port, ret);
+				/* Callback should have freed message on error */
+			}
+			goto DONE;
+		}
+
+		/* Unexpected command (media_server_flags != 1) */
+		dev_err(rpu->dev,
+			"%s: FATAL - Unexpected/corrupted command id %d "
+			"received (instance_id=%u, isp_id=%d, flags=%u). "
+			"Firmware mismatch or memory corruption.\n",
+			__func__, cmd, instance_id, isp_id,
+			msg_copy->media_server_flags);
+		kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+		/* Return immediately - corrupted or unsupported command */
+		return -EINVAL;
 	}
-
-	/* Handle display buffer notification from RPU */
-	if (cmd == RPU_2_APU_CMD_DISPLAY_BUFFER) {
-		if (!isp_dev->frameout_cb) {
-			pr_err("%s %d CALLBACK IS NULL\n", __func__, __LINE__);
-			ret = -EINVAL;
-			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
-			goto ERROR;
-		}
-
-		/*
-		 * Direct callback - no FIFO overhead.
-		 * Frameout processing happens synchronously in mailbox context.
-		 * Message ownership transferred to callback, which must free it.
-		 */
-		ret = isp_dev->frameout_cb(isp_dev, port, msg_copy);
-		if (ret != 0) {
-			dev_err(rpu->dev,
-				"Frameout callback failed for port %u: %d\n",
-				port, ret);
-			/* Callback should have freed message on error */
-		}
-		goto DONE;
-	}
-
-	/* Unexpected command */
-	dev_err(rpu->dev,
-		"%s: FATAL - Unexpected/corrupted command id %d received "
-		"(instance_id=%u, isp_id=%d). Firmware mismatch or memory corruption.\n",
-		__func__, cmd, instance_id, isp_id);
-	kmem_cache_free(rpu->rx_msg_cache, msg_copy);
-	/* Return immediately - corrupted or unsupported command */
-	return -EINVAL;
 
 ERROR:
 DONE:
@@ -391,7 +411,8 @@ DONE:
 }
 EXPORT_SYMBOL_GPL(visp_mbox_apu_read);
 
-int visp_mbox_mailbox_init(struct rpu_dev *rpu, u32 cpu, uint64_t MBOX_FIFO_START_ADDR,
+int visp_mbox_mailbox_init(struct rpu_dev *rpu, u32 cpu,
+			   uint64_t MBOX_FIFO_START_ADDR,
 			   uint64_t mbox_fifo_start_addr_phy)
 {
 	if (!rpu) {
