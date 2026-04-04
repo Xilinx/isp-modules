@@ -144,6 +144,8 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 				   isp_dev->isp_ports[port].bufmode);
 			seq_printf(sfile, "hw_mcm      : %s\n",
 					isp_dev->isp_ports[port].hw_mcm ? "1 / Enable" : "0 / Disable" );
+			seq_printf(sfile, "fusa_json   : %s\n",
+				   isp_dev->isp_ports[port].fusa_json);
 
 			/* Display LLP status, capability, and which path it's enabled for */
 			{
@@ -366,8 +368,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					    val,
 					    sizeof(isp_dev->isp_ports[port].bufmode));
 				}
-			}
-			else if (strcmp(val, "hw_mcm") == 0) {
+			} else if (strcmp(val, "hw_mcm") == 0) {
 				val = strsep(&kv_cur, kv_delim);
 				if (val && isdigit(*val)) {
 					if((uint32_t)simple_strtoul(val, &end, 0) == 1 )
@@ -378,6 +379,15 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					{
 						isp_dev->isp_ports[port].hw_mcm=(bool)false;
 					}
+				}
+			} else if (strcmp(val, "fusa_json") == 0) {
+				val = strsep(&kv_cur, kv_delim);
+				if (val) {
+					memset(isp_dev->isp_ports[port].fusa_json, 0,
+					       sizeof(isp_dev->isp_ports[port].fusa_json));
+
+					strscpy(isp_dev->isp_ports[port].fusa_json,
+						val, sizeof(isp_dev->isp_ports[port].fusa_json));
 				}
 			} else if (strcmp(val, "llp") == 0) {
 			    val = strsep(&kv_cur, kv_delim);

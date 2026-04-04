@@ -650,6 +650,20 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 		return ret_val;
 	}
 
+	if (strlen(isp_dev->isp_ports[port].fusa_json)) {
+		/* it will be called when this port has streaming,
+		 * one path can not call this function twice.
+		 */
+		if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] != 0) {
+			ret_val = visp_l_fusa_event(isp_dev, pad_index);
+			if (ret_val != 0 && ret_val != -EPIPE) {
+				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+					__func__, __LINE__, isp_dev->id, port);
+				goto ERR_TO_DESTROY_BUFPOOL;
+			}
+		}
+	}
+
 	/*Get currest streaming state*/
 	ret_val = vsi_cam_device_get_path_streaming(
 	    isp_dev, isp_port->cam_device_handle, &PathStatus);
@@ -658,7 +672,7 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 			"%s: port %d chn %d create GetPathStreaming failed, "
 			"ret is %d",
 			__func__, port, chn, ret_val);
-		goto ERR_TO_DESTROY_BUFPOOL;
+		goto ERR_TO_STOP_FUSA;
 	}
 	PathStatus.out_path_enable |= (1 << chn);
 
@@ -702,11 +716,17 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 		    "port %d chn %d CamDevice start stream failed, ret is %d",
 		    port, chn, ret_val);
 		ret_val = VSI_ERR_NOTREADY;
-		goto ERR_TO_DESTROY_BUFPOOL;
+		goto ERR_TO_STOP_FUSA;
 	}
 
 	isp_dev->streamon[pad_index] = 1;
 	return ret_val;
+
+ERR_TO_STOP_FUSA:
+	if (strlen(isp_dev->isp_ports[port].fusa_json)) {
+		if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0)
+			visp_stop_fusa_event(isp_dev, pad_index);
+	}
 
 ERR_TO_DESTROY_BUFPOOL:
 	media_isp_device_destroy_buf_pool(isp_dev, port, chn);
@@ -783,6 +803,9 @@ int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 	 * proceeds to perform complete cleanup of input pipeline.
 	 */
 	if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
+		if (strlen(isp_dev->isp_ports[port].fusa_json))
+			visp_stop_fusa_event(isp_dev, pad_index);
+
 		media_isp_device_camera_dis_connect(isp_dev, port, chn);
 
 		isp_destroy_pipeline(isp_dev, port, chn);
@@ -2828,6 +2851,23 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 		}
 		isp_dev->isp_ports[port].camera_connect_ref_cnt++;
 
+		if (strlen(isp_dev->isp_ports[port].fusa_json)) {
+			ret = visp_l_fusa_event(isp_dev, pad);
+			if (ret != 0 && ret != -EPIPE) {
+				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d ret:%d\n",
+					__func__, __LINE__, isp_dev->id, port, ret);
+				ret = -ENOMEM;
+				mutex_unlock(&isp_dev->rpu->rpu_lock);
+				media_isp_device_camera_dis_connect(isp_dev, port, chn);
+				isp_device_destroy(isp_dev, port, chn);
+				return ret;
+			}
+			if (ret == -EPIPE) {
+				dev_err(isp_dev->dev, "Proceed without loadFuSa isp:%d port:%d\n",
+					isp_dev->id, port);
+			}
+		}
+
 #ifdef LOAD_CALIB_ENABLE
 		ret = visp_l_json_event(isp_dev, pad);
 		if (ret != 0 && ret != -EPIPE) {
@@ -2835,6 +2875,8 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 				__func__, __LINE__, isp_dev->id, port);
 			ret = -ENOMEM;
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			if (strlen(isp_dev->isp_ports[port].fusa_json))
+				visp_stop_fusa_event(isp_dev, pad);
 			media_isp_device_camera_dis_connect(isp_dev, port, chn);
 			isp_device_destroy(isp_dev, port, chn);
 			return ret;

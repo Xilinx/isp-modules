@@ -71,6 +71,8 @@ enum visp_vevent_id {
 	VISP_EVENT_LOAD_CALIB,
 	VISP_EVENT_LOAD_JSON,
 	VISP_EVENT_S_INTERVAL,
+	VISP_EVENT_LOAD_FUSA,
+	VISP_EVENT_STOP_FUSA,
 	VISP_EVENT_MAX,
 };
 
@@ -142,6 +144,8 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad);
 int visp_l_json_event(struct visp_dev *isp_dev, int pad);
 int visp_s_interval_event(struct visp_dev *isp_dev, int pad,
 			  struct v4l2_fract *timeperframe);
+int visp_l_fusa_event(struct visp_dev *isp_dev, int pad);
+int visp_stop_fusa_event(struct visp_dev *isp_dev, int pad);
 
 #endif
 

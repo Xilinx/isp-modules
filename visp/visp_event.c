@@ -390,3 +390,84 @@ int visp_s_interval_event(struct visp_dev *isp_dev, int pad,
 
 	return ret;
 }
+
+int visp_l_fusa_event(struct visp_dev *isp_dev, int pad)
+{
+	struct v4l2_event event;
+
+	event.type = VISP_DEAMON_EVENT;
+	event.id = VISP_EVENT_LOAD_FUSA;
+
+	if (!visp_event_subscribed(&isp_dev->sd, event.type, event.id)) {
+		dev_err(isp_dev->dev, "post event %d not subscribed\n", event.id);
+		return -EPIPE;
+	}
+
+	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
+	int ret = 0;
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	uint8_t *pdata = NULL;
+
+	mutex_lock(&isp_dev->event_shm.event_lock);
+	event_pkg->head.pad = pad;
+	event_pkg->head.dev = isp_dev->id;
+	event_pkg->head.eid = VISP_EVENT_LOAD_FUSA;
+
+	event_pkg->head.shm_fd = isp_dev->event_shm.dmabuf_fd;
+	event_pkg->head.shm_size = isp_dev->event_shm.size;
+	event_pkg->head.data_size = 0;
+	event_pkg->ack = 0;
+	event_pkg->result = 0;
+
+	pdata = event_pkg->data;
+
+	memcpy(pdata, &isp_dev->isp_ports[port].fusa_json,
+	       sizeof(isp_dev->isp_ports[port].fusa_json));
+	pdata += sizeof(isp_dev->isp_ports[port].fusa_json);
+	event_pkg->head.data_size += sizeof(isp_dev->isp_ports[port].fusa_json);
+
+	ret = visp_post_event(&isp_dev->sd, event_pkg);
+	if (ret != 0) {
+		dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__,
+			__LINE__);
+	}
+
+	mutex_unlock(&isp_dev->event_shm.event_lock);
+	return ret;
+}
+
+int visp_stop_fusa_event(struct visp_dev *isp_dev, int pad)
+{
+	struct v4l2_event event;
+
+	event.type = VISP_DEAMON_EVENT;
+	event.id = VISP_EVENT_STOP_FUSA;
+
+	if (!visp_event_subscribed(&isp_dev->sd, event.type, event.id)) {
+		dev_err(isp_dev->dev, "post event %d not subscribed\n", event.id);
+		return -EPIPE;
+	}
+
+	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
+	int ret = 0;
+
+	mutex_lock(&isp_dev->event_shm.event_lock);
+	event_pkg->head.pad = pad;
+	event_pkg->head.dev = isp_dev->id;
+	event_pkg->head.eid = VISP_EVENT_STOP_FUSA;
+
+	event_pkg->head.shm_fd = isp_dev->event_shm.dmabuf_fd;
+	event_pkg->head.shm_size = isp_dev->event_shm.size;
+	event_pkg->head.data_size = 0;
+	event_pkg->ack = 0;
+	event_pkg->result = 0;
+
+	ret = visp_post_event(&isp_dev->sd, event_pkg);
+	if (ret != 0) {
+		dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__,
+			__LINE__);
+	}
+
+	mutex_unlock(&isp_dev->event_shm.event_lock);
+	return ret;
+}
