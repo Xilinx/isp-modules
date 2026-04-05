@@ -2123,6 +2123,12 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		dev_info(&pdev->dev, "xlnx,num_streams: %u\n",
 			 isp_dev->num_streams);
 	}
+
+	/* Force num_streams = 1 for MIMO mode */
+	if (isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0) {
+		isp_dev->num_streams = 1;
+		dev_info(&pdev->dev, "MIMO mode detected: forcing num_streams to 1\n");
+	}
 	dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
 
 	ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
@@ -2189,7 +2195,7 @@ int xlnx_link_mbox(struct visp_dev *isp_dev)
 		return -ENOMEM;
 	}
 	/* Initialise completions/FIFOs used for ack/data handling */
-	for (int inst = 0; inst < MAX_PORTS; inst++) {
+	for (int inst = 0; inst < isp_dev->num_streams; inst++) {
 		for (int path = 0; path < 4; path++)
 			for (int buf = 0; buf < 32; buf++)
 				init_completion(&isp_dev->apu_wait_for_enq_ack[inst][path][buf]);

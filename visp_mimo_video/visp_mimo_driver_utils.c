@@ -34,7 +34,7 @@ int xlnx_link_mbox(struct visp_dev *isp_dev)
 		return -ENOMEM;
 	}
 	/* Initialise completions/FIFOs used for ack/data handling */
-	for (int inst = 0; inst < MAX_PORTS; inst++) {
+	for (int inst = 0; inst < isp_dev->num_streams; inst++) {
 		for (int path = 0; path < 4; path++)
 			for (int buf = 0; buf < 32; buf++)
 				init_completion(&isp_dev->apu_wait_for_enq_ack[inst][path][buf]);

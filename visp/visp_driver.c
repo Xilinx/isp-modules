@@ -842,10 +842,10 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev, int port, mbox_post_
 		return -EINVAL;
 	}
 
-	if (port < 0 || port >= MAX_PORTS) {
+	if (port < 0 || port >= isp_dev->num_streams) {
 		dev_err(isp_dev->dev,
 			"%s: Invalid port %d (must be 0-%d)\n",
-			__func__, port, MAX_PORTS - 1);
+			__func__, port, isp_dev->num_streams - 1);
 		return -EINVAL;
 	}
 
@@ -2839,14 +2839,14 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 		return -ENOMEM;
 	}
 	/* initialise completion used in while waiting for ack & data*/
-	/* Initialize 3D completion array for ENQUE_BUFFER */
-	for (int inst = 0; inst < 4; inst++)
+	/* Initialize 3D completion array for ENQUE_BUFFER [port][path][buffer] */
+	for (int port = 0; port < isp_dev->num_streams; port++)
 		for (int path = 0; path < 4; path++)
 			for (int buf = 0; buf < 32; buf++)
-				init_completion(&isp_dev->apu_wait_for_enq_ack[inst][path][buf]);
+				init_completion(&isp_dev->apu_wait_for_enq_ack[port][path][buf]);
 
 	/* Initialize port-level completions for other commands */
-	for (int port = 0; port < 4; port++) {
+	for (int port = 0; port < isp_dev->num_streams; port++) {
 		init_completion(&isp_dev->apu_wait_for_cmd_ack[port]);
 		mutex_init(&isp_dev->cmd_ack_fifo_lock[port]);
 		/* Allocate port-level FIFO (128 entries) */
@@ -2881,7 +2881,7 @@ static void visp_destroy_enq_wqs(struct visp_dev *isp_dev)
 	if (!isp_dev)
 		return;
 
-	for (port = 0; port < MAX_PORTS; port++) {
+	for (port = 0; port < isp_dev->num_streams; port++) {
 		for (chain = 0; chain < ENQ_WQ_CHAIN_MAX; chain++) {
 			if (isp_dev->enq_wq_chain[port][chain]) {
 				destroy_workqueue(isp_dev->enq_wq_chain[port][chain]);
@@ -2927,8 +2927,8 @@ static int visp_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	/* Initialize mutexes for cam_device_bufs arrays (4 ports × 4 channels) */
-	for (int port = 0; port < MAX_PORTS; port++)
+	/* Initialize mutexes for cam_device_bufs arrays (num_streams ports × 4 channels) */
+	for (int port = 0; port < isp_dev->num_streams; port++)
 		for (int chn = 0; chn < 4; chn++)
 			mutex_init(&isp_dev->isp_ports[port]
 				       .isp_chns[chn]
@@ -3014,7 +3014,7 @@ static int visp_probe(struct platform_device *pdev)
 		INIT_LIST_HEAD(&isp_dev->mcm_input[port]);
 	}
 
-	for (port = 0; port < MAX_PORTS; port++) {
+	for (port = 0; port < isp_dev->num_streams; port++) {
 		char wq_name[16];
 
 		/* Per-port MP/SP workqueues: chain 0 = MP, chain 1 = SP */

@@ -2529,6 +2529,12 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n",
 			isp_dev->num_streams);
 	}
+
+	/* Force num_streams = 1 for MIMO mode */
+	if (isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0) {
+		isp_dev->num_streams = 1;
+		dev_info(&pdev->dev, "MIMO mode detected: forcing num_streams to 1\n");
+	}
 	dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
 
 	ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
@@ -2698,7 +2704,7 @@ int visp_mimo_probe(struct platform_device *pdev)
 	mutex_init(&device->isp_dev->mlock);
 	mutex_init(&device->isp_dev->ctrl_lock);
 	device->isp_dev->dev = &pdev->dev;
-	for (int port = 0; port < MAX_PORTS; port++) {
+	for (int port = 0; port < device->isp_dev->num_streams; port++) {
 		spin_lock_init(&device->isp_dev->frameout_lock[port]);
 		device->isp_dev->pending_frameout_msg[port] = NULL;
 	}
