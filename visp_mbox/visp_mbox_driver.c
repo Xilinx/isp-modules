@@ -661,15 +661,15 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		/* Initialize path_idx for MIMO mapping */
 		path_idx = path;
 
-		/* MIMO path mapping: firmware reports path=6, map to path=1 */
+		/* MIMO path mapping: firmware reports path=6, map to path=3 */
 		if (path == 6 && isp_dev->ss_mode_i0 &&
 		    strcmp(isp_dev->ss_mode_i0, "mimo") == 0)
-			path_idx = 1;
+			path_idx = 3;
 
-		/* Validate path for array bounds (only 0 and 1 supported) */
-		if (path_idx != 0 && path_idx != 1) {
+		/* Validate path for array bounds (only 0-3 supported) */
+		if (path_idx >= 4) {
 			pr_err("%s: Invalid path %u for ENQUE_BUFFER "
-			       "(expected 0 or 1)\n", __func__, path);
+			       "(expected 0-3)\n", __func__, path);
 			return -EINVAL;
 		}
 

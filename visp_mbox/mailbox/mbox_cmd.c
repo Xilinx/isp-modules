@@ -284,10 +284,10 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				uint32_t buffer_index = 0;
 				uint8_t *payload_ptr;
 
-				if (path != 0 && path != 1 && path != 6) {
+				if (path >= 4 && path != 6) {
 					dev_err(rpu->dev,
 						"ENQUE_BUFFER ACK: unexpected path=%u "
-						"for port=%u (expected 0, 1, or 6)\n",
+						"for port=%u (expected 0-3 or 6)\n",
 						path, port);
 				}
 				/* Extract buffer_index from payload */
@@ -310,11 +310,11 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 					return -EINVAL;
 				}
 				/* MIMO mode: Firmware reports path=6, but
-				 * arrays only have 2 paths (0,1)
+				 * arrays only have 4 paths (0,1,2,3)
 				 */
 				if (path == 6 && isp_dev->ss_mode_i0 &&
 				    strcmp(isp_dev->ss_mode_i0, "mimo") == 0) {
-					path = 1; /* Map path 6 to 1 for array indexing */
+					path = 3; /* Map path 6 to 3 for array indexing */
 				}
 				/* Extract error code from ACK and store before signaling */
 				int error_code = pkt->resp_field.error_subcode_t;
