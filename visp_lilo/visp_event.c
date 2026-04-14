@@ -281,7 +281,7 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.dev = isp_dev->id;
 	event_pkg->head.eid = VISP_EVENT_S_CTRL;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
-	event_pkg->head.data_size += (sizeof(isp_ctrl) + isp_ctrl->size);
+	event_pkg->head.data_size += (sizeof(struct visp_ctrl) + isp_ctrl->size);
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
@@ -332,14 +332,14 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	event_pkg->head.dev = isp_dev->id;
 	event_pkg->head.eid = VISP_EVENT_G_CTRL;
 	event_pkg->head.shm_size = isp_dev->event_shm.size;
-	event_pkg->head.data_size += (sizeof(isp_ctrl) + isp_ctrl->size);
+	event_pkg->head.data_size += (sizeof(struct visp_ctrl) + isp_ctrl->size);
 	event_pkg->ack = 0;
 	event_pkg->result = 0;
 
 	ret = visp_post_event(&isp_dev->sd, event_pkg);
 
 	if (ret == 0) {
-		memcpy(ctrl->p_new.p_u8, /*event_pkg->data*/pdata + sizeof(isp_ctrl),
+		memcpy(ctrl->p_new.p_u8, /*event_pkg->data*/pdata + sizeof(struct visp_ctrl),
 		       isp_ctrl->size);
 	}
 
