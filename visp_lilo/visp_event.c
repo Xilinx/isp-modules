@@ -105,11 +105,9 @@ static int visp_post_event(struct v4l2_subdev *sd,
 	v4l2_event_queue(sd->devnode, &event);
 
 	for (i = 0; i < timeout_ms; i++) {
-		if (event_pkg->ack)
+		if (READ_ONCE(event_pkg->ack))
 			break;
 		usleep_range(5, 10);
-		if (i > 5000000)
-			i = 0;
 	}
 
 	if (event_pkg->ack == 0) {
@@ -255,20 +253,12 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 
 	pad = 1;//vipp sends pad as 0 always, temporarily hardcoding this to 0
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
-	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
-	ret = visp_setup_isp_pipeline(isp_dev, pad);
-	if (ret)
-		return ret;
+	/* If stream is not active, skip silently */
+	if (isp_dev->streamon[pad] != 1)
+		return 0;
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
-
-	if (isp_dev->isp_ports[port].camera_connect_ref_cnt < 1) {
-		dev_err(isp_dev->dev,
-			"%s %d issue communicating with the ispid : %d, port %d Chn:%d\n",
-			 __func__, __LINE__, isp_dev->id, port, chn);
-		return 0;
-	}
 	memcpy(pdata, &port, sizeof(uint32_t));
 	pdata += sizeof(uint32_t);
 	event_pkg->head.data_size += sizeof(uint32_t);
@@ -312,24 +302,14 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 
 	pad = 1;//vipp sends pad as 0 always, temporarily hardcoding this to 0
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
-	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
-	ret = visp_setup_isp_pipeline(isp_dev, pad);
-	if (ret)
-		return ret;
-
-	mutex_lock(&isp_dev->event_shm.event_lock);
-
-	if (isp_dev->isp_ports[port].camera_connect_ref_cnt < 1) {
-		dev_err(isp_dev->dev,
-			"%s %d issue communicating with the ispid : %d, port %d Chn:%d\n",
-			 __func__, __LINE__, isp_dev->id, port, chn);
-		/* Return Zero'd control value*/
-		isp_ctrl->cid = ctrl->id;
-		isp_ctrl->size = ctrl->elem_size * ctrl->elems;
-		memset(ctrl->p_new.p_u8, 0, sizeof(isp_ctrl));
+	/* If stream is not active, return default (zero) values */
+	if (isp_dev->streamon[pad] != 1) {
+		memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
 		return 0;
 	}
+
+	mutex_lock(&isp_dev->event_shm.event_lock);
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
 
