@@ -1761,7 +1761,7 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	struct visp_pad_data *sink_pad;
 	struct visp_pad_data *source_pad;
 	int i;
-	int ret;
+	int ret = 0;
 	media_fmt format_media;
 	struct v4l2_mbus_framefmt *mbus_format;
 	struct media_pad *mediapad_t;
@@ -1885,7 +1885,7 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 		&mbus_format->code, &format_media.pixel_format, fourcc_code);
 
 	mediapad_t = &isp_dev->pads[format->pad];
-	media_isp_set_format(isp_dev, mediapad_t->index, format_media);
+	ret = media_isp_set_format(isp_dev, mediapad_t->index, format_media);
 	if (ret)
 		return ret;
 
@@ -1903,7 +1903,7 @@ int visp_set_fmt_public(struct visp_dev *isp_dev,
 	struct visp_pad_data *sink_pad;
 	struct visp_pad_data *source_pad;
 	int i;
-	int ret;
+	int ret = 0;
 	media_fmt format_media;
 	struct v4l2_mbus_framefmt *mbus_format;
 	struct media_pad *mediapad_t;
@@ -1943,9 +1943,6 @@ int visp_set_fmt_public(struct visp_dev *isp_dev,
 			   sizeof(uint32_t));
 	}
 
-	if (ret)
-		return ret;
-
 	memset(&format_media, 0, sizeof(format_media));
 
 	mbus_format = (struct v4l2_mbus_framefmt *)&format->format;
@@ -1966,7 +1963,9 @@ int visp_set_fmt_public(struct visp_dev *isp_dev,
 		&mbus_format->code, &format_media.pixel_format, fourcc_code);
 
 	mediapad_t = &isp_dev->pads[format->pad];
-	media_isp_set_format(isp_dev, mediapad_t->index, format_media);
+	ret = media_isp_set_format(isp_dev, mediapad_t->index, format_media);
+	if (ret)
+		return ret;
 
 	cur_pad->format = format->format;
 

@@ -769,7 +769,7 @@ static int visp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
 {
 	struct visp_pad_buf *pad_buf = (struct visp_pad_buf *)arg;
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
-	int ret_val;
+	int ret_val = 0;
 	unsigned long flags;
 	struct visp_pad_data *cur_pad;
 	int i = 0;
