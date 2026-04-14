@@ -259,6 +259,7 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 		return 0;
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
+	event_pkg->head.data_size = 0;
 	memcpy(pdata, &port, sizeof(uint32_t));
 	pdata += sizeof(uint32_t);
 	event_pkg->head.data_size += sizeof(uint32_t);
@@ -310,6 +311,7 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
+	event_pkg->head.data_size = 0;
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
 
