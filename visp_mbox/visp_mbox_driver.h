@@ -179,7 +179,8 @@ struct rpu_dev {
 	struct work_struct mbox_work;
 	struct workqueue_struct *rpu_wq;
 	struct sk_buff_head tx_mc_skbs;
-	struct completion mailbox_completion;
+	/* Wait queue for poll() and read() blocking */
+	wait_queue_head_t read_wait;
 	DECLARE_KFIFO(app_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
 	DECLARE_KFIFO(data_fifo, struct mbox_post_msg *, RPU_CMD_KFIFO_SIZE);
 	/* Remoteproc for automatic firmware loading */

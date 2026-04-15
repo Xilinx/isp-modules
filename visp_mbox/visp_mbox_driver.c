@@ -321,14 +321,13 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 		return -EINVAL;
 	}
 
-	/* Acquire lock to protect RPU structure */
-	/* Wait for completion interruptibly */
-	result = wait_for_completion_interruptible(&rpu->mailbox_completion);
+	/* Wait for data to be available in the FIFO */
+	result = wait_event_interruptible(rpu->read_wait,
+					  !kfifo_is_empty(&rpu->app_fifo));
 	if (result != 0) {
-		pr_err("%s: Completion wait interrupted, error code: %d\n",
+		pr_err("%s: Wait interrupted, error code: %d\n",
 		       __func__, result);
-		bytes_copied = -ERESTARTSYS; // Return appropriate error for
-				     // interruption
+		bytes_copied = -ERESTARTSYS;
 		goto ERROR;
 	}
 
@@ -381,10 +380,46 @@ ERROR:
 	return bytes_copied; // Return the size of data copied on success
 }
 
+/**
+ * visp_mbox_rpudev_poll - poll file operation for mailbox device
+ * @file: File structure
+ * @wait: Poll table structure
+ *
+ * Returns POLLIN|POLLRDNORM when data is available in app_fifo
+ * Returns 0 when no data is available
+ * Returns POLLERR on error conditions
+ */
+static __poll_t visp_mbox_rpudev_poll(struct file *file, poll_table *wait)
+{
+	struct rpu_dev *rpu = file->private_data;
+	__poll_t mask = 0;
+
+	if (!rpu) {
+		pr_err("%s: Invalid RPU device pointer\n", __func__);
+		return POLLERR;
+	}
+
+	/* Add our wait queue to the poll table */
+	poll_wait(file, &rpu->read_wait, wait);
+
+	/* Check if data is available in the FIFO */
+	mutex_lock(&rpu->app_fifo_lock);
+	if (!kfifo_is_empty(&rpu->app_fifo)) {
+		/* Data is available for reading */
+		mask |= (POLLIN | POLLRDNORM);
+	}
+	mutex_unlock(&rpu->app_fifo_lock);
+
+	/* Note: POLLOUT/POLLWRNORM could be added for write readiness if needed */
+
+	return mask;
+}
+
 static const struct file_operations visp_mbox_rpudev_fops = {
 	.owner		= THIS_MODULE,
 	.read		= visp_mbox_rpudev_read,
 	.write		= visp_mbox_rpudev_write,
+	.poll		= visp_mbox_rpudev_poll,
 	.open		= visp_mbox_rpudev_open,
 	.release	= visp_mbox_rpudev_release
 };
@@ -1188,7 +1223,8 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	 */
 	list_add_tail(&rpu->node, &rpu_devices);
 
-	init_completion(&rpu->mailbox_completion);
+	/* Initialize wait queue for poll() and read() blocking */
+	init_waitqueue_head(&rpu->read_wait);
 
 	mutex_unlock(&rpu_list_lock);
 	return rpu;

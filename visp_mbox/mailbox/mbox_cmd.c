@@ -262,7 +262,8 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 			goto ERROR;
 		}
 		mutex_unlock(&rpu->app_fifo_lock);
-		complete(&rpu->mailbox_completion);
+		/* Wake up any blocking readers (read/poll/select/epoll) */
+		wake_up_interruptible(&rpu->read_wait);
 		goto DONE;
 	} else {
 		/* Handle command responses and display buffer messages */
