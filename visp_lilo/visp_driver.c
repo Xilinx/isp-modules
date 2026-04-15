@@ -861,12 +861,12 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev, int port, mbox_post_
 	}
 
 	/* Free message after successful processing */
-	kmem_cache_free(isp_dev->rpu->rx_msg_cache, msg);
+	visp_free_rx_buffer(isp_dev->rpu, msg);
 	return 0;
 
 error_free_buf:
 	/* Free message in case of any error */
-	kmem_cache_free(isp_dev->rpu->rx_msg_cache, msg);
+	visp_free_rx_buffer(isp_dev->rpu, msg);
 	return ret_val;
 }
 // EXPORT_SYMBOL_GPL(handle_frameout_buffer);

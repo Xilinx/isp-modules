@@ -494,8 +494,8 @@ void visp_mimo_device_run(void *priv)
 	if (!p_media_buffer) {
 		dev_err(device->isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__,
 			__LINE__);
-		if (device->isp_dev->rpu && device->isp_dev->rpu->rx_msg_cache && msg)
-			kmem_cache_free(device->isp_dev->rpu->rx_msg_cache, msg);
+		if (device->isp_dev->rpu && msg)
+			visp_free_rx_buffer(device->isp_dev->rpu, msg);
 		goto stream_off;
 	}
 
@@ -550,15 +550,15 @@ void visp_mimo_device_run(void *priv)
 	}
 
 
-	if (device->isp_dev->rpu && device->isp_dev->rpu->rx_msg_cache && msg)
-		kmem_cache_free(device->isp_dev->rpu->rx_msg_cache, msg);
+	if (device->isp_dev->rpu && msg)
+		visp_free_rx_buffer(device->isp_dev->rpu, msg);
 	v4l2_m2m_job_finish(device->m2m_dev, curr_ctx->fh.m2m_ctx);
 
 	return;
 
 stream_off:
-	if (device->isp_dev->rpu && device->isp_dev->rpu->rx_msg_cache && msg)
-		kmem_cache_free(device->isp_dev->rpu->rx_msg_cache, msg);
+	if (device->isp_dev->rpu && msg)
+		visp_free_rx_buffer(device->isp_dev->rpu, msg);
 
 	if(device->isp_dev->streamon[port])
 		media_isp_device_stream_off(device->isp_dev, port, CAMDEV_BUFCHAIN_MP);
@@ -2576,10 +2576,9 @@ int handle_frameout_buffer_mimo(struct visp_dev *isp_dev, int port,
 
 	/* Store latest frame-out message for this port */
 	spin_lock_irqsave(&isp_dev->frameout_lock[port], flags);
-	if (isp_dev->pending_frameout_msg[port] && isp_dev->rpu &&
-	    isp_dev->rpu->rx_msg_cache)
-		kmem_cache_free(isp_dev->rpu->rx_msg_cache,
-				isp_dev->pending_frameout_msg[port]);
+	if (isp_dev->pending_frameout_msg[port] && isp_dev->rpu)
+		visp_free_rx_buffer(isp_dev->rpu,
+				    isp_dev->pending_frameout_msg[port]);
 	isp_dev->pending_frameout_msg[port] = msg;
 	spin_unlock_irqrestore(&isp_dev->frameout_lock[port], flags);
 

@@ -99,12 +99,11 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 	if (!rpu)
 		return -EINVAL;
 
-	if (!rpu->tx_msg_cache)
-		return -EINVAL;
-
-	msg = kmem_cache_zalloc(rpu->tx_msg_cache, GFP_KERNEL);
+	/* Get a buffer from the pre-allocated TX pool */
+	msg = visp_get_tx_buffer(rpu);
 	if (!msg)
 		return -ENOMEM;
+
 	if (size == 0) {
 		msg->msg_id = cmd_id;
 	} else {
@@ -138,14 +137,15 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 			"%s: TX FIFO FULL (RPU%d) - RPU can't drain enqueue commands fast enough. "
 			"This WILL cause frame drops. Check RPU processing load.\n",
 			__func__, rpu->rpu_id);
-		kmem_cache_free(rpu->tx_msg_cache, msg);
+		visp_free_tx_buffer(rpu, msg);
 		return -EAGAIN;
 	}
 
 	ret = vpi_mbox_post(rpu->apu_tx_ctrl, msg, receiver_id, NULL);
 	mutex_unlock(&rpu->write_lock);
 
-	kmem_cache_free(rpu->tx_msg_cache, msg);
+	/* Return buffer to pool after hardware copies it */
+	visp_free_tx_buffer(rpu, msg);
 
 	if (ret)
 		return ret;
@@ -161,10 +161,10 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	int ret = 0;
 	mbox_post_msg *msg_copy;
 
-	/* Allocate from RX cache - consumer will free after kfifo_out */
-	msg_copy = kmem_cache_zalloc(rpu->rx_msg_cache, GFP_ATOMIC);
+	/* Get a buffer from the pre-allocated RX pool */
+	msg_copy = visp_get_rx_buffer(rpu);
 	if (!msg_copy) {
-		pr_err("%s: Failed to allocate from RX cache\n", __func__);
+		pr_err("%s: Failed to get RX buffer\n", __func__);
 		return -ENOMEM;
 	}
 
@@ -175,13 +175,13 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	if (ret != VPI_SUCCESS) {
 		if (ret == VPI_ERR_EMPTY) {
 			/* FIFO empty - race condition between check and read */
-			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+			visp_free_rx_buffer(rpu, msg_copy);
 			return 0; /* Not an error, just empty */
 		}
 		/* Other read errors */
 		pr_err("%s: vpi_mbox_read failed with error: %d\n", __func__,
 		       ret);
-		kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+		visp_free_rx_buffer(rpu, msg_copy);
 		return ret;
 	}
 
@@ -223,7 +223,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 			"Firmware or memory corruption.\n",
 			__func__, isp_id, MAX_ISP_INSTANCES - 1,
 			instance_id, rpu->rpu_id);
-		kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+		visp_free_rx_buffer(rpu, msg_copy);
 		return -EINVAL;
 	}
 
@@ -235,7 +235,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 			"Ensure all ISP modules loaded before "
 			"streaming. Rejecting message.\n",
 			__func__, isp_id, instance_id, cmd, rpu->rpu_id);
-		kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+		visp_free_rx_buffer(rpu, msg_copy);
 		/* Return immediately - no further processing */
 		return -ENODEV;
 	}
@@ -249,7 +249,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				kfifo_len(&rpu->app_fifo), RPU_CMD_KFIFO_SIZE,
 				cmd, rpu->rpu_id);
 			ret = -ENOSPC;
-			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+			visp_free_rx_buffer(rpu, msg_copy);
 			goto ERROR;
 		}
 		mutex_lock(&rpu->app_fifo_lock);
@@ -258,7 +258,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 			dev_err(rpu->dev,
 				"Failed to queue into app_fifo\n");
 			ret = -ENOMEM;
-			kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+			visp_free_rx_buffer(rpu, msg_copy);
 			goto ERROR;
 		}
 		mutex_unlock(&rpu->app_fifo_lock);
@@ -272,7 +272,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 					"FATAL - Invalid port %u (max 3) "
 					"instance_id=%u. Memory corruption\n",
 					port, instance_id);
-				kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+				visp_free_rx_buffer(rpu, msg_copy);
 				return -EINVAL;
 			}
 			/* Extract command type for routing decisions */
@@ -306,7 +306,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 						"for port=%u path=%u (max 31)."
 						" Array bounds violation!\n",
 						buffer_index, port, path);
-					kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+					visp_free_rx_buffer(rpu, msg_copy);
 					return -EINVAL;
 				}
 				/* MIMO mode: Firmware reports path=6, but
@@ -323,7 +323,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				complete(&isp_dev->apu_wait_for_enq_ack
 					[port][path][buffer_index]);
 				/* Free message immediately - no FIFO needed */
-				kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+				visp_free_rx_buffer(rpu, msg_copy);
 			} else {
 				if (kfifo_is_full(&isp_dev->cmd_ack_fifo[port])) {
 					dev_err_ratelimited(rpu->dev,
@@ -333,8 +333,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 						" responses not consumed\n",
 						port, instance_id);
 					ret = -ENOSPC;
-					kmem_cache_free(rpu->rx_msg_cache,
-							msg_copy);
+				visp_free_rx_buffer(rpu, msg_copy);
 					goto ERROR;
 				}
 				mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
@@ -345,7 +344,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 						"Failed to queue into cmd_ack_fifo"
 						"[%u] (race condition)\n", port);
 					ret = -ENOMEM;
-					kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+					visp_free_rx_buffer(rpu, msg_copy);
 					goto ERROR;
 				}
 				mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
@@ -361,7 +360,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				mutex_unlock(&rpu->data_fifo_lock);
 				dev_err(rpu->dev, "Failed to queue into apu data kfifo\n");
 				ret = -ENOMEM;
-				kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+				visp_free_rx_buffer(rpu, msg_copy);
 				goto ERROR;
 			}
 			mutex_unlock(&rpu->data_fifo_lock);
@@ -374,7 +373,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 			if (!isp_dev->frameout_cb) {
 				dev_err(rpu->dev, "CALLBACK IS NULL\n");
 				ret = -EINVAL;
-				kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+				visp_free_rx_buffer(rpu, msg_copy);
 				goto ERROR;
 			}
 
@@ -400,7 +399,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 			"Firmware mismatch or memory corruption.\n",
 			__func__, cmd, instance_id, isp_id,
 			msg_copy->media_server_flags);
-		kmem_cache_free(rpu->rx_msg_cache, msg_copy);
+		visp_free_rx_buffer(rpu, msg_copy);
 		/* Return immediately - corrupted or unsupported command */
 		return -EINVAL;
 	}
