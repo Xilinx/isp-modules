@@ -1969,6 +1969,7 @@ CHANGE_SENSOR_MODE:
 
 ERR_TO_UNREGISTER_SENSOR_HANDLE:
 	dev_err(isp_dev->dev, "Error %s %d\n ", __func__, __LINE__);
+	kfree(format);
 	vsi_cam_device_sensor_drv_handle_un_register(
 	    isp_dev, isp_port->cam_device_handle);
 ERR_TO_DESTROY_CAMDEVICE_HANDLE:

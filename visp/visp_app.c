@@ -2795,6 +2795,7 @@ CHANGE_SENSOR_MODE:
 	return ret_val;
 
 ERR_TO_UNREGISTER_SENSOR_HANDLE:
+	kfree(format);
 	vsi_cam_device_sensor_drv_handle_un_register(
 	    isp_dev, isp_port->cam_device_handle);
 ERR_TO_DESTROY_CAMDEVICE_HANDLE:
