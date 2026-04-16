@@ -359,7 +359,7 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 	}
 
 	user_pkt->cmdid = msg->msg_id;
-	user_pkt->data = msg->payload;
+	user_pkt->data = NULL;
 
 	/* Copy payload data with size validation */
 	size_t copy_size = min_t(size_t, msg->size, sizeof(payload_packet));
@@ -435,8 +435,7 @@ struct rpu_dev *visp_mbox_get_rpu_dev(int rpu_id)
 
 	/* Check if the RPU devices list is empty */
 	if (list_empty(&rpu_devices)) {
-		dev_warn(rpu->dev, "%s: RPU devices list is empty.\n",
-			 __func__);
+		pr_warn("%s: RPU devices list is empty.\n", __func__);
 		mutex_unlock(&rpu_list_lock);
 		return NULL;
 	}
