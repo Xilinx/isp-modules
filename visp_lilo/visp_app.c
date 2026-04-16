@@ -258,6 +258,13 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 	    kmalloc(num_bufs * sizeof(uint32_t), GFP_KERNEL);
 	BufPoolCfg.p_ipl_addr_list =
 	    kmalloc(num_bufs * sizeof(void *), GFP_KERNEL);
+	if (!BufPoolCfg.p_base_addr_list || !BufPoolCfg.p_ipl_addr_list) {
+		kfree(BufPoolCfg.p_base_addr_list);
+		kfree(BufPoolCfg.p_ipl_addr_list);
+		vsi_cam_device_de_init_buf_chain(isp_dev,
+			isp_port->cam_device_handle, chn);
+		return -ENOMEM;
+	}
 
 	if (chn < MEDIA_ISP_CHN_MAX) {
 		// create isp buf pool by user allocated dma memory
@@ -279,6 +286,18 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 		for (i = 0; i < num_bufs; i++) {
 			//-LILO
 			void *buf_addr = (void *)kzalloc(buf_size, GFP_KERNEL);
+			if (!buf_addr) {
+				dev_err(isp_dev->dev,
+					"kzalloc buf failed %s %d\n",
+					__func__, __LINE__);
+				while (--i >= 0) {
+					kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i]);
+					kfree(isp_port->isp_chns[chn].cam_device_bufs[i]);
+				}
+				kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer);
+				ret_val = -ENOMEM;
+				goto ERR_TO_DEINIT_CHAIN;
+			}
 			ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i] = buf_addr;
 			BufPoolCfg.p_base_addr_list[i] =
 			    (uint32_t)(uintptr_t)buf_addr;
@@ -326,7 +345,7 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 			"CamDevice chn %d create buf pool failed, ret is %d",
 			chn, ret_val);
 		ret_val = VSI_ERR_ILLEGAL_PARAM;
-		goto ERR_TO_DEINIT_CHAIN;
+		goto ERR_TO_FREE_BUFS;
 	}
 	/************ STEP 4. SETUP BUF MGMT *******************/
 	ret_val = vsi_cam_device_setup_buf_mgmt(
@@ -348,6 +367,14 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 ERR_TO_DESTROY_BUFPOOL:
 	vsi_cam_device_destroy_buf_pool(isp_dev, isp_port->cam_device_handle,
 					chn);
+ERR_TO_FREE_BUFS:
+	if (chn < MEDIA_ISP_CHN_MAX) {
+		for (i = 0; i < ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].num_bufs; i++) {
+			kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i]);
+			kfree(isp_port->isp_chns[chn].cam_device_bufs[i]);
+		}
+		kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer);
+	}
 ERR_TO_DEINIT_CHAIN:
 	kfree(BufPoolCfg.p_ipl_addr_list);
 	kfree(BufPoolCfg.p_base_addr_list);
