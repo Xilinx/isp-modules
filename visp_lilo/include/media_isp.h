@@ -136,6 +136,7 @@ typedef struct media_isp_port_s {
 	struct mutex main_lock;
 	char bufmode[BUF_MODE_SIZE];
 	bool_t hw_mcm;
+	char fusa_json[MEDIA_ISP_PATH_LENGTH_MAX];
 	bool_t load_json;
 } media_isp_port_attr;
 

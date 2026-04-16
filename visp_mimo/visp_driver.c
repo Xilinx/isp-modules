@@ -795,6 +795,21 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 			isp_dev->isp_ports[port].camera_connect_ref_cnt++;
 
+			if (strlen(isp_dev->isp_ports[port].fusa_json)) {
+				ret = visp_l_fusa_event(isp_dev, pad_stream->pad);
+				if (ret != 0 && ret != -EPIPE) {
+					dev_err(isp_dev->dev,
+						"[EVENT_FAIL] %s %d\n",
+						__func__, __LINE__);
+					return ret;
+				}
+				if (ret == -EPIPE) {
+					dev_err(isp_dev->dev,
+						"Proceed without loadFuSa isp:%d port:%d\n",
+						isp_dev->id, port);
+				}
+			}
+
 #ifdef LOAD_CALIB_ENABLE
 			ret = visp_l_calib_event(isp_dev, pad_stream->pad);
 			if (ret != 0) {
@@ -823,6 +838,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 					__func__, __LINE__);
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n",
 					__func__, __LINE__);
+				if (strlen(isp_dev->isp_ports[port].fusa_json))
+					visp_stop_fusa_event(isp_dev, pad_stream->pad);
 				return ret;
 			}
 #endif

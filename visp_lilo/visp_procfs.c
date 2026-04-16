@@ -142,6 +142,8 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 				   isp_dev->isp_ports[port].sensor_info.i2c_id);
 			seq_printf(sfile, "buffer_type : %s\n",
 				   isp_dev->isp_ports[port].bufmode);
+			seq_printf(sfile, "fusa_json   : %s\n",
+				   isp_dev->isp_ports[port].fusa_json);
 			seq_printf(sfile,
 				   "#################################\n\n\n");
 		}
@@ -323,6 +325,15 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					    isp_dev->isp_ports[port].bufmode,
 					    val,
 					sizeof(isp_dev->isp_ports[port].bufmode));
+				}
+			} else if (strcmp(val, "fusa_json") == 0) {
+				val = strsep(&kv_cur, kv_delim);
+				if (val) {
+					memset(isp_dev->isp_ports[port].fusa_json, 0,
+					       sizeof(isp_dev->isp_ports[port].fusa_json));
+					strscpy(isp_dev->isp_ports[port].fusa_json,
+						val,
+						sizeof(isp_dev->isp_ports[port].fusa_json));
 				}
 			}
 		}

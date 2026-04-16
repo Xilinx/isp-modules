@@ -666,8 +666,11 @@ EXPORT_SYMBOL_GPL(isp_destroy_pipeline);
 
 int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 {
+	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 
 	media_isp_device_stream_off(isp_dev, port, chn);
+	if (strlen(isp_dev->isp_ports[port].fusa_json))
+		visp_stop_fusa_event(isp_dev, pad_index);
 
 	isp_destroy_pipeline(isp_dev, port, chn);
 
