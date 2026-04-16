@@ -408,7 +408,10 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 				dev_err(isp_dev->dev,
 					"FAILED TO KMALLOC %s %d\n", __func__,
 					__LINE__);
-				return -ENOMEM;
+				while (--i >= 0)
+					kfree(isp_port->isp_chns[chn].cam_device_bufs[i]);
+				ret_val = -ENOMEM;
+				goto ERR_TO_DEINIT_CHAIN;
 			}
 			p_media_buffer->index = i;
 			p_media_buffer->base_address =

@@ -271,8 +271,10 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 		ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].num_bufs = num_bufs;
 		ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer =
 			kcalloc(num_bufs, sizeof(void *), GFP_KERNEL);
-		if (!ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer)
-			return -ENOMEM;
+		if (!ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer) {
+			ret_val = -ENOMEM;
+			goto ERR_TO_DEINIT_CHAIN;
+		}
 
 		for (i = 0; i < num_bufs; i++) {
 			//-LILO
@@ -291,7 +293,13 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 				dev_err(isp_dev->dev,
 					"FAILED TO KMALLOC %s %d\n", __func__,
 					__LINE__);
-				return -ENOMEM;
+				do {
+					kfree(isp_port->isp_chns[chn].cam_device_bufs[i]);
+					kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i]);
+				} while (--i >= 0);
+				kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer);
+				ret_val = -ENOMEM;
+				goto ERR_TO_DEINIT_CHAIN;
 			}
 			p_media_buffer->index = i;
 			p_media_buffer->base_address =

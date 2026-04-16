@@ -1103,6 +1103,7 @@ static int visp_buffer_alloc(struct v4l2_subdev *sd, void *arg)
 	if (ext_dma_buf->vaddr == NULL) {
 		dev_err(isp_dev->dev, "%s: failed to alloc dma buffer!\n",
 			__func__);
+		kfree(ext_dma_buf);
 		return -ENOMEM;
 	}
 
@@ -1187,6 +1188,7 @@ int visp_buffer_alloc_public(struct visp_dev *isp_dev,
 	if (ext_dma_buf->vaddr == NULL) {
 		dev_err(isp_dev->dev, "%s: failed to alloc dma buffer!\n",
 			__func__);
+		kfree(ext_dma_buf);
 		return -ENOMEM;
 	}
 
