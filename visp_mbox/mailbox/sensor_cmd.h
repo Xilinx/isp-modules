@@ -117,6 +117,7 @@ typedef enum {
 	APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_UNREG,
 	APU_2_RPU_MB_CMD_SENSOR_CLOSE,
 	APU_2_RPU_MB_CMD_SENSOR_MAPPING,
+	APU_2_RPU_MB_CMD_FMC_ID_SELECT,
 	APU_2_RPU_MB_CMD_SENSOR_QUERY,
 	APU_2_RPU_MB_CMD_SENSOR_GET_INFO,
 	// TEST PATTERN
@@ -579,6 +580,15 @@ struct resource_table  {
 
 int send_command(mb_cmd_id_e cmd, void *data, uint32_t size, uint8_t dest_cpu,
 		 uint8_t src_cpu);
+
+/**
+ * Payload structure for APU_2_RPU_MB_CMD_FMC_ID_SELECT command.
+ * Selects the FMC board and corresponding I2C bus.
+ */
+typedef struct {
+	uint32_t instance_id;   /* cam device instance id */
+	uint8_t  fmc_id;        /* 0 = FMC0, 1 = FMC1 */
+} apu_fmc_id_select_payload_t;
 
 void apu_wait_for_ACK(uint32_t cookie);
 

@@ -77,6 +77,14 @@
 #define MEDIA_ISP_EMPTY_BUF_WAIT_TIME 10
 #define MEDIA_ISP_FULL_BUF_WAIT_TIME 120
 
+/* FMC selection macro: evaluates to 0  or 1 */
+#define FMC_SEL_BUS_ID(fmc)  ((uint8_t)((fmc) & 0x1))
+
+/* Module parameter: set to 0 for FMC0 or 1 for FMC1. */
+static uint8_t fmc_id;
+module_param(fmc_id, byte, 0644);
+MODULE_PARM_DESC(fmc_id, "FMC board selection: 0=FMC0 , 1=FMC1");
+
 int visp_set_fmt_public(struct visp_dev *isp_dev,
 			struct v4l2_subdev_format *format);
 
@@ -1777,6 +1785,67 @@ static int visp_set_compatability_flag(struct visp_dev *isp,
 	return 0;
 }
 
+/**
+ * isp_send_fmc_id_select_to_rpu - Send APU_2_RPU_MB_CMD_FMC_ID_SELECT command
+ * @isp_dev:       pointer to the visp device
+ * @h_cam_device:  cam device handle
+ * @fmc:           FMC selection value (0 = FMC0 ,
+ *                                      1 = FMC1 )
+ *
+ * Sends the FMC ID select command to RPU so that the firmware side can
+ * select the current FMC board
+ *
+ * Return: RET_SUCCESS on success, negative error code on failure.
+ */
+static int isp_send_fmc_id_select_to_rpu(struct visp_dev *isp_dev,
+					  cam_device_handle_t h_cam_device,
+					  uint8_t fmc)
+{
+	int result = RET_SUCCESS;
+	payload_packet *packet;
+	apu_fmc_id_select_payload_t fmc_payload;
+	uint8_t *p_data;
+	cam_device_context_t *p_cam_dev_ctx =
+		(cam_device_context_t *)h_cam_device;
+
+	if (!p_cam_dev_ctx)
+		return RET_WRONG_HANDLE;
+	p_cam_dev_ctx->cookie++;
+
+	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+	if (!packet)
+		return -ENOMEM;
+
+	memset(&fmc_payload, 0, sizeof(fmc_payload));
+	fmc_payload.instance_id = p_cam_dev_ctx->instance_id;
+	fmc_payload.fmc_id      = FMC_SEL_BUS_ID(fmc);
+
+	p_data = packet->payload;
+	packet->cookie = p_cam_dev_ctx->cookie;
+	packet->type         = CMD;
+	packet->payload_size = 0;
+
+	memcpy(p_data, &fmc_payload, sizeof(apu_fmc_id_select_payload_t));
+	packet->payload_size += sizeof(apu_fmc_id_select_payload_t);
+
+	result = xlnx_send_mbox_acked_cmd(isp_dev,
+					  APU_2_RPU_MB_CMD_FMC_ID_SELECT,
+					  packet,
+					  packet->payload_size +
+						payload_extra_size,
+					  isp_dev->isp_rpu, MBOX_CORE_APU);
+	if (result != RET_SUCCESS) {
+		dev_err(isp_dev->dev,
+			"%s: FMC ID select cmd failed ret=%d\n",
+			__func__, result);
+		kfree(packet);
+		return RET_FAILURE;
+	}
+
+	kfree(packet);
+	return result;
+}
+
 int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 {
 	int ret_val = VSI_SUCCESS;
@@ -1852,12 +1921,22 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	if (!apu_sensor) {
 		memset(&hal_i2c_config, 0, sizeof(hal_i2c_config));
 		hal_i2c_config.hal_i2c_mode = HAL_PS_I2C_MODE;
-		hal_i2c_config.i2c_bus_id = 0;
+		hal_i2c_config.i2c_bus_id = FMC_SEL_BUS_ID(fmc_id);
+
+		/* Notify RPU of the selected FMC before I2C init */
+		ret_val = isp_send_fmc_id_select_to_rpu(isp_dev,
+							 isp_port->cam_device_handle,
+							 fmc_id);
+
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev,
+				"FMC ID Select Failed, ret is %d\n", ret_val);
+			goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
+		}
 
 		ret_val = hal_i2c_init(isp_dev, isp_port->cam_device_handle, &hal_i2c_config);
 		if (ret_val != VSI_SUCCESS) {
-			dev_err(isp_dev->dev, "I2C init Failed, ret is %d", ret_val);
-			ret_val = VSI_ERR_TIMEOUT;
+			dev_err(isp_dev->dev, "I2C init Failed, ret is %d\n", ret_val);
 			goto ERR_TO_DESTROY_CAMDEVICE_HANDLE;
 		}
 	}
