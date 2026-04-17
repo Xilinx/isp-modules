@@ -56,6 +56,7 @@
 #define __VISP_DRIVER_H__
 #include <linux/list.h>
 #include <linux/videodev2.h>
+#include <linux/completion.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
@@ -157,6 +158,8 @@ struct visp_event_shm {
 	struct dma_buf *dmabuf;
 	int dmabuf_fd;
 	struct device *dev;
+	struct completion event_ack;
+	uint32_t seq;
 };
 
 typedef struct iba_info {

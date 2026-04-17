@@ -100,8 +100,7 @@ int visp_subdev_post_event(struct visp_mimo_device *visp_vdev,
 			  struct visp_event_pkg *event_pkg)
 {
 	struct v4l2_event event;
-	int timeout_ms = 800000;
-	unsigned int i = 0;
+	unsigned long remaining;
 
 	memset(&event, 0, sizeof(event));
 
@@ -113,24 +112,27 @@ int visp_subdev_post_event(struct visp_mimo_device *visp_vdev,
 		return -EINVAL;
 	}
 
-	event_pkg->ack = 0;
+	/* Assign sequence number for stale-ack protection */
+	visp_vdev->event_shm.seq++;
+	event_pkg->seq = visp_vdev->event_shm.seq;
+
+	reinit_completion(&visp_vdev->event_shm.event_ack);
 
 	v4l2_event_queue(visp_vdev->subdev.devnode, &event);
 
-	for (i = 0; i < timeout_ms; i++) {
-		if (event_pkg->ack)
-			break;
-		usleep_range(5, 10);
-	}
-
-	if (event_pkg->ack == 0) {
-		pr_err("%s post event %d time out\n", visp_vdev->video_dev.name,
-		       event.id);
+	remaining = wait_for_completion_timeout(&visp_vdev->event_shm.event_ack,
+						msecs_to_jiffies(30000));
+	if (!remaining) {
+		pr_err("%s post event %d time out (seq=%u)\n", visp_vdev->video_dev.name,
+		       event.id, event_pkg->seq);
 		return -EIO;
 	}
 
-	if (event_pkg->result)
+	if (event_pkg->result) {
+		pr_err("%s post event %d return error\n", visp_vdev->video_dev.name,
+		       event.id);
 		return -EINVAL;
+	}
 
 	return 0;
 }

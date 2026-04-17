@@ -32,6 +32,7 @@
 #include <linux/fs.h>
 #include <linux/fcntl.h>
 #include <asm/uaccess.h>
+#include <linux/completion.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
@@ -86,6 +87,8 @@ struct visp_video_event_shm {
 	struct dma_buf *dmabuf;
 	int dmabuf_fd;
 	struct device *dev;
+	struct completion event_ack;
+	uint32_t seq;
 };
 
 struct visp_video_reserve_mem {

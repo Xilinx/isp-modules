@@ -109,6 +109,7 @@ struct visp_event_pkg {
 	struct visp_event_pkg_head head;
 	uint8_t ack;
 	int32_t result;
+	uint32_t seq;
 	uint8_t data[2048];
 };
 
@@ -131,6 +132,7 @@ struct isp_rpu {
 
 #define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
 #define VISP_GET_EVENT_SHM_FD _IOR('I', BASE_VIDIOC_PRIVATE + 4, int)
+#define VISP_EVENT_ACK _IOW('I', BASE_VIDIOC_PRIVATE + 5, uint32_t)
 
 #ifdef __KERNEL__
 #include "visp_driver.h"

@@ -71,6 +71,7 @@
 #include <linux/kernel.h>
 #include <linux/kfifo.h>
 #include <linux/spinlock.h>
+#include <linux/completion.h>
 
 #include <linux/mailbox_client.h>
 #include <linux/mailbox_controller.h>
@@ -155,6 +156,8 @@ struct visp_event_shm {
 	struct dma_buf *dmabuf;
 	int dmabuf_fd;
 	struct device *dev;
+	struct completion event_ack;
+	uint32_t seq;
 };
 
 #define MAX_IBA_PER_ISP 5

@@ -1918,6 +1918,20 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 		}
 		break;
 	}
+	case VISP_EVENT_ACK: {
+		struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+		uint32_t ack_seq = *(uint32_t *)arg;
+
+		if (ack_seq == isp_dev->event_shm.seq) {
+			complete(&isp_dev->event_shm.event_ack);
+			ret = 0;
+		} else {
+			dev_warn(isp_dev->dev, "Stale ack: got seq=%u, expected=%u\n",
+				 ack_seq, isp_dev->event_shm.seq);
+			ret = -EINVAL;
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -2997,6 +3011,8 @@ static int visp_probe(struct platform_device *pdev)
 
 	memset(isp_dev->event_shm.virt_addr, 0, isp_dev->event_shm.size);
 	mutex_init(&isp_dev->event_shm.event_lock);
+	init_completion(&isp_dev->event_shm.event_ack);
+	isp_dev->event_shm.seq = 0;
 
 	/* DMA-BUF will be exported lazily on first VISP_GET_EVENT_SHM_FD ioctl */
 	isp_dev->event_shm.dmabuf = NULL;

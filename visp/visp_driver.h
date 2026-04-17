@@ -54,6 +54,7 @@
 
 #ifndef __VISP_DRIVER_H__
 #define __VISP_DRIVER_H__
+#include <linux/completion.h>
 #include <linux/list.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-ctrls.h>
@@ -163,6 +164,8 @@ struct visp_event_shm {
 	struct dma_buf *dmabuf;
 	int dmabuf_fd;
 	struct device *dev;
+	struct completion event_ack;
+	uint32_t seq;
 };
 
 #define MAX_IBA_PER_ISP 5

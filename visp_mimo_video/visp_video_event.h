@@ -59,6 +59,7 @@
 
 #define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
 #define VISP_GET_EVENT_SHM_FD _IOR('I', BASE_VIDIOC_PRIVATE + 4, int32_t)
+#define VISP_EVENT_ACK _IOW('I', BASE_VIDIOC_PRIVATE + 5, uint32_t)
 
 struct isp_rpu {
 	uint32_t rpu;

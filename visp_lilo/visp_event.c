@@ -87,9 +87,9 @@ static bool visp_event_subscribed(struct v4l2_subdev *sd, uint32_t type,
 static int visp_post_event(struct v4l2_subdev *sd,
 			   struct visp_event_pkg *event_pkg)
 {
+	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct v4l2_event event;
-	int timeout_ms = 6000000;
-	int i = 0;
+	unsigned long remaining;
 
 	memset(&event, 0, sizeof(event));
 
@@ -102,16 +102,19 @@ static int visp_post_event(struct v4l2_subdev *sd,
 		return -EPIPE;
 	}
 
+	/* Assign sequence number for stale-ack protection */
+	isp_dev->event_shm.seq++;
+	event_pkg->seq = isp_dev->event_shm.seq;
+
+	reinit_completion(&isp_dev->event_shm.event_ack);
+
 	v4l2_event_queue(sd->devnode, &event);
 
-	for (i = 0; i < timeout_ms; i++) {
-		if (READ_ONCE(event_pkg->ack))
-			break;
-		usleep_range(5, 10);
-	}
-
-	if (event_pkg->ack == 0) {
-		dev_err(sd->dev, "post event %d time out\n", event.id);
+	remaining = wait_for_completion_timeout(&isp_dev->event_shm.event_ack,
+						msecs_to_jiffies(30000));
+	if (!remaining) {
+		dev_err(sd->dev, "post event %d time out (seq=%u)\n",
+			event.id, event_pkg->seq);
 		return -EIO;
 	}
 

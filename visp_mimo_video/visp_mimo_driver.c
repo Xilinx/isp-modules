@@ -2107,6 +2107,20 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 			ret = 0;
 		}
 		break;
+	case VISP_EVENT_ACK: {
+		struct visp_mimo_device *device = v4l2_get_subdevdata(sd);
+		uint32_t ack_seq = *(uint32_t *)arg;
+
+		if (ack_seq == device->event_shm.seq) {
+			complete(&device->event_shm.event_ack);
+			ret = 0;
+		} else {
+			dev_warn(device->event_shm.dev, "Stale ack: got seq=%u, expected=%u\n",
+				 ack_seq, device->event_shm.seq);
+			ret = -EINVAL;
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -2804,6 +2818,8 @@ int visp_mimo_probe(struct platform_device *pdev)
 
 	memset(device->event_shm.virt_addr, 0, device->event_shm.size);
 	mutex_init(&device->event_shm.event_lock);
+	init_completion(&device->event_shm.event_ack);
+	device->event_shm.seq = 0;
 
 	/* DMA-BUF will be exported lazily on first VISP_GET_EVENT_SHM_FD ioctl */
 	device->event_shm.dmabuf = NULL;

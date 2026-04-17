@@ -108,6 +108,7 @@ struct visp_event_pkg {
 	struct visp_event_pkg_head head;
 	uint8_t ack;
 	int32_t result;
+	uint32_t seq;
 	uint8_t data[2048];
 };
 
