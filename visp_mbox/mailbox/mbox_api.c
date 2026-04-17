@@ -74,8 +74,10 @@ int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 	uint64_t buffer_addr_phy;
 	int ret;
 
-	if (shm_block_size == 0)
+	if (shm_block_size == 0) {
+		pr_err("%s: shm_block_size is zero\n", __func__);
 		return VPI_ERR_INVALID;
+	}
 
 	init_fifo =
 	    (fifo_init_data *)kmalloc(sizeof(fifo_init_data), GFP_KERNEL);
@@ -89,6 +91,8 @@ int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 		uint64_t offset;
 
 		if (channel_idx > U64_MAX / shm_block_size) {
+			pr_err("%s: offset overflow (channel_idx=%llu, shm_block_size=%u)\n",
+			       __func__, channel_idx, shm_block_size);
 			kfree(init_fifo);
 			return VPI_ERR_INVALID;
 		}
@@ -105,6 +109,8 @@ int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 		uint64_t offset;
 
 		if (channel_idx > U64_MAX / shm_block_size) {
+			pr_err("%s: offset overflow (channel_idx=%llu, shm_block_size=%u)\n",
+			       __func__, channel_idx, shm_block_size);
 			kfree(init_fifo);
 			return VPI_ERR_INVALID;
 		}

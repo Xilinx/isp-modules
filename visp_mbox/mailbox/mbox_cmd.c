@@ -104,15 +104,11 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 	if (!msg)
 		return -ENOMEM;
 
-	if (size == 0) {
-		msg->msg_id = cmd_id;
-	} else {
-		msg->msg_id = cmd_id;
-		msg->media_server_flags = flag;
-		msg->size = sizeof(payload_packet) - MAX_ITEM +
-			    ((payload_packet *)struct_msg)->payload_size;
-		memcpy(msg->payload, struct_msg, ALIGN(msg->size, 8));
-	}
+	msg->msg_id = cmd_id;
+	msg->media_server_flags = flag;
+	msg->size = sizeof(payload_packet) - MAX_ITEM +
+			((payload_packet *)struct_msg)->payload_size;
+	memcpy(msg->payload, struct_msg, ALIGN(msg->size, 8));
 
 	if (core_id != MBOX_CORE_APU)
 		core_id = MBOX_CORE_APU;
@@ -192,6 +188,11 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	memcpy(&instance_id, payload_ptr, sizeof(uint32_t));
 	payload_ptr += sizeof(uint32_t);
 	memcpy(&path, payload_ptr, sizeof(uint32_t));
+
+	if (instance_id >> 8)
+		dev_warn_ratelimited(rpu->dev,
+				     "%s: instance_id upper bits set 0x%08x\n",
+			__func__, instance_id);
 
 	/* Extract instance_id from bits 0-7 */
 	instance_id = instance_id & 0xFF;

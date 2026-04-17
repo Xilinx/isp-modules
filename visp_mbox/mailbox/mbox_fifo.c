@@ -106,6 +106,7 @@ int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 {
 	uint32_t items_stored;
 	uint32_t current_write_offset, current_read_offset;
+	uint32_t aligned_size;
 
 	if (fifo == NULL || msg == NULL)
 		return VPI_ERR_INVALID;
@@ -140,10 +141,17 @@ int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 		return VPI_ERR_FULL;
 	}
 
+	aligned_size = ALIGN(sizeof(mbox_post_msg) - sizeof(payload_packet) + msg->size,
+			     8);
+	if (aligned_size > fifo->item_size) {
+		pr_err("Write size %u exceeds fifo item size %u\n",
+		       aligned_size, fifo->item_size);
+		return VPI_ERR_INVALID;
+	}
+
 	/* Copy message to shared memory buffer using index */
 	memcpy(((uint8_t *)fifo->buffer_virt + (current_write_offset * fifo->item_size)), msg,
-	       ALIGN(sizeof(mbox_post_msg) - sizeof(payload_packet) + msg->size,
-		     8));
+	       aligned_size);
 	/*
 	 * CRITICAL: Memory barrier sequence for APU→RPU communication
 	 * Use //dmb(sy) for full system visibility (matches RPU's dsb_sync_barrier)
@@ -166,6 +174,7 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 {
 	mbox_post_msg *fifo_msg;
 	uint32_t current_write_offset, current_read_offset;
+	uint32_t aligned_size;
 
 	if (fifo == NULL)
 		return VPI_ERR_INVALID;
@@ -193,9 +202,15 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 	    (mbox_post_msg *)(((char *)fifo->buffer_virt +
 	    (current_read_offset * fifo->item_size)));
 
-	memcpy(msg, fifo_msg,
-	       sizeof(mbox_post_msg) - sizeof(payload_packet) +
-		   (((fifo_msg->size) + 63) & ~63));
+	aligned_size = sizeof(mbox_post_msg) - sizeof(payload_packet) +
+		       (((fifo_msg->size) + 63) & ~63);
+	if (aligned_size > fifo->item_size) {
+		pr_err("Read size %u exceeds fifo item size %u\n",
+		       aligned_size, fifo->item_size);
+		return VPI_ERR_INVALID;
+	}
+
+	memcpy(msg, fifo_msg, aligned_size);
 
 	/* Update read_offset after memcpy completes - use system barrier for RPU visibility
 	 * NOTE: Barrier is currently commented out; enable if coherence issues are observed.

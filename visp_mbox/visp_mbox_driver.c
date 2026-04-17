@@ -248,7 +248,7 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 	}
 
 	/* Allocate memory for user_packet */
-	user_packet = kmalloc(sizeof(payload_user_packet), GFP_KERNEL);
+	user_packet = kzalloc(sizeof(payload_user_packet), GFP_KERNEL);
 	if (!user_packet) {
 		pr_err("%s: Failed to allocate memory for user_packet\n",
 		       __func__);
@@ -256,7 +256,7 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 	}
 
 	/* Allocate memory for packet */
-	packet = kmalloc(sizeof(payload_packet), GFP_KERNEL);
+	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
 	if (!packet) {
 		pr_err("%s: Failed to allocate memory for packet\n", __func__);
 		kfree(user_packet);
@@ -275,6 +275,12 @@ static ssize_t visp_mbox_rpudev_write(struct file *file, const char __user *buf,
 	packet->type = user_packet->type;
 	packet->cookie = user_packet->cookie;
 	packet->payload_size = user_packet->payload_size;
+	if (packet->type == RESP) {
+		packet->resp_field.processed_cmdid =
+			user_packet->resp_field.processed_cmdid;
+		packet->resp_field.error_subcode_t =
+			user_packet->resp_field.error_subcode_t;
+	}
 	memcpy(packet->payload, user_packet->payload,
 	       sizeof(user_packet->payload));
 
@@ -1102,9 +1108,11 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 {
 	struct rpu_dev *rpu;
 	struct device_node *node;
-	struct device *mboxdev;
+	struct device *mboxdev = NULL;
 	char dev_name[20];
 	int ret;
+	bool devno_allocated = false;
+	bool cdev_added = false;
 
 	node = pdev->dev.of_node;
 	mutex_lock(&rpu_list_lock);
@@ -1172,6 +1180,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 			"Failed to allocate device number (error %d)\n", ret);
 		goto cleanup;
 	}
+	devno_allocated = true;
 
 	/* Add the character device */
 	ret = cdev_add(&rpu->cdev, rpu->devno, 1);
@@ -1179,14 +1188,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 		dev_err(&pdev->dev, "Failed to add cdev (error %d)\n", ret);
 		goto cleanup;
 	}
-
-	/* Create a device node */
-	mboxdev = device_create(mailbox_class, NULL, rpu->devno, NULL,
-				dev_name);
-	if (!mboxdev) {
-		dev_err(&pdev->dev, "Failed to create device node\n");
-		goto cleanup;
-	}
+	cdev_added = true;
 
 	rpu->dev = &pdev->dev;
 	rpu->rpu_id = rpu_id;
@@ -1219,6 +1221,14 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 		goto cleanup;
 	}
 
+	/* Create a device node only after successful mailbox initialization. */
+	mboxdev = device_create(mailbox_class, NULL, rpu->devno, NULL,
+				dev_name);
+	if (!mboxdev) {
+		dev_err(&pdev->dev, "Failed to create device node\n");
+		goto cleanup;
+	}
+
 	kref_init(&rpu->refcount);
 
 	/*
@@ -1245,8 +1255,9 @@ cleanup:
 			rpu->rpu_wq = NULL;
 		}
 		/* Buffer pools are embedded in rpu_dev - no cleanup needed */
-		cdev_del(&rpu->cdev);
-		if (rpu->devno)
+		if (cdev_added)
+			cdev_del(&rpu->cdev);
+		if (devno_allocated)
 			unregister_chrdev_region(rpu->devno, 1);
 		if (mboxdev)
 			device_destroy(mailbox_class, rpu->devno);
