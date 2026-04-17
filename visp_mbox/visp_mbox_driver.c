@@ -1408,19 +1408,16 @@ static void visp_mbox_remove(struct platform_device *pdev)
 		return;
 	}
 
-	/* Check and free mailbox channels if defined in the device tree */
-	if (of_property_read_bool(rpu->dev->of_node, "mboxes")) {
-		dev_info(rpu->dev, "Freeing mailbox channels.\n");
-		if (rpu->tx_chan) {
-			mbox_free_channel(rpu->tx_chan);
-			rpu->tx_chan = NULL; // Avoid dangling pointers
-		}
-		if (rpu->rx_chan) {
-			mbox_free_channel(rpu->rx_chan);
-			rpu->rx_chan = NULL; // Avoid dangling pointers
-		}
-	} else {
-		dev_dbg(rpu->dev, "No mailbox channels to free.\n");
+	/* Free mailbox channels regardless of device tree properties. */
+	if (rpu->tx_chan) {
+		dev_info(rpu->dev, "Freeing mailbox TX channel.\n");
+		mbox_free_channel(rpu->tx_chan);
+		rpu->tx_chan = NULL;
+	}
+	if (rpu->rx_chan) {
+		dev_info(rpu->dev, "Freeing mailbox RX channel.\n");
+		mbox_free_channel(rpu->rx_chan);
+		rpu->rx_chan = NULL;
 	}
 
 	/* Call rpu_remove to handle RPU-specific cleanup */
