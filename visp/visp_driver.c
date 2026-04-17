@@ -3004,6 +3004,11 @@ static int visp_probe(struct platform_device *pdev)
 
 	isp_dev->reserve_mem.va =
 	    ioremap_wc(isp_dev->reserve_mem.pa, isp_dev->reserve_mem.size);
+	if (!isp_dev->reserve_mem.va) {
+		dev_err(dev, "Failed to ioremap reserved memory\n");
+		ret = -ENOMEM;
+		goto err_ioremap;
+	}
 
 	visp_ctrl_init(isp_dev);
 
@@ -3050,6 +3055,7 @@ static int visp_probe(struct platform_device *pdev)
 err_destroy_enq_wq:
 	visp_destroy_enq_wqs(isp_dev);
 
+err_ioremap:
 	/* Free DMA memory if it was allocated */
 	if (isp_dev->event_shm.virt_addr) {
 		dma_free_coherent(isp_dev->event_shm.dev, isp_dev->event_shm.size,
@@ -3117,6 +3123,10 @@ static void visp_remove(struct platform_device *pdev)
 	}
 
 	visp_ctrl_destroy(isp_dev);
+
+	if (isp_dev->reserve_mem.va)
+		iounmap(isp_dev->reserve_mem.va);
+
 	dev_info(&pdev->dev, "visp isp driver remove\n");
 
 }
