@@ -57,6 +57,7 @@
 #include <linux/gfp.h>
 #include <linux/ioport.h>
 #include <linux/kernel.h>
+#include <linux/limits.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include "mbox_api.h"
@@ -73,6 +74,9 @@ int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 	uint64_t buffer_addr_phy;
 	int ret;
 
+	if (shm_block_size == 0)
+		return VPI_ERR_INVALID;
+
 	init_fifo =
 	    (fifo_init_data *)kmalloc(sizeof(fifo_init_data), GFP_KERNEL);
 
@@ -82,7 +86,13 @@ int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 	if (core_id == MBOX_CORE_APU) {
 		/* APU receiving from RPU: RX channel (even index within pair) */
 		uint64_t channel_idx = sender_id * 2;  /* sender_id is RPU enum (0-3) */
-		uint64_t offset = channel_idx * shm_block_size;
+		uint64_t offset;
+
+		if (channel_idx > U64_MAX / shm_block_size) {
+			kfree(init_fifo);
+			return VPI_ERR_INVALID;
+		}
+		offset = channel_idx * shm_block_size;
 
 		buffer_addr_virt = (void *)(shm_start_addr + offset);
 		buffer_addr_phy = shm_start_addr_phy + offset;
@@ -92,7 +102,13 @@ int visp_mbox_mem_map(mbox_fifo_ctrl *mbox_fifo, mbox_core_id core_id,
 	} else {
 		/* RPU receiving from APU: TX channel (odd index within pair) */
 		uint64_t channel_idx = (core_id * 2) + 1;  /* core_id is RPU enum (0-3) */
-		uint64_t offset = channel_idx * shm_block_size;
+		uint64_t offset;
+
+		if (channel_idx > U64_MAX / shm_block_size) {
+			kfree(init_fifo);
+			return VPI_ERR_INVALID;
+		}
+		offset = channel_idx * shm_block_size;
 
 		buffer_addr_virt = (void *)(shm_start_addr + offset);
 		buffer_addr_phy = shm_start_addr_phy + offset;

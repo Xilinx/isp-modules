@@ -980,6 +980,7 @@ static int visp_mbox_firmware_load(struct rpu_dev *rpu)
 	/* Search for the remoteproc device by looking
 	 * at the platform device's children
 	 */
+	rpu->rproc = NULL;
 	device_for_each_child(&rpu->rproc_pdev->dev, &rpu->rproc,
 			      find_rproc_child);
 
@@ -1020,6 +1021,10 @@ static int visp_mbox_firmware_load(struct rpu_dev *rpu)
 		dev_err(dev, "Failed to boot remoteproc for RPU %d: %d\n",
 			rpu_id, ret);
 		dev_err(dev, "Ensure firmware exists in /lib/firmware/\n");
+		/*
+		 * Keep mailbox resources intact so users can load custom firmware
+		 * and retry boot without re-probing the device.
+		 */
 		rpu->rproc = NULL;
 		put_device(&rpu->rproc_pdev->dev);
 		return 0;
