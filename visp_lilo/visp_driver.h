@@ -242,6 +242,7 @@ struct visp_lilo_isp_dev_extended {
 	bool is_oba_yuv_420[VISP_PORT_PAD_NR];
 	int yuv_420_format_index[VISP_PORT_PAD_NR];
 	struct buf_instance buf_list[VISP_PORT_PAD_NR];
+	bool fps_initialized;
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
