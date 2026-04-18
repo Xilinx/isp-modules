@@ -2806,7 +2806,6 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 	int ret = 0;
 
-	mutex_lock(&isp_dev->rpu->rpu_lock);
 	/* Try to create ISP device if not already created */
 	if (!isp_dev->isp_ports[port].cam_device_handle) {
 		ret = isp_device_create(isp_dev, port);
@@ -2816,13 +2815,13 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 				"device creation failed with %d\n",
 				ret);
 
-			mutex_unlock(&isp_dev->rpu->rpu_lock);
 			return ret;
 		}
 	}
 	/*perform camera or filter configuration if not already done*/
 	if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
 #ifdef LOAD_CALIB_ENABLE
+		mutex_lock(&isp_dev->rpu->rpu_lock);
 		ret = visp_l_calib_event(isp_dev, pad);
 		if (ret != 0 && ret != -EPIPE) {
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
@@ -2836,7 +2835,7 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
 				isp_dev->id, port);
 		}
-
+		mutex_unlock(&isp_dev->rpu->rpu_lock);
 #endif
 
 		ret = media_isp_device_camera_connect(isp_dev, pad);
@@ -2845,7 +2844,6 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 				"%s %d FAiled camera connect\n",
 				__func__, __LINE__);
 			ret = -ENODEV;
-			mutex_unlock(&isp_dev->rpu->rpu_lock);
 			isp_device_destroy(isp_dev, port, chn);
 			return ret;
 		}
@@ -2857,7 +2855,6 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d ret:%d\n",
 					__func__, __LINE__, isp_dev->id, port, ret);
 				ret = -ENOMEM;
-				mutex_unlock(&isp_dev->rpu->rpu_lock);
 				media_isp_device_camera_dis_connect(isp_dev, port, chn);
 				isp_device_destroy(isp_dev, port, chn);
 				return ret;
@@ -2869,6 +2866,7 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 		}
 
 #ifdef LOAD_CALIB_ENABLE
+		mutex_lock(&isp_dev->rpu->rpu_lock);
 		ret = visp_l_json_event(isp_dev, pad);
 		if (ret != 0 && ret != -EPIPE) {
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
@@ -2890,9 +2888,8 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			/* indicate json is loaded, and 3a lib is registered */
 			isp_dev->isp_ports[port].load_json = (bool_t)true;
 		}
+		mutex_unlock(&isp_dev->rpu->rpu_lock);
 #endif
 	}
-	mutex_unlock(&isp_dev->rpu->rpu_lock);
-
 	return 0;
 }

@@ -954,9 +954,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		isp_dev->pad_data[pad_stream->pad].sequence = 0;
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 
-		/*ENTER PORT Level CRITICAL SECITON*/
-		mutex_lock(&isp_dev->rpu->rpu_lock);
-
 		ret = media_isp_device_set_frame_rate(
 			isp_dev, port,
 			&isp_dev->isp_ports[port].sensor_info.frame_rate);
@@ -980,8 +977,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				isp_dev->id, port);
 			goto ERR_TO_CAMERA_DISCONNECT;
 		}
-		mutex_unlock(&isp_dev->rpu->rpu_lock);
-		/*EXIT PORT Level CRITICAL SECITON*/
 	}
 
 	else {
@@ -1016,7 +1011,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 
 ERR_TO_CAMERA_DISCONNECT:
 	visp_stream_off(isp_dev);
-	mutex_unlock(&isp_dev->rpu->rpu_lock);
 	isp_dev->streamon[pad_stream->pad] = 0;
 	isp_dev->pad_data[pad_stream->pad].stream = 0;
 	return ret;

@@ -1220,8 +1220,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		isp_dev->pad_data[pad_stream->pad].sequence = 0;
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 
-		/* ENTER PORT Level CRITICAL SECTION */
-		mutex_lock(&isp_dev->rpu->rpu_lock);
 		/*
 		 * the subdev_streamon_count[port] holds the count of number of
 		 * piplines MP/SP/RAW are up on a port
@@ -1263,7 +1261,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		}
 		/* only all subdev stream on, then mark subdev_streamon_count */
 		ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
-		mutex_unlock(&isp_dev->rpu->rpu_lock);
 		/* EXIT PORT Level CRITICAL SECTION */
 	} else {
 		if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]) {
@@ -1302,7 +1299,6 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	return ret;
 
 ERR_TO_RPU_LOCK:
-	mutex_unlock(&isp_dev->rpu->rpu_lock);
 	isp_dev->streamon[pad_stream->pad] = 0;
 	isp_dev->pad_data[pad_stream->pad].stream = 0;
 	return ret;

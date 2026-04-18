@@ -2330,12 +2330,10 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 
 	int port = 0; // for LILO
 	/*Create Instance*/
-	mutex_lock(&isp_dev->rpu->rpu_lock);
 	/* Try to create ISP device if not already created */
 	if (!isp_dev->isp_ports[port].cam_device_handle) {
 		ret = isp_device_create(isp_dev, port);
 		if (ret != VSI_SUCCESS) {
-			mutex_unlock(&isp_dev->rpu->rpu_lock);
 			dev_err(isp_dev->dev, "CamDevice Creat Isp , ret is %d", ret);
 			return ret;
 		}
@@ -2348,7 +2346,6 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 				dev_err(isp_dev->dev,
 					"[EVENT_FAIL] %s %d isp:%d port:%d ret:%d\n",
 					__func__, __LINE__, isp_dev->id, port, ret);
-				mutex_unlock(&isp_dev->rpu->rpu_lock);
 				return ret;
 			}
 			if (ret == -EPIPE) {
@@ -2358,6 +2355,7 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			}
 		}
 #ifdef LOAD_CALIB_ENABLE
+		mutex_lock(&isp_dev->rpu->rpu_lock);
 		ret = visp_l_calib_event(isp_dev, pad);
 		if (ret != 0 && ret != -EPIPE) {
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
@@ -2369,6 +2367,7 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
 				isp_dev->id, port);
 		}
+		mutex_unlock(&isp_dev->rpu->rpu_lock);
 #endif
 
 		ret = media_isp_device_camera_connect(isp_dev, pad);
@@ -2376,11 +2375,11 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev,
 				"%s %d FAiled camera connect\n",
 				__func__, __LINE__);
-			mutex_unlock(&isp_dev->rpu->rpu_lock);
 			return ret;
 		}
 
 #ifdef LOAD_CALIB_ENABLE
+		mutex_lock(&isp_dev->rpu->rpu_lock);
 		ret = visp_l_json_event(isp_dev, pad);
 		if (ret != 0 && ret != -EPIPE) {
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
@@ -2399,11 +2398,11 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
 				isp_dev->id, port);
 		}
+		mutex_unlock(&isp_dev->rpu->rpu_lock);
 #endif
 		}
 
 	/*Exit port Level Critical Section */
-	mutex_unlock(&isp_dev->rpu->rpu_lock);
 	return ret;
 }
 
