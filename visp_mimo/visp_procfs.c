@@ -525,7 +525,8 @@ void visp_procfs_unregister(unsigned long pde)
 	int ret = 0;
 	bool found = false;
 	int32_t files_cnt;
-	struct visp_procfs *isp_proc = (struct visp_procfs *)pde;
+	struct visp_procfs *isp_proc =
+		container_of((struct proc_dir_entry **)pde, struct visp_procfs, pde);
 
 	ret = find_proc_dir_by_name("/proc", "vsi", &found, NULL);
 	if (ret == 0) {
