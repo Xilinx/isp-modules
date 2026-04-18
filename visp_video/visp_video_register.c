@@ -2841,7 +2841,7 @@ static int visp_video_vb2_start_streaming(struct vb2_queue *queue,
 	if (ret) {
 		for (i = 0; i < queue->max_num_buffers; i++) {
 			if (!queue->bufs[i])
-				return -EINVAL; // RET if max_numbuffers > allocated buffers.
+				break;
 			if (queue->bufs[i]->state == VB2_BUF_STATE_ACTIVE)
 				vb2_buffer_done(queue->bufs[i], VB2_BUF_STATE_QUEUED);
 		}
@@ -2873,7 +2873,7 @@ static void visp_video_vb2_stop_streaming(struct vb2_queue *queue)
 
 	for (i = 0; i < queue->max_num_buffers; i++) {
 		if (queue->bufs[i] == NULL)
-			return; // RET if max_numbuffers > allocated buffers.
+			break;
 		if (queue->bufs[i]->state == VB2_BUF_STATE_ACTIVE)
 			vb2_buffer_done(queue->bufs[i], VB2_BUF_STATE_ERROR);
 	}
