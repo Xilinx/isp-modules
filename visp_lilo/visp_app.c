@@ -1188,10 +1188,10 @@ int media_isp_calib_get_mode_info(struct visp_dev *isp_dev, uint8_t port,
 	int ret_val = VSI_SUCCESS;
 	media_isp_port_attr *isp_port = VSI_NULL;
 
-	if (!isp_dev || !mode_info) {
-		dev_err(isp_dev->dev, "%s: null pointer of handle", __func__);
-		ret_val = VSI_ERR_NULL_PTR;
-		return ret_val;
+	if (!mode_info) {
+		dev_err(isp_dev->dev, "%s: null pointer of mode_info",
+			__func__);
+		return VSI_ERR_NULL_PTR;
 	}
 
 	isp_port = &isp_dev->isp_ports[port];
@@ -1246,12 +1246,10 @@ int media_isp_calib_get_sensor_name(struct visp_dev *isp_dev, uint8_t port,
 	media_isp_port_attr *isp_port = VSI_NULL;
 	int ret_val = VSI_SUCCESS;
 
-	isp_port = &isp_dev->isp_ports[port];
-
-	if (!sensor_name || !isp_dev) {
-		dev_err(isp_dev->dev, "%s: null pointer of handle", __func__);
-		ret_val = VSI_ERR_NULL_PTR;
-		return ret_val;
+	if (!sensor_name) {
+		dev_err(isp_dev->dev, "%s: null pointer of sensor_name",
+			__func__);
+		return VSI_ERR_NULL_PTR;
 	}
 
 	isp_port = &isp_dev->isp_ports[port];
@@ -1274,10 +1272,10 @@ int media_isp_calib_get_sensor_mode(struct visp_dev *isp_dev, uint8_t port,
 	int ret_val = VSI_SUCCESS;
 	media_isp_port_attr *isp_port = VSI_NULL;
 
-	if (!sensor_mode || !isp_dev) {
-		dev_err(isp_dev->dev, "%s: null pointer of handle", __func__);
-		ret_val = VSI_ERR_NULL_PTR;
-		return ret_val;
+	if (!sensor_mode) {
+		dev_err(isp_dev->dev, "%s: null pointer of sensor_mode",
+			__func__);
+		return VSI_ERR_NULL_PTR;
 	}
 
 	isp_port = &isp_dev->isp_ports[port];
@@ -1619,12 +1617,6 @@ int media_isp_calib_query_sensor(struct visp_dev *isp_dev, uint8_t port)
 	cam_device_sensor_query_t *QueryInfo = &QueryInfo_s;
 	media_isp_port_attr *isp_port = VSI_NULL;
 
-	if (!isp_dev) {
-		dev_err(isp_dev->dev, "%s: null pointer of handle", __func__);
-		ret_val = VSI_ERR_NULL_PTR;
-		return ret_val;
-	}
-
 	isp_port = &isp_dev->isp_ports[port];
 
 	ret_val = vsi_cam_device_sensor_query(
@@ -1674,12 +1666,6 @@ int media_isp_calib_load_isp_config(struct visp_dev *isp_dev, uint8_t port)
 	int ret_val = VSI_SUCCESS;
 	media_isp_port_attr *isp_port = VSI_NULL;
 	char dev_name[MEDIA_ISP_CHAR_LENGTH_MAX];
-
-	if (!isp_dev) {
-		dev_err(isp_dev->dev, "%s: null pointer of handle", __func__);
-		ret_val = VSI_ERR_NULL_PTR;
-		return ret_val;
-	}
 
 	isp_port = &isp_dev->isp_ports[port];
 
