@@ -362,8 +362,10 @@ static ssize_t visp_procfs_write(struct file *file, const char __user *buffer,
 	if (!str_buf)
 		return -ENOMEM;
 
-	if (copy_from_user(str_buf, buffer, count))
+	if (copy_from_user(str_buf, buffer, count)) {
+		kfree(str_buf);
 		return -EFAULT;
+	}
 
 	*(str_buf + count - 1) = '\0';
 
