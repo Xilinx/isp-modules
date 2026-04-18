@@ -1993,7 +1993,7 @@ static int visp_video_try_create_pipeline(struct visp_video_dev *visp_vdev)
 	subdev = visp_video_remote_subdev(visp_vdev);
 	if (!subdev) {
 		dev_err(visp_vdev->visp_mdev->dev, "try_create_pipeline: no remote subdev found\n");
-		return -EINVAL;
+		return -ENODEV;
 	}
 
 #if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
@@ -2004,7 +2004,7 @@ static int visp_video_try_create_pipeline(struct visp_video_dev *visp_vdev)
 
 	if (!pad) {
 		dev_err(visp_vdev->visp_mdev->dev, "try_create_pipeline: no remote pad found\n");
-		return -EINVAL;
+		return -ENODEV;
 	}
 
 	sd_fmt.pad = pad->index;
