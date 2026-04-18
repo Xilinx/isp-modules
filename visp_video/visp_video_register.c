@@ -3005,7 +3005,12 @@ error_free_visp_vdev:
 
 int visp_video_unregister(struct visp_media_dev *visp_mdev, int port)
 {
-	struct visp_video_dev *visp_vdev = visp_mdev->video_devs[port];
+	struct visp_video_dev *visp_vdev;
+
+	if (port < 0 || port >= VISP_VIDEO_PORT_MAX)
+		return -EINVAL;
+
+	visp_vdev = visp_mdev->video_devs[port];
 
 	if (visp_vdev == NULL)
 		return 0;

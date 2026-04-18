@@ -216,6 +216,13 @@ static int visp_video_notifier_bound(struct v4l2_async_notifier *notifier,
 		if (sd->entity.pads[link.local_port].flags == MEDIA_PAD_FL_SINK)
 			continue;
 
+	if (link.remote_port >= VISP_VIDEO_PORT_MAX) {
+		dev_err(dev, "remote_port %u exceeds max %d\n",
+			link.remote_port, VISP_VIDEO_PORT_MAX);
+		v4l2_fwnode_put_link(&link);
+		continue;
+	}
+
 		visp_vdev = visp_mdev->video_devs[link.remote_port];
 		vdev = visp_vdev->video;
 		source = &sd->entity;
@@ -393,6 +400,12 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 		if (!ep)
 			break;
 		port_id++;
+		if (port_id >= VISP_VIDEO_PORT_MAX) {
+			dev_warn(&pdev->dev,
+				 "Reached max ports %d, ignoring additional ports\n",
+				 VISP_VIDEO_PORT_MAX);
+			break;
+		}
 	}
 
 	snprintf(node_name, sizeof(node_name), "isp%d_reserve_memory",
