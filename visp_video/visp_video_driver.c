@@ -505,9 +505,9 @@ static void visp_video_remove(struct platform_device *pdev)
 
 	visp_mdev = platform_get_drvdata(pdev);
 
-	media_device_unregister(&visp_mdev->mdev);
 	visp_video_async_unregister_subdev(visp_mdev);
 	visp_video_unregister_ports(visp_mdev);
+	media_device_unregister(&visp_mdev->mdev);
 	v4l2_device_unregister(&visp_mdev->v4l2_dev);
 	dev_info(&pdev->dev, "visp video driver remove\n");
 }
