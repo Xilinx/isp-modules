@@ -440,7 +440,7 @@ int media_isp_device_create_buf_pool(struct visp_dev *isp_dev, uint8_t port,
 				__func__, isp_dev->id, i, isp_dev->ip_a[i]);
 
 			}
-			uint32_t high_mem = isp_dev->ip_a[i]>>32U;
+			uint32_t high_mem = isp_dev->ip_a[num_bufs - 1]>>32U;
 
 			if(high_mem)
 			{
