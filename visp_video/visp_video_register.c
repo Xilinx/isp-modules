@@ -2187,10 +2187,6 @@ static int visp_videoc_s_fmt_vid_cap(struct file *file, void *priv,
 
 	visp_vdev->format = *f;
 
-	//   printk("%d x %d size %d fmt %s\n",
-	//   f->fmt.pix.width,f->fmt.pix.height,f->fmt.pix.sizeimage, (char
-	//   *)&f->fmt.pix.pixelformat);
-
 	return 0;
 }
 
