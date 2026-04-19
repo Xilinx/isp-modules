@@ -254,7 +254,7 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	struct visp_ctrl *isp_ctrl;
 	u8 *pdata = event_pkg->data;
 
-	pad = 1;//vipp sends pad as 0 always, temporarily hardcoding this to 0
+	pad = 1;//vipp sends pad as 0 always, temporarily hardcoding this to 1
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 
 	/* If stream is not active, skip silently */
@@ -304,7 +304,7 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	struct visp_ctrl *isp_ctrl;
 	u8 *pdata = event_pkg->data;
 
-	pad = 1;//vipp sends pad as 0 always, temporarily hardcoding this to 0
+	pad = 1;//vipp sends pad as 0 always, temporarily hardcoding this to 1
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 
 	/* If stream is not active, return default (zero) values */
