@@ -75,6 +75,14 @@
 #include "visp_v4l2_common.h"
 #include "visp_v4l2_std_exts.h"
 
+/*
+ * ISP DMA engine operates on 128-bit words
+ * All stride calculations must account for this hardware constraint
+ */
+#define ISP_DMA_WORD_BITS	128	/* Hardware DMA word size in bits */
+#define ISP_DMA_WORD_BYTES	16	/* Hardware DMA word size in bytes (128/8) */
+#define ISP_STRIDE_ALIGN	16	/* Stride must be 16-byte aligned */
+
 static struct visp_video_fmt_info visp_formats_info[] = {
 	{
 		.fourcc = V4L2_PIX_FMT_NV16,
@@ -637,7 +645,7 @@ static int visp_video_get_format_stride(uint32_t fourcc,
 				stride = width * 4 / 3;
 				if (fourcc == V4L2_PIX_FMT_I40DWA ||
 					fourcc == V4L2_PIX_FMT_I48DWA) {
-					stride = ALIGN(stride, 16);
+					stride = ALIGN(stride, ISP_STRIDE_ALIGN);
 				} else {
 					stride = ALIGN(stride, ALIGN_BYTES);
 				}
@@ -647,10 +655,10 @@ static int visp_video_get_format_stride(uint32_t fourcc,
 
 		case 10:
 			if (align_mode == 0) {
-				stride = DIV_ROUND_UP(width * 10, 128) * 16;
+				stride = DIV_ROUND_UP(width * 10, ISP_DMA_WORD_BITS) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			} else if (align_mode == 1) {
-				stride = DIV_ROUND_UP(width, 8) * 16;
+				stride = DIV_ROUND_UP(width, 8) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			} else {
 				stride = width * 4 / 3;
@@ -659,7 +667,7 @@ static int visp_video_get_format_stride(uint32_t fourcc,
 			break;
 
 		case 12:
-			stride = DIV_ROUND_UP(width * 12, 128) * 16;
+			stride = DIV_ROUND_UP(width * 12, ISP_DMA_WORD_BITS) * ISP_DMA_WORD_BYTES;
 			stride = ALIGN(stride, ALIGN_BYTES);
 			break;
 
@@ -672,7 +680,7 @@ static int visp_video_get_format_stride(uint32_t fourcc,
 	} else if (fmt_type == 1) {
 		/*RGB*/
 		if (fourcc == V4L2_PIX_FMT_RGB24DWA)
-			stride = ALIGN(width * 4 / 3, 16);
+			stride = ALIGN(width * 4 / 3, ISP_STRIDE_ALIGN);
 		else
 			stride = ALIGN(width, ALIGN_BYTES);
 
@@ -681,14 +689,14 @@ static int visp_video_get_format_stride(uint32_t fourcc,
 		/*RAW*/
 		switch (bit_width) {
 		case 8:
-			stride = ALIGN(width, 16);
+			stride = ALIGN(width, ISP_STRIDE_ALIGN);
 			break;
 		case 10:
 			if (align_mode == 0) {
-				stride = DIV_ROUND_UP(width * 10, 128) * 16;
+				stride = DIV_ROUND_UP(width * 10, ISP_DMA_WORD_BITS) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			} else if (align_mode == 1) {
-				stride = DIV_ROUND_UP(width, 8) * 16;
+				stride = DIV_ROUND_UP(width, 8) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			} else {
 				stride = width * 4 / 3;
@@ -698,37 +706,37 @@ static int visp_video_get_format_stride(uint32_t fourcc,
 
 		case 12:
 			if (align_mode == 0) {
-				stride = DIV_ROUND_UP(width * 12, 128) * 16;
+				stride = DIV_ROUND_UP(width * 12, ISP_DMA_WORD_BITS) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			} else if (align_mode == 1) {
-				stride = DIV_ROUND_UP(width, 8) * 16;
+				stride = DIV_ROUND_UP(width, 8) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			} else {
-				stride = DIV_ROUND_UP(width, 10) * 16;
+				stride = DIV_ROUND_UP(width, 10) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			}
 			break;
 
 		case 14:
 			if (align_mode == 0) {
-				stride = DIV_ROUND_UP(width * 14, 128) * 16;
+				stride = DIV_ROUND_UP(width * 14, ISP_DMA_WORD_BITS) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			} else if (align_mode == 1) {
-				stride = DIV_ROUND_UP(width, 8) * 16;
+				stride = DIV_ROUND_UP(width, 8) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			} else {
-				stride = DIV_ROUND_UP(width, 9) * 16;
+				stride = DIV_ROUND_UP(width, 9) * ISP_DMA_WORD_BYTES;
 				stride = ALIGN(stride, ALIGN_BYTES);
 			}
 			break;
 
 		case 16:
-			stride = DIV_ROUND_UP(width * 16, 128) * 16;
+			stride = DIV_ROUND_UP(width * 16, ISP_DMA_WORD_BITS) * ISP_DMA_WORD_BYTES;
 			stride = ALIGN(stride, ALIGN_BYTES);
 			break;
 
 		case 24:
-			stride = DIV_ROUND_UP(width * 24, 128) * 16;
+			stride = DIV_ROUND_UP(width * 24, ISP_DMA_WORD_BITS) * ISP_DMA_WORD_BYTES;
 			stride = ALIGN(stride, ALIGN_BYTES);
 			break;
 
