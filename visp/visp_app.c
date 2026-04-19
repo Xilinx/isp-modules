@@ -2192,9 +2192,21 @@ int read_dq_buf_info(void *data, struct visp_dev *isp_dev, struct Chn_info *info
 	*buf_index = idx;
 	p_data += sizeof(uint8_t);
 
-	output_buffer_t *output_buffer = NULL;
+	/* Get channel info first to access num_bufs */
 	media_isp_chn_attr *isp_chns =
 	    &isp_dev->isp_ports[info->vt_id].isp_chns[info->path];
+
+	/* Validate buffer index from RPU firmware - never trust external hardware.
+	 * Check against actual allocated buffer count, not array capacity.
+	 */
+	if (*buf_index >= isp_chns->num_bufs) {
+		dev_err(isp_dev->dev,
+			"%s: Invalid buf_index %u from RPU (allocated: %u) - firmware bug or corruption\n",
+			__func__, *buf_index, isp_chns->num_bufs);
+		return -EINVAL;
+	}
+
+	output_buffer_t *output_buffer = NULL;
 	output_buffer = isp_chns->cam_device_bufs[*buf_index];
 
 	memcpy(&(output_buffer->p_owner), p_data, sizeof(uint32_t));
