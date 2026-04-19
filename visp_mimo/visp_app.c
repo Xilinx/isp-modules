@@ -383,6 +383,14 @@ int media_isp_device_create_buf_pool(struct visp_dev *isp_dev, uint8_t port,
 		kmalloc(num_bufs * sizeof(uint32_t), GFP_KERNEL);
 	BufPoolCfg.p_ipl_addr_list =
 		kmalloc(num_bufs * sizeof(void *), GFP_KERNEL);
+	if (!BufPoolCfg.p_base_addr_list || !BufPoolCfg.p_ipl_addr_list) {
+		dev_err(isp_dev->dev, "%s: failed to allocate buf pool lists\n",
+			__func__);
+		kfree(BufPoolCfg.p_base_addr_list);
+		kfree(BufPoolCfg.p_ipl_addr_list);
+		ret_val = -ENOMEM;
+		goto ERR_TO_DEINIT_CHAIN_NOMEM;
+	}
 
 	if (chn < MEDIA_ISP_CHN_MAX) {
 		// create isp buf pool by user allocated dma memory
@@ -504,6 +512,7 @@ ERR_TO_RELEASE_MEM:
 ERR_TO_DEINIT_CHAIN:
 	kfree(BufPoolCfg.p_ipl_addr_list);
 	kfree(BufPoolCfg.p_base_addr_list);
+ERR_TO_DEINIT_CHAIN_NOMEM:
 	vsi_cam_device_de_init_buf_chain(isp_dev, isp_port->cam_device_handle,
 					 chn);
 
