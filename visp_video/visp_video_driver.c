@@ -390,8 +390,12 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 
 	struct fwnode_handle *ep;
 
-	fwnode_property_read_u32(of_fwnode_handle(pdev->dev.of_node), "id",
-				 &visp_mdev->id);
+	ret = fwnode_property_read_u32(of_fwnode_handle(pdev->dev.of_node),
+				       "id", &visp_mdev->id);
+	if (ret) {
+		dev_err(&pdev->dev, "Missing 'id' property in device tree\n");
+		return -EINVAL;
+	}
 
 	while (1) {
 		ep = fwnode_graph_get_endpoint_by_id(
