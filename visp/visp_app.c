@@ -2164,7 +2164,7 @@ int media_isp_hal_buf_done(struct v4l2_subdev *sd, int pad,
 }
 
 int read_dq_buf_info(void *data, struct visp_dev *isp_dev, struct Chn_info *info,
-		    uint8_t *buf_index)
+		    uint8_t *buf_index, uint32_t *p_owner)
 {
 	uint8_t *p_data = NULL;
 	uint32_t hw_id_t = 100;
@@ -2206,10 +2206,12 @@ int read_dq_buf_info(void *data, struct visp_dev *isp_dev, struct Chn_info *info
 		return -EINVAL;
 	}
 
-	output_buffer_t *output_buffer = NULL;
-	output_buffer = isp_chns->cam_device_bufs[*buf_index];
+	/* Read p_owner from payload. Do NOT access cam_device_bufs[] here -
+	 * the array entry could be freed concurrently by destroy_buf_pool,
+	 * causing use-after-free. Caller writes p_owner under lock.
+	 */
+	memcpy(p_owner, p_data, sizeof(uint32_t));
 
-	memcpy(&(output_buffer->p_owner), p_data, sizeof(uint32_t));
 	return 0;
 }
 

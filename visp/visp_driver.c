@@ -853,21 +853,20 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev, int port, mbox_post_
 		return -EINVAL;
 	}
 
-	/* Dequeue buffer from the ISP device - pass payload directly */
-	read_dq_buf_info(msg->payload, isp_dev, &info, &buf_index);
-
-	/* Validate buffer index to detect RPU reusing stale indices */
-	if (buf_index >= 32) {
+	/* Dequeue buffer from the ISP device - pass payload directly.
+	 * read_dq_buf_info() validates buf_index and reads p_owner from payload.
+	 */
+	uint32_t p_owner_val;
+	ret_val = read_dq_buf_info(msg->payload, isp_dev, &info, &buf_index, &p_owner_val);
+	if (ret_val) {
 		dev_err(isp_dev->dev,
-			"%s: Invalid buf_index %u (max 31) - RPU may be reusing stale buffer\n",
-			__func__,
-			buf_index);
-		ret_val = -EINVAL;
+			"%s: Invalid buffer info from RPU\n", __func__);
 		goto error_free_buf;
 	}
 
-	/* Lock to read cam_device_bufs - protects against concurrent p_owner
-	 * writes
+	/* Lock to read cam_device_bufs and write p_owner atomically.
+	 * Without lock, destroy_buf_pool could free the buffer between
+	 * pointer read and p_owner write, causing use-after-free.
 	 */
 	mutex_lock(&isp_dev->isp_ports[info.vt_id]
 		   .isp_chns[info.path]
@@ -875,6 +874,9 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev, int port, mbox_post_
 	output_buffer = isp_dev->isp_ports[info.vt_id]
 			    .isp_chns[info.path]
 			    .cam_device_bufs[buf_index];
+	if (output_buffer) {
+		output_buffer->p_owner = p_owner_val;
+	}
 	mutex_unlock(&isp_dev->isp_ports[info.vt_id]
 		     .isp_chns[info.path]
 		     .cam_device_bufs_lock);

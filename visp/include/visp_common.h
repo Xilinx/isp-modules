@@ -88,7 +88,7 @@ int media_isp_device_sensor_open(struct visp_dev *isp_dev, uint8_t port);
 int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index);
 
 int read_dq_buf_info(void *data, struct visp_dev *isp_dev, struct Chn_info *info,
-		    uint8_t *buf_index);
+		    uint8_t *buf_index, uint32_t *p_owner);
 int media_isp_device_dqbuf(struct visp_dev *isp_dev, struct Chn_info *info,
 			   media_buf *buf, void *packet_from_rpu,
 			   output_buffer_t *output_buffer);
