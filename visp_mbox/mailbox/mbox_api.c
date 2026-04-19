@@ -204,7 +204,8 @@ int vpi_mbox_post(mbox_fifo_ctrl *mbox_fifo, mbox_post_msg *msg,
 	ret = visp_mbox_fifo_write(msg, (mbox_fifo->fifo));
 
 	if (ret != VPI_SUCCESS) {
-		pr_err("MBOX_POST: FAILED ret=%d\n", ret);
+		if (ret != VPI_ERR_FULL)
+			pr_err("MBOX_POST: FAILED ret=%d\n", ret);
 		return ret;
 	}
 	/* Callback is optional - IPI may be handled by framework */

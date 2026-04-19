@@ -2452,6 +2452,13 @@ int visp_mimo_open(struct file *file)
 		    "[v4l2] Created instance: [0x%x], m2m_ctx: [0x%x]\n", ctx,
 		    ctx->fh.m2m_ctx);
 		if (!dev_open) {
+			if (!device->isp_dev || !device->isp_dev->rpu ||
+			    !device->isp_dev->rpu->tx_chan ||
+			    !device->isp_dev->rpu->rx_chan) {
+				visp_pr_debug("===== [VISP_M2M] ISP/RPU not ready for open\n");
+				rc = -ENODEV;
+				goto open_unlock;
+			}
 			rc = isp_device_create_m_i_m_o(device->isp_dev, 0);
 			dev_open = 1;
 		} else {

@@ -106,17 +106,9 @@ int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 {
 	uint32_t items_stored;
 	uint32_t current_write_offset, current_read_offset;
-	uint32_t aligned_size;
 
-	if (fifo == NULL || msg == NULL)
+	if (fifo == NULL)
 		return VPI_ERR_INVALID;
-
-	/* Validate message size to prevent buffer overflow */
-	if (msg->size > MAX_PAYLOAD_SIZE) {
-		pr_err("Message size %u exceeds maximum payload size %u\n",
-		       msg->size, MAX_PAYLOAD_SIZE);
-		return VPI_ERR_INVALID;
-	}
 
 	/*
 	 * CRITICAL: Read indices with system barrier for cross-cluster visibility
@@ -141,17 +133,10 @@ int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 		return VPI_ERR_FULL;
 	}
 
-	aligned_size = ALIGN(sizeof(mbox_post_msg) - sizeof(payload_packet) + msg->size,
-			     8);
-	if (aligned_size > fifo->item_size) {
-		pr_err("Write size %u exceeds fifo item size %u\n",
-		       aligned_size, fifo->item_size);
-		return VPI_ERR_INVALID;
-	}
-
 	/* Copy message to shared memory buffer using index */
 	memcpy(((uint8_t *)fifo->buffer_virt + (current_write_offset * fifo->item_size)), msg,
-	       aligned_size);
+	       ALIGN(sizeof(mbox_post_msg) - sizeof(payload_packet) + msg->size,
+		     8));
 	/*
 	 * CRITICAL: Memory barrier sequence for APU→RPU communication
 	 * Use //dmb(sy) for full system visibility (matches RPU's dsb_sync_barrier)
@@ -174,7 +159,6 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 {
 	mbox_post_msg *fifo_msg;
 	uint32_t current_write_offset, current_read_offset;
-	uint32_t aligned_size;
 
 	if (fifo == NULL)
 		return VPI_ERR_INVALID;
@@ -202,15 +186,9 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 	    (mbox_post_msg *)(((char *)fifo->buffer_virt +
 	    (current_read_offset * fifo->item_size)));
 
-	aligned_size = sizeof(mbox_post_msg) - sizeof(payload_packet) +
-		       (((fifo_msg->size) + 63) & ~63);
-	if (aligned_size > fifo->item_size) {
-		pr_err("Read size %u exceeds fifo item size %u\n",
-		       aligned_size, fifo->item_size);
-		return VPI_ERR_INVALID;
-	}
-
-	memcpy(msg, fifo_msg, aligned_size);
+	memcpy(msg, fifo_msg,
+	       sizeof(mbox_post_msg) - sizeof(payload_packet) +
+		   (((fifo_msg->size) + 63) & ~63));
 
 	/* Update read_offset after memcpy completes - use system barrier for RPU visibility
 	 * NOTE: Barrier is currently commented out; enable if coherence issues are observed.

@@ -787,6 +787,12 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	/* Wait for ACK outside the lock */
 	result = xlnx_mbox_apu_wait_for_ack(isp_dev, instance_id, path_idx, buffer_index, cmd);
 	if (result < 0) {
+		if (result == -ENODEV) {
+			dev_warn(rpu->dev,
+				"%s: Mailbox not ready for cmd=%d (instance_id=%u)\n",
+				__func__, cmd, instance_id);
+			return -EPIPE;
+		}
 		dev_err(rpu->dev, "%s: Failed to get ack\n", __func__);
 		return result;
 	}
@@ -826,6 +832,14 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 	if (!rpu) {
 		dev_err(isp_dev->dev, "RPU device is NULL in %s.\n", __func__);
 		ret = -EINVAL;
+		goto ERROR;
+	}
+
+	if (!rpu->tx_chan || !rpu->rx_chan) {
+		dev_err(isp_dev->dev,
+			"Mailbox channels not initialized in %s (tx=%p, rx=%p).\n",
+			__func__, rpu->tx_chan, rpu->rx_chan);
+		ret = -ENODEV;
 		goto ERROR;
 	}
 

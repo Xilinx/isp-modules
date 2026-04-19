@@ -108,6 +108,13 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 	msg->media_server_flags = flag;
 	msg->size = sizeof(payload_packet) - MAX_ITEM +
 			((payload_packet *)struct_msg)->payload_size;
+	if (msg->size > MAX_PAYLOAD_SIZE) {
+		dev_err(rpu->dev,
+			"%s: Message size %u exceeds maximum payload size %u\n",
+			__func__, msg->size, MAX_PAYLOAD_SIZE);
+		visp_free_tx_buffer(rpu, msg);
+		return -EINVAL;
+	}
 	memcpy(msg->payload, struct_msg, ALIGN(msg->size, 8));
 
 	if (core_id != MBOX_CORE_APU)
@@ -122,27 +129,19 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 	 */
 	mutex_lock(&rpu->write_lock);
 
-	if (vpi_mbox_is_full(rpu->apu_tx_ctrl, core_id, receiver_id)) {
-		mutex_unlock(&rpu->write_lock);
-		/*
-		 * TX FIFO FULL - this is the PRIMARY bottleneck causing drops!
-		 * RPU can't consume enqueue commands fast enough.
-		 * Rate limit to avoid log flooding during sustained overload.
-		 */
-		dev_err_ratelimited(rpu->dev,
-			"%s: TX FIFO FULL (RPU%d) - RPU can't drain enqueue commands fast enough. "
-			"This WILL cause frame drops. Check RPU processing load.\n",
-			__func__, rpu->rpu_id);
-		visp_free_tx_buffer(rpu, msg);
-		return -EAGAIN;
-	}
-
 	ret = vpi_mbox_post(rpu->apu_tx_ctrl, msg, receiver_id, NULL);
 	mutex_unlock(&rpu->write_lock);
 
 	/* Return buffer to pool after hardware copies it */
 	visp_free_tx_buffer(rpu, msg);
 
+	if (ret == VPI_ERR_FULL) {
+		dev_err_ratelimited(rpu->dev,
+			"%s: TX FIFO FULL (RPU%d) - RPU can't drain enqueue commands fast enough. "
+			"This WILL cause frame drops. Check RPU processing load.\n",
+			__func__, rpu->rpu_id);
+		return -EAGAIN;
+	}
 	if (ret)
 		return ret;
 
