@@ -83,7 +83,7 @@
 #define ISP_DMA_WORD_BYTES	16	/* Hardware DMA word size in bytes (128/8) */
 #define ISP_STRIDE_ALIGN	16	/* Stride must be 16-byte aligned */
 
-static struct visp_video_fmt_info visp_formats_info[] = {
+static const struct visp_video_fmt_info visp_formats_info[] = {
 	{
 		.fourcc = V4L2_PIX_FMT_NV16,
 		.mbus = MEDIA_BUS_FMT_YUYV8_2X8,
