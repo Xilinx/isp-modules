@@ -2705,6 +2705,18 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	int ret = 0;
 	struct device_node *node = pdev->dev.of_node;
 
+	/* Read stream info (multi-stream, single-stream) */
+	ret = of_property_read_u32(node, "xlnx,num_streams",
+				   &isp_dev->num_streams);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"Failed to read xlnx,num_streams property\n");
+		return ret;
+	} else {
+		dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n",
+			isp_dev->num_streams);
+	}
+
 	for (port = 0; port < VISP_PORT_NR; port++) {
 		strscpy(isp_dev->isp_ports[port].sensor_info.name,
 			VISP_DEFAULT_SENSOR,
@@ -2715,7 +2727,11 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 
 		isp_dev->isp_ports[port].sensor_info.sensor_id =
 		    sensor_dev_id[port];
+		if(isp_dev->num_streams > 1)
+		{
+			isp_dev->isp_ports[port].hw_mcm = (bool_t)CAMDEV_MCM_OP_HW;
 
+		}
 	}
 
 	fwnode_property_read_u32(of_fwnode_handle(node), "isp_id",
@@ -2736,18 +2752,6 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		return ret;
 	} else {
 		dev_dbg(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
-	}
-
-	/* Read stream info (multi-stream, single-stream) */
-	ret = of_property_read_u32(node, "xlnx,num_streams",
-				   &isp_dev->num_streams);
-	if (ret) {
-		dev_err(&pdev->dev,
-			"Failed to read xlnx,num_streams property\n");
-		return ret;
-	} else {
-		dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n",
-			isp_dev->num_streams);
 	}
 
 	ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
