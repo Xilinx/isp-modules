@@ -2721,10 +2721,6 @@ int visp_mimo_probe(struct platform_device *pdev)
 	mutex_init(&device->isp_dev->mlock);
 	mutex_init(&device->isp_dev->ctrl_lock);
 	device->isp_dev->dev = &pdev->dev;
-	for (int port = 0; port < device->isp_dev->num_streams; port++) {
-		spin_lock_init(&device->isp_dev->frameout_lock[port]);
-		device->isp_dev->pending_frameout_msg[port] = NULL;
-	}
 
 	ret = visp_parse_params(device->isp_dev, pdev);
 	if (ret) {
@@ -2739,6 +2735,12 @@ int visp_mimo_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err_m2m;
 	}
+
+	for (int port = 0; port < device->isp_dev->num_streams; port++) {
+		spin_lock_init(&device->isp_dev->frameout_lock[port]);
+		device->isp_dev->pending_frameout_msg[port] = NULL;
+	}
+
 	num_mems = of_count_phandle_with_args(pdev->dev.of_node,
 					      "memory-region", NULL);
 	if (num_mems < 0) {

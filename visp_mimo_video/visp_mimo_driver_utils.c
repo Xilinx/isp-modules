@@ -33,6 +33,12 @@ int xlnx_link_mbox(struct visp_dev *isp_dev)
 			isp_dev->isp_rpu);
 		return -ENOMEM;
 	}
+	if (isp_dev->num_streams < 1 || isp_dev->num_streams > MAX_PORTS) {
+		dev_err(isp_dev->dev,
+			"Invalid num_streams=%u (valid 1-%u)\n",
+			isp_dev->num_streams, MAX_PORTS);
+		return -EINVAL;
+	}
 	/* Initialise completions/FIFOs used for ack/data handling */
 	for (int inst = 0; inst < isp_dev->num_streams; inst++) {
 		for (int path = 0; path < 4; path++)
