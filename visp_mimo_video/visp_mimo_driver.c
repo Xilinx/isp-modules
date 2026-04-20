@@ -2406,20 +2406,18 @@ static char dev_open;
 int visp_mimo_open(struct file *file)
 {
 	static int device_open_count;
+	struct visp_mimo_ctx *ctx = NULL;
+	struct visp_mimo_device *device = video_drvdata(file);
+	int rc = 0;
+
+	if (mutex_lock_interruptible(&device->lock))
+		return -ERESTARTSYS;
 
 	++device_open_count;
 
 	if (!strcmp(current->comm, "v4l_id"))
 		visp_pr_debug("===== [VISP_M2M] Device opened %d times\n",
 			      device_open_count);
-
-	struct visp_mimo_ctx *ctx = NULL;
-
-	struct visp_mimo_device *device = video_drvdata(file);
-	int rc = 0;
-
-	if (mutex_lock_interruptible(&device->lock))
-		return -ERESTARTSYS;
 	if (!ctx) {
 		ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 		if (!ctx) {
@@ -2494,9 +2492,6 @@ int visp_mimo_release(struct file *file)
 	struct visp_mimo_device *device = video_drvdata(file);
 	struct visp_mimo_ctx *ctx = file2ctx(file);
 
-	if (dev_open == 1)
-		dev_open = 0;
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	v4l2_fh_del(&ctx->fh, file);
 #else
@@ -2504,6 +2499,8 @@ int visp_mimo_release(struct file *file)
 #endif
 	v4l2_fh_exit(&ctx->fh);
 	mutex_lock(&device->lock);
+	if (dev_open == 1)
+		dev_open = 0;
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
 	mutex_unlock(&device->lock);
 	kfree(ctx);
