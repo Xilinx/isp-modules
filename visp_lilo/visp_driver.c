@@ -757,6 +757,9 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	unsigned long flags;
 	int ret = 0;
+
+	if (pad_stream->pad >= VISP_PAD_NR)
+		return -EINVAL;
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 	struct v4l2_subdev *subdev;
@@ -886,6 +889,8 @@ static int visp_g_ctrl(struct v4l2_subdev *sd, void *arg)
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_control *pad_ctrl = (struct visp_pad_control *)arg;
 
+	if (pad_ctrl->pad >= VISP_PAD_NR)
+		return -EINVAL;
 	mutex_lock(&isp_dev->ctrl_lock);
 	isp_dev->ctrl_pad = pad_ctrl->pad;
 	ret = v4l2_g_ctrl(&isp_dev->ctrl_handler, pad_ctrl->control);
@@ -900,6 +905,8 @@ static int visp_s_ctrl(struct v4l2_subdev *sd, void *arg)
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_control *pad_ctrl = (struct visp_pad_control *)arg;
 
+	if (pad_ctrl->pad >= VISP_PAD_NR)
+		return -EINVAL;
 	mutex_lock(&isp_dev->ctrl_lock);
 	isp_dev->ctrl_pad = pad_ctrl->pad;
 	ret = v4l2_s_ctrl(NULL, &isp_dev->ctrl_handler, pad_ctrl->control);
@@ -916,6 +923,8 @@ static int visp_g_ext_ctrls(struct v4l2_subdev *sd, void *arg)
 	struct visp_pad_ext_controls *pad_ext_ctrls =
 		(struct visp_pad_ext_controls *)arg;
 
+	if (pad_ext_ctrls->pad >= VISP_PAD_NR)
+		return -EINVAL;
 	mutex_lock(&isp_dev->ctrl_lock);
 	isp_dev->ctrl_pad = pad_ext_ctrls->pad;
 	ret = v4l2_g_ext_ctrls(&isp_dev->ctrl_handler, sd->devnode,
@@ -932,6 +941,8 @@ static int visp_s_ext_ctrls(struct v4l2_subdev *sd, void *arg)
 	struct visp_pad_ext_controls *pad_ext_ctrls =
 		(struct visp_pad_ext_controls *)arg;
 
+	if (pad_ext_ctrls->pad >= VISP_PAD_NR)
+		return -EINVAL;
 	mutex_lock(&isp_dev->ctrl_lock);
 	isp_dev->ctrl_pad = pad_ext_ctrls->pad;
 	ret = v4l2_s_ext_ctrls(NULL, &isp_dev->ctrl_handler, sd->devnode,
