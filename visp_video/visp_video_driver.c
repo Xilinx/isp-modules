@@ -487,8 +487,10 @@ static int visp_video_probe(struct platform_device *pdev)
 	}
 
 	/* Discover and list pipeline subdevices generically */
+	mutex_lock(&visp_mdev->mdev.graph_mutex);
 	visp_video_discover_pipeline_subdevs(visp_mdev);
 	visp_video_list_pipeline_connections(visp_mdev);
+	mutex_unlock(&visp_mdev->mdev.graph_mutex);
 
 	dev_info(&pdev->dev, "visp video driver probe success\n");
 	return 0;
