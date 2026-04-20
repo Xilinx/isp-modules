@@ -2065,7 +2065,7 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 	case VISP_GET_EVENT_SHM_FD:
 		device = v4l2_get_subdevdata(sd);
 		if (!device) {
-			dev_err(device->event_shm.dev, "VISP_GET_EVENT_SHM_FD: device is NULL\n");
+			pr_err("VISP_GET_EVENT_SHM_FD: device is NULL\n");
 			ret = -EINVAL;
 			break;
 		}
