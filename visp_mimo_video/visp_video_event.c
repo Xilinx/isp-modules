@@ -57,6 +57,7 @@
 #include <media/v4l2-event.h>
 #include <media/v4l2-fh.h>
 #include <linux/delay.h>
+#include <linux/namei.h>
 #include "visp_video_event.h"
 #include "visp_mimo_driver.h"
 #include <visp_event.h>
@@ -321,6 +322,13 @@ int visp_l_fusa_event(struct visp_dev *isp_dev, int pad)
 	int ret = 0;
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	uint8_t *pdata;
+
+	if (!isp_dev->isp_ports[port].fusa_json[0]) {
+		dev_err(isp_dev->dev,
+			"fusa_json path not set for port %d, aborting fusa event\n",
+			port);
+		return -EINVAL;
+	}
 
 	/* Bounds check: verify fusa_json payload fits in event shm buffer */
 	size_t required_size = offsetof(struct visp_event_pkg, data) +

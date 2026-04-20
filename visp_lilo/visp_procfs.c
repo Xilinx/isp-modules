@@ -53,6 +53,7 @@
  *****************************************************************************/
 
 #include <linux/ctype.h>
+#include <linux/namei.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
@@ -163,6 +164,30 @@ static int visp_procfs_open(struct inode *inode, struct file *file)
 #endif
 }
 
+/*
+ * Validate that a file path written via procfs actually exists.
+ * Returns true if the path is valid, false otherwise.
+ */
+static bool visp_procfs_check_path(struct device *dev, const char *key,
+				   char *path_buf, size_t buf_size)
+{
+	struct path kpath;
+	int ret;
+
+	if (!path_buf[0])
+		return true;
+
+	ret = kern_path(path_buf, LOOKUP_FOLLOW, &kpath);
+	if (ret) {
+		dev_err(dev, "procfs: %s path '%s' does not exist\n",
+			key, path_buf);
+		memset(path_buf, 0, buf_size);
+		return false;
+	}
+	path_put(&kpath);
+	return true;
+}
+
 static int32_t visp_proc_process(struct seq_file *sfile,
 				 struct visp_procfs *isp_proc, char *str_buf)
 {
@@ -174,6 +199,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 	char *const com_delim = ",";
 	int port = 0;
 	int path = 0;
+	int32_t ret = 0;
 
 	isp_dev = isp_proc->isp_dev;
 
@@ -227,6 +253,10 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 						val,
 						sizeof(isp_dev->isp_ports[port]
 						       .sensor_info.calib));
+					if (!visp_procfs_check_path(isp_dev->dev, "calib",
+						isp_dev->isp_ports[port].sensor_info.calib,
+						sizeof(isp_dev->isp_ports[port].sensor_info.calib)))
+						ret = -ENOENT;
 				}
 			} else if (strcmp(val, "manu_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -242,6 +272,10 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 						val,
 						sizeof(isp_dev->isp_ports[port]
 						       .sensor_info.manu_json));
+					if (!visp_procfs_check_path(isp_dev->dev, "manu_json",
+						isp_dev->isp_ports[port].sensor_info.manu_json,
+						sizeof(isp_dev->isp_ports[port].sensor_info.manu_json)))
+						ret = -ENOENT;
 				}
 			} else if (strcmp(val, "auto_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -257,6 +291,10 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 						val,
 						sizeof(isp_dev->isp_ports[port]
 						       .sensor_info.auto_json));
+					if (!visp_procfs_check_path(isp_dev->dev, "auto_json",
+						isp_dev->isp_ports[port].sensor_info.auto_json,
+						sizeof(isp_dev->isp_ports[port].sensor_info.auto_json)))
+						ret = -ENOENT;
 				}
 			} else if (strcmp(val, "one_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -272,6 +310,10 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 						val,
 						sizeof(isp_dev->isp_ports[port]
 						       .sensor_info.one_json));
+					if (!visp_procfs_check_path(isp_dev->dev, "one_json",
+						isp_dev->isp_ports[port].sensor_info.one_json,
+						sizeof(isp_dev->isp_ports[port].sensor_info.one_json)))
+						ret = -ENOENT;
 				}
 			} else if (strcmp(val, "output_type") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -338,6 +380,10 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					strscpy(isp_dev->isp_ports[port].fusa_json,
 						val,
 						sizeof(isp_dev->isp_ports[port].fusa_json));
+					if (!visp_procfs_check_path(isp_dev->dev, "fusa_json",
+						isp_dev->isp_ports[port].fusa_json,
+						sizeof(isp_dev->isp_ports[port].fusa_json)))
+						ret = -ENOENT;
 				}
 			}
 		}
@@ -345,7 +391,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 
 	mutex_unlock(&isp_proc->lock);
 
-	return 0;
+	return ret;
 }
 
 static ssize_t visp_procfs_write(struct file *file, const char __user *buffer,
@@ -354,6 +400,7 @@ static ssize_t visp_procfs_write(struct file *file, const char __user *buffer,
 	struct visp_procfs *isp_proc;
 	struct seq_file *sfile;
 	char *str_buf;
+	int32_t ret;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)
 	isp_proc = (struct visp_procfs *)PDE_DATA(file_inode(file));
@@ -373,11 +420,11 @@ static ssize_t visp_procfs_write(struct file *file, const char __user *buffer,
 
 	*(str_buf + count - 1) = '\0';
 
-	visp_proc_process(sfile, isp_proc, str_buf);
+	ret = visp_proc_process(sfile, isp_proc, str_buf);
 
 	kfree(str_buf);
 
-	return count;
+	return ret ? ret : count;
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)

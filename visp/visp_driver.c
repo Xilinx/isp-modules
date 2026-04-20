@@ -92,9 +92,6 @@
 
 #define VISP_DEFAULT_SENSOR "ox03f10"
 #define VISP_DEFAULT_SENSOR_MODE 0
-#define VISP_DEFAULT_SENSOR_CALIB "/usr/share/limo_example_jsons/OX03f10.json"
-#define VISP_DEFAULT_SENSOR_MANU_JSON "/usr/share/limo_example_jsons/manual_ext.json"
-#define VISP_DEFAULT_SENSOR_AUTO_JSON "/usr/share/limo_example_jsons/auto.json"
 
 /* Runtime configurable alignment bytes for stride calculation (default 16) */
 unsigned int visp_align_bytes = 16;
@@ -2713,22 +2710,12 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 			VISP_DEFAULT_SENSOR,
 			sizeof(isp_dev->isp_ports[port].sensor_info.name));
 
-		strscpy(isp_dev->isp_ports[port].sensor_info.calib,
-			VISP_DEFAULT_SENSOR_CALIB,
-			sizeof(isp_dev->isp_ports[port].sensor_info.calib));
-
 		isp_dev->isp_ports[port].sensor_info.mode =
 		    VISP_DEFAULT_SENSOR_MODE;
+
 		isp_dev->isp_ports[port].sensor_info.sensor_id =
 		    sensor_dev_id[port];
 
-		strscpy(isp_dev->isp_ports[port].sensor_info.manu_json,
-			VISP_DEFAULT_SENSOR_MANU_JSON,
-			sizeof(isp_dev->isp_ports[port].sensor_info.manu_json));
-
-		strscpy(isp_dev->isp_ports[port].sensor_info.auto_json,
-			VISP_DEFAULT_SENSOR_AUTO_JSON,
-			sizeof(isp_dev->isp_ports[port].sensor_info.auto_json));
 	}
 
 	fwnode_property_read_u32(of_fwnode_handle(node), "isp_id",

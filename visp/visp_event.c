@@ -55,6 +55,7 @@
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
 #include <linux/delay.h>
+#include <linux/namei.h>
 #include "visp_event.h"
 #include "visp_driver.h"
 
@@ -197,6 +198,14 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	pdata += sizeof(cam_device_context_t);
 	event_pkg->head.data_size += sizeof(cam_device_context_t);
 
+	if (!isp_dev->isp_ports[port].sensor_info.calib[0]) {
+		dev_err(isp_dev->dev,
+			"calib path not set for port %d, aborting calib event\n",
+			port);
+		mutex_unlock(&isp_dev->event_shm.event_lock);
+		return -EINVAL;
+	}
+
 	memcpy(pdata, &(isp_dev->isp_ports[port].sensor_info),
 	       sizeof(media_isp_sensor_info));
 	pdata += sizeof(media_isp_sensor_info);
@@ -232,6 +241,26 @@ int visp_l_json_event(struct visp_dev *isp_dev, int pad)
 	int ret = 0;
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	uint8_t *pdata = NULL;
+
+	if (isp_dev->isp_ports[port].one_json_mode) {
+		if (!isp_dev->isp_ports[port].sensor_info.one_json[0]) {
+			dev_err(isp_dev->dev,
+				"one_json path not set for port %d\n", port);
+			return -EINVAL;
+		}
+	} else {
+		if (!isp_dev->isp_ports[port].sensor_info.manu_json[0]) {
+			dev_err(isp_dev->dev,
+				"manu_json path not set for port %d\n", port);
+			return -EINVAL;
+		}
+
+		if (!isp_dev->isp_ports[port].sensor_info.auto_json[0]) {
+			dev_err(isp_dev->dev,
+				"auto_json path not set for port %d\n", port);
+			return -EINVAL;
+		}
+	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 	event_pkg->head.pad = pad;
@@ -442,6 +471,13 @@ int visp_l_fusa_event(struct visp_dev *isp_dev, int pad)
 	int ret = 0;
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	uint8_t *pdata = NULL;
+
+	if (!isp_dev->isp_ports[port].fusa_json[0]) {
+		dev_err(isp_dev->dev,
+			"fusa_json path not set for port %d, aborting fusa event\n",
+			port);
+		return -EINVAL;
+	}
 
 	/* Bounds check: verify fusa_json payload fits in event shm buffer */
 	size_t required_size = offsetof(struct visp_event_pkg, data) +
