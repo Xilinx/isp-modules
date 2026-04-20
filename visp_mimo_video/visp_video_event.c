@@ -145,6 +145,17 @@ int visp_l_calib_event(struct visp_mimo_device *device, int pad, int event)
 	uint8_t *pdata = event_pkg->data;
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 
+	/* Bounds check: verify total payload fits in event shm buffer */
+	size_t required_size = offsetof(struct visp_event_pkg, data) +
+			       sizeof(uint32_t) +
+			       sizeof(struct visp_subdev_dma_buf);
+	if (required_size > device->event_shm.size) {
+		dev_err(&device->video_dev.dev,
+			"%s: required %zu exceeds shm buffer %u\n",
+			__func__, required_size, device->event_shm.size);
+		return -EOVERFLOW;
+	}
+
 	mutex_lock(&device->event_shm.event_lock);
 	event_pkg->head.eid = event;
 	event_pkg->head.shm_fd = -1;
@@ -252,9 +263,21 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 
 	mutex_lock(&device->event_shm.event_lock);
 
+	/* Bounds check to prevent writing past event buffer */
+	size_t ctrl_data_size = ctrl->elem_size * ctrl->elems;
+	size_t required_size = offsetof(struct visp_event_pkg, data) +
+			       sizeof(struct visp_ctrl) + ctrl_data_size;
+	if (required_size > device->event_shm.size) {
+		dev_err(isp_dev->dev,
+			"%s: ctrl data size %zu exceeds shm buffer %u\n",
+			__func__, required_size, device->event_shm.size);
+		mutex_unlock(&device->event_shm.event_lock);
+		return -EOVERFLOW;
+	}
+
 	isp_ctrl = (struct visp_ctrl *)pdata;
 	isp_ctrl->cid = ctrl->id;
-	isp_ctrl->size = ctrl->elem_size * ctrl->elems;
+	isp_ctrl->size = ctrl_data_size;
 
 	event_pkg->head.pad = pad;
 	event_pkg->head.dev = isp_dev->id;
@@ -298,6 +321,15 @@ int visp_l_fusa_event(struct visp_dev *isp_dev, int pad)
 	int ret = 0;
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	uint8_t *pdata;
+
+	/* Bounds check: verify fusa_json payload fits in event shm buffer */
+	size_t required_size = offsetof(struct visp_event_pkg, data) +
+			       sizeof(isp_dev->isp_ports[port].fusa_json);
+	if (required_size > device->event_shm.size) {
+		dev_err(isp_dev->dev, "%s: required %zu exceeds shm buffer %u\n",
+			__func__, required_size, device->event_shm.size);
+		return -EOVERFLOW;
+	}
 
 	mutex_lock(&device->event_shm.event_lock);
 	event_pkg->head.pad = pad;

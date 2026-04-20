@@ -157,6 +157,19 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	media_isp_sensor_info *readback_1 = NULL;
 	media_isp_port_attr *isp_port = NULL;
 
+	/* Bounds check: verify total payload fits in event shm buffer */
+	size_t required_size = offsetof(struct visp_event_pkg, data) +
+			       sizeof(uint32_t) +
+			       sizeof(struct visp_subdev_dma_buf) +
+			       sizeof(cam_device_context_t) +
+			       sizeof(media_isp_sensor_info);
+	if (required_size > isp_dev->event_shm.size) {
+		dev_err(isp_dev->dev,
+			"%s: required %zu exceeds shm buffer %u\n",
+			__func__, required_size, isp_dev->event_shm.size);
+		return -EOVERFLOW;
+	}
+
 	mutex_lock(&isp_dev->event_shm.event_lock);
 	event_pkg->head.pad = pad;
 	event_pkg->head.dev = isp_dev->id;
@@ -257,11 +270,27 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	pad = 1;//vipp sends pad as 0 always, temporarily hardcoding this to 1
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 
-	/* If stream is not active, skip silently */
-	if (isp_dev->streamon[pad] != 1)
-		return 0;
+	/* If stream is not active, control cannot be applied to RPU */
+	if (isp_dev->streamon[pad] != 1) {
+		dev_info(isp_dev->dev, "unable to set control prior to streamon\n");
+		return -EBUSY;
+	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
+
+	/* Bounds check to prevent writing past event buffer */
+	size_t ctrl_data_size = ctrl->elem_size * ctrl->elems;
+	size_t required_size = offsetof(struct visp_event_pkg, data) +
+			       sizeof(uint32_t) + sizeof(cam_device_context_t) +
+			       sizeof(struct visp_ctrl) + ctrl_data_size;
+	if (required_size > isp_dev->event_shm.size) {
+		dev_err(isp_dev->dev,
+			"%s: ctrl data size %zu exceeds shm buffer %u\n",
+			__func__, required_size, isp_dev->event_shm.size);
+		mutex_unlock(&isp_dev->event_shm.event_lock);
+		return -EOVERFLOW;
+	}
+
 	event_pkg->head.data_size = 0;
 	memcpy(pdata, &port, sizeof(uint32_t));
 	pdata += sizeof(uint32_t);
@@ -276,9 +305,9 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	pdata += sizeof(cam_device_context_t);
 	event_pkg->head.data_size += sizeof(cam_device_context_t);
 
-	isp_ctrl = (struct visp_ctrl *)pdata/*event_pkg->data*/;
+	isp_ctrl = (struct visp_ctrl *)pdata;
 	isp_ctrl->cid = ctrl->id;
-	isp_ctrl->size = ctrl->elem_size * ctrl->elems;
+	isp_ctrl->size = ctrl_data_size;
 	memcpy(isp_ctrl->data, ctrl->p_new.p_u8, isp_ctrl->size);
 
 	event_pkg->head.pad = pad;
@@ -314,6 +343,20 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
+
+	/* Bounds check to prevent writing past event buffer */
+	size_t ctrl_data_size = ctrl->elem_size * ctrl->elems;
+	size_t required_size = offsetof(struct visp_event_pkg, data) +
+			       sizeof(uint32_t) + sizeof(cam_device_context_t) +
+			       sizeof(struct visp_ctrl) + ctrl_data_size;
+	if (required_size > isp_dev->event_shm.size) {
+		dev_err(isp_dev->dev,
+			"%s: ctrl data size %zu exceeds shm buffer %u\n",
+			__func__, required_size, isp_dev->event_shm.size);
+		mutex_unlock(&isp_dev->event_shm.event_lock);
+		return -EOVERFLOW;
+	}
+
 	event_pkg->head.data_size = 0;
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)isp_dev->isp_ports[port].cam_device_handle;
@@ -329,9 +372,9 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	pdata += sizeof(cam_device_context_t);
 	event_pkg->head.data_size += sizeof(cam_device_context_t);
 
-	isp_ctrl = (struct visp_ctrl *)pdata;//(event_pkg->data);
+	isp_ctrl = (struct visp_ctrl *)pdata;
 	isp_ctrl->cid = ctrl->id;
-	isp_ctrl->size = ctrl->elem_size * ctrl->elems;
+	isp_ctrl->size = ctrl_data_size;
 
 	event_pkg->head.pad = pad;
 	event_pkg->head.dev = isp_dev->id;
@@ -344,8 +387,15 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	ret = visp_post_event(&isp_dev->sd, event_pkg);
 
 	if (ret == 0) {
-		memcpy(ctrl->p_new.p_u8, /*event_pkg->data*/pdata + sizeof(struct visp_ctrl),
-		       isp_ctrl->size);
+		if (isp_ctrl->size > ctrl_data_size) {
+			dev_err(isp_dev->dev,
+				"%s: returned size %u exceeds ctrl size %zu\n",
+				__func__, isp_ctrl->size, ctrl_data_size);
+			ret = -EOVERFLOW;
+		} else {
+			memcpy(ctrl->p_new.p_u8, pdata + sizeof(struct visp_ctrl),
+			       isp_ctrl->size);
+		}
 	}
 
 	mutex_unlock(&isp_dev->event_shm.event_lock);
@@ -396,6 +446,15 @@ int visp_l_fusa_event(struct visp_dev *isp_dev, int pad)
 	int ret = 0;
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	uint8_t *pdata = NULL;
+
+	/* Bounds check: verify fusa_json payload fits in event shm buffer */
+	size_t required_size = offsetof(struct visp_event_pkg, data) +
+			       sizeof(isp_dev->isp_ports[port].fusa_json);
+	if (required_size > isp_dev->event_shm.size) {
+		dev_err(isp_dev->dev, "%s: required %zu exceeds shm buffer %u\n",
+			__func__, required_size, isp_dev->event_shm.size);
+		return -EOVERFLOW;
+	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
 	event_pkg->head.pad = pad;
