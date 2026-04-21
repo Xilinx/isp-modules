@@ -289,3 +289,62 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	mutex_unlock(&device->event_shm.event_lock);
 	return ret;
 }
+
+int visp_l_fusa_event(struct visp_dev *isp_dev, int pad)
+{
+	struct visp_mimo_device *device =
+		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
+	int ret = 0;
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	uint8_t *pdata;
+
+	mutex_lock(&device->event_shm.event_lock);
+	event_pkg->head.pad = pad;
+	event_pkg->head.dev = isp_dev->id;
+	event_pkg->head.eid = VISP_EVENT_LOAD_FUSA;
+	event_pkg->head.shm_fd = -1;
+	event_pkg->head.shm_size = device->event_shm.size;
+	event_pkg->head.data_size = 0;
+	event_pkg->ack = 0;
+	event_pkg->result = 0;
+
+	pdata = event_pkg->data;
+
+	memcpy(pdata, &isp_dev->isp_ports[port].fusa_json,
+	       sizeof(isp_dev->isp_ports[port].fusa_json));
+	pdata += sizeof(isp_dev->isp_ports[port].fusa_json);
+	event_pkg->head.data_size += sizeof(isp_dev->isp_ports[port].fusa_json);
+
+	ret = visp_subdev_post_event(device, event_pkg);
+	if (ret != 0)
+		pr_err("[FAIL] %s %d\n", __func__, __LINE__);
+	mutex_unlock(&device->event_shm.event_lock);
+
+	return ret;
+}
+
+int visp_stop_fusa_event(struct visp_dev *isp_dev, int pad)
+{
+	struct visp_mimo_device *device =
+		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
+	int ret = 0;
+
+	mutex_lock(&device->event_shm.event_lock);
+	event_pkg->head.pad = pad;
+	event_pkg->head.dev = isp_dev->id;
+	event_pkg->head.eid = VISP_EVENT_STOP_FUSA;
+	event_pkg->head.shm_fd = -1;
+	event_pkg->head.shm_size = device->event_shm.size;
+	event_pkg->head.data_size = 0;
+	event_pkg->ack = 0;
+	event_pkg->result = 0;
+
+	ret = visp_subdev_post_event(device, event_pkg);
+	if (ret != 0)
+		pr_err("[FAIL] %s %d\n", __func__, __LINE__);
+
+	mutex_unlock(&device->event_shm.event_lock);
+	return ret;
+}

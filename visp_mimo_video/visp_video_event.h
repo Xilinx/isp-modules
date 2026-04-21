@@ -105,4 +105,7 @@ int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event);
 int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
 
 int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
+
+int visp_l_fusa_event(struct visp_dev *isp_dev, int pad);
+int visp_stop_fusa_event(struct visp_dev *isp_dev, int pad);
 #endif

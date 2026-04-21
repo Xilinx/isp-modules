@@ -68,7 +68,6 @@
 #include "visp_app.h"
 #include "visp_v4l2_std_exts.h"
 #include "cam_device_sensor_api.h"
-#include "iba.h"
 #include "visp_common.h"
 #include "visp_mbox_driver.h"
 
@@ -2150,8 +2149,6 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	}
 
 	kfree(format);
-	/*Exit port Level Critical Section */
-	iba_init_send_command(isp_dev, isp_port->cam_device_handle);
 
 	return ret_val;
 
