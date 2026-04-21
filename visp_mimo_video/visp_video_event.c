@@ -60,7 +60,7 @@
 #include <linux/namei.h>
 #include "visp_video_event.h"
 #include "visp_mimo_driver.h"
-#include <visp_event.h>
+#include "visp_event.h"
 struct visp_subdev_dma_buf {
 	uint64_t pa;
 	int size;
@@ -416,3 +416,4 @@ int visp_stop_fusa_event(struct visp_dev *isp_dev, int pad)
 	mutex_unlock(&device->event_shm.event_lock);
 	return ret;
 }
+EXPORT_SYMBOL(visp_stop_fusa_event);

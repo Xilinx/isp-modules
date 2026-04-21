@@ -57,6 +57,7 @@
 
 #define VISP_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 2000)
 
+#if 0
 enum visp_vevent_id {
 	VISP_EVENT_SET_FMT,
 	VISP_EVENT_REQBUFS,
@@ -73,7 +74,7 @@ enum visp_vevent_id {
 	VISP_EVENT_STOP_FUSA,
 	VISP_EVENT_MAX,
 };
-
+#endif
 struct visp_plane {
 	uint64_t dma_addr;
 	uint32_t size;

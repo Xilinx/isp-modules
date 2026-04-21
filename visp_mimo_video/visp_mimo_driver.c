@@ -438,7 +438,7 @@ void visp_mimo_device_run(void *priv)
 	device->isp_dev->op_a[3] = output_addr[3];
 	if (!device->isp_dev->streamon[port]) {
 		ret = visp_set_compatability_flag(device->isp_dev,
-			device->isp_dev->isp_ports[0].cam_device_handle, 1);
+			device->isp_dev->isp_ports[port].cam_device_handle, 1);
 		if (ret != 0) {
 			dev_err(device->isp_dev->dev, "set_compatability_flag failed: %d\n", ret);
 			goto destroy_instance;
@@ -456,10 +456,26 @@ void visp_mimo_device_run(void *priv)
 			dev_err(device->isp_dev->dev, "stream_on failed: %d\n", ret);
 			goto destroy_instance;
 		}
+		if (strlen(device->isp_dev->isp_ports[port].fusa_json)) {
+			ret = visp_l_fusa_event(device->isp_dev, 1);
+			if (ret != 0 && ret != -EPIPE) {
+				dev_err(device->isp_dev->dev,
+					"[EVENT_FAIL] %s %d\n",
+					__func__, __LINE__);
+				goto destroy_instance;
+			}
+			if (ret == -EPIPE) {
+				dev_err(device->isp_dev->dev,
+					"Proceed without loadFuSa isp:%d port:%d\n",
+					device->isp_dev->id, port);
+			}
+		}
 
 		ret = visp_l_calib_event(device, 1, VISP_EVENT_LOAD_JSON);
 		if (ret != 0) {
 			dev_err(device->isp_dev->dev, "LOAD_JSON event failed: %d\n", ret);
+			if (strlen(device->isp_dev->isp_ports[port].fusa_json))
+				visp_stop_fusa_event(device->isp_dev, 1);
 			goto clean_input_buffer_pool;
 		}
 
