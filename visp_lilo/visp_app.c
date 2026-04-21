@@ -97,46 +97,6 @@ int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
 	return ret_val;
 }
 
-int visp_buffer_alloc_public(struct visp_dev *isp_dev,
-			     struct visp_ext_buf_info *ext_buf_info);
-
-int visp_buffer_free_public(struct visp_dev *isp_dev,
-			    struct visp_ext_buf_info *ext_buf_info);
-
-static int media_isp_hal_alloc_buf(struct visp_dev *isp_dev, int port,
-				   media_buf *BufInfo)
-{
-	struct visp_ext_buf_info ExtBufInfo;
-	int ret_val = VSI_SUCCESS;
-
-	ExtBufInfo.port = port;
-	ExtBufInfo.plane.size = BufInfo->planes[0].dma_size;
-	ret_val = visp_buffer_alloc_public(isp_dev, &ExtBufInfo);
-	if (ret_val) {
-		dev_err(isp_dev->dev, "port %d alloc dma buffer failed:\n",
-			port);
-		return VSI_ERR_ILLEGAL_PARAM;
-	}
-
-	BufInfo->planes[0].dma_addr = ExtBufInfo.plane.dma_addr;
-
-	return ret_val;
-}
-
-int visp_buffer_free_public_wrapper(struct visp_dev *isp_dev, void *arg);
-
-static int media_isp_hal_free_buf(struct visp_dev *isp_dev, int port,
-				  media_buf *BufInfo)
-{
-	struct visp_ext_buf_info ExtBufInfo;
-
-	ExtBufInfo.port = port;
-	ExtBufInfo.plane.dma_addr = BufInfo->planes[0].dma_addr;
-	visp_buffer_free_public_wrapper(isp_dev, &ExtBufInfo);
-
-	return VSI_SUCCESS;
-}
-
 static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 					     uint8_t port, uint8_t chn)
 {
@@ -148,33 +108,6 @@ static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 	vsi_cam_device_destroy_buf_pool(isp_dev, isp_port->cam_device_handle,
 					chn);
 
-	// release mcm buf pool by camdevice reserved memory
-	if (chn == CAMDEV_BUFCHAIN_RDMA) {
-		if (isp_port->mcm_attr.input_select ==
-		    MEDIA_ISP_MCM_INPUT_SELECT_RPU) {
-			int i = 0;
-
-			for (i = 0; i < isp_port->mcm_attr.num_bufs; i++) {
-				vsi_cam_device_free_res_memory(
-				    isp_dev, isp_port->cam_device_handle,
-				    isp_port->mcm_attr.bufs[i]
-					.planes[0]
-					.dma_addr);
-				isp_port->mcm_attr.bufs[i].planes[0].dma_addr =
-				    0;
-			}
-		} else if (isp_port->mcm_attr.input_select ==
-			   MEDIA_ISP_MCM_INPUT_SELECT_APU) {
-			int i = 0;
-
-			for (i = 0; i < isp_port->mcm_attr.num_bufs; i++) {
-				media_buf *BufInfo =
-				    &isp_port->mcm_attr.bufs[i];
-				media_isp_hal_free_buf(isp_dev, port, BufInfo);
-				BufInfo->planes[0].dma_addr = 0;
-			}
-		}
-	}
 	vsi_cam_device_de_init_buf_chain(isp_dev, isp_port->cam_device_handle,
 					 chn);
 	if (chn < MEDIA_ISP_CHN_MAX) {
@@ -257,19 +190,6 @@ static int media_isp_device_sensor_close(struct visp_dev *isp_dev,
 	return ret_val;
 }
 
-static int media_isp_device_mcm_terminate(struct visp_dev *isp_dev,
-					  uint8_t port)
-{
-	int ret_val = VSI_SUCCESS;
-	uint8_t chn = CAMDEV_BUFCHAIN_RDMA;
-	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
-
-	media_isp_device_destroy_buf_pool(isp_dev, port, chn);
-	isp_port->mcm_attr.num_bufs = 0;
-
-	return ret_val;
-}
-
 int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 					uint8_t chn)
 {
@@ -285,8 +205,6 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 		media_isp_device_un_register3a_lib(isp_dev, port, chn);
 		vsi_cam_device_disconnect_camera(isp_dev,
 						 isp_port->cam_device_handle);
-		if (isp_dev->ports_mask != 0x01)
-			media_isp_device_mcm_terminate(isp_dev, port);
 		media_isp_device_sensor_close(isp_dev, port);
 	}
 
@@ -383,77 +301,8 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 			__func__, __LINE__, \ p_media_buffer->index,
 			p_media_buffer->base_address);*/
 		}
-	} else if (chn == CAMDEV_BUFCHAIN_RDMA) {
-		// create mcm buf pool by camdevice reserved memory
-		uint32_t phy_addr = 0;
-		uint32_t *pIpl_addr = VSI_NULL;
-
-		ret_val = vsi_cam_device_get_buffer_size(
-		    isp_dev, isp_port->cam_device_handle, chn, &buf_size);
-		if (ret_val != VSI_SUCCESS) {
-			dev_err(isp_dev->dev,
-				"%s: CamDevice get chain %d buf size failed, "
-				"ret is %d",
-				__func__, chn, ret_val);
-			ret_val = VSI_ERR_ILLEGAL_PARAM;
-			goto ERR_TO_DEINIT_CHAIN;
-		}
-		BufPoolCfg.buf_size = buf_size;
-
-		isp_port->mcm_attr.input_select =
-		    MEDIA_ISP_MCM_INPUT_SELECT_APU;
-
-		if (isp_port->mcm_attr.input_select ==
-		    MEDIA_ISP_MCM_INPUT_SELECT_RPU) {
-			dev_err(isp_dev->dev, "%s: Alloc mcm buffer from rpu",
-				__func__);
-			for (i = 0; i < num_bufs; i++) {
-				ret_val = vsi_cam_device_alloc_res_memory(
-				    isp_dev, isp_port->cam_device_handle,
-				    buf_size, &phy_addr, (void **)&pIpl_addr);
-				if (ret_val != VSI_SUCCESS) {
-					dev_err(isp_dev->dev,
-						"%s: CamDevice chain %d alloc "
-						"buf[%d] failed, ret "
-						"is %d",
-						__func__, chn, i, ret_val);
-					ret_val = VSI_ERR_ILLEGAL_PARAM;
-					goto ERR_TO_RELEASE_MEM;
-				}
-
-				BufPoolCfg.p_base_addr_list[i] = phy_addr;
-				BufPoolCfg.p_ipl_addr_list[i] =
-				    (void *)pIpl_addr;
-				isp_port->mcm_attr.bufs[i].planes[0].dma_addr =
-				    phy_addr;
-			}
-		} else if (isp_port->mcm_attr.input_select ==
-			   MEDIA_ISP_MCM_INPUT_SELECT_APU) {
-			for (i = 0; i < num_bufs; i++) {
-				media_buf *BufInfo =
-				    &isp_port->mcm_attr.bufs[i];
-				BufInfo->planes[0].dma_size = buf_size;
-
-				ret_val = media_isp_hal_alloc_buf(isp_dev, port,
-								 BufInfo);
-				if (ret_val) {
-					dev_err(isp_dev->dev,
-						"%s: port %d alloc mcm "
-						"buffer[%d] from apu failed, "
-						"ret is %d\n",
-						__func__, port, i, ret_val);
-					goto ERR_TO_RELEASE_MEM;
-				}
-
-				phy_addr = BufInfo->planes[0].dma_addr;
-				BufPoolCfg.p_base_addr_list[i] = phy_addr;
-				BufPoolCfg.p_ipl_addr_list[i] =
-				    (void *)pIpl_addr;
-			}
-		}
-	}
-
-	else {
+	} else
+		{
 		dev_err(isp_dev->dev,
 			"%s: current not support chn %d to create buf pool",
 			__func__, chn);
@@ -469,7 +318,7 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 			"CamDevice chn %d create buf pool failed, ret is %d",
 			chn, ret_val);
 		ret_val = VSI_ERR_ILLEGAL_PARAM;
-		goto ERR_TO_RELEASE_MEM;
+		goto ERR_TO_DEINIT_CHAIN;
 	}
 	/************ STEP 4. SETUP BUF MGMT *******************/
 	ret_val = vsi_cam_device_setup_buf_mgmt(
@@ -491,27 +340,6 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 ERR_TO_DESTROY_BUFPOOL:
 	vsi_cam_device_destroy_buf_pool(isp_dev, isp_port->cam_device_handle,
 					chn);
-ERR_TO_RELEASE_MEM:
-	if (chn == CAMDEV_BUFCHAIN_RDMA) {
-		if (isp_port->mcm_attr.input_select ==
-		    MEDIA_ISP_MCM_INPUT_SELECT_RPU) {
-			for (--i; i >= 0; --i) {
-				vsi_cam_device_free_res_memory(
-				    isp_dev, isp_port->cam_device_handle,
-				    BufPoolCfg.p_base_addr_list[i]);
-				isp_port->mcm_attr.bufs[i].planes[0].dma_addr =
-				    0;
-			}
-		} else if (isp_port->mcm_attr.input_select ==
-			   MEDIA_ISP_MCM_INPUT_SELECT_APU) {
-			for (--i; i >= 0; --i) {
-				media_buf *BufInfo =
-				    &isp_port->mcm_attr.bufs[i];
-				media_isp_hal_free_buf(isp_dev, port, BufInfo);
-				BufInfo->planes[0].dma_addr = 0;
-			}
-		}
-	}
 ERR_TO_DEINIT_CHAIN:
 	kfree(BufPoolCfg.p_ipl_addr_list);
 	kfree(BufPoolCfg.p_base_addr_list);
@@ -1463,125 +1291,6 @@ int media_isp_device_sensor_open(struct visp_dev *isp_dev, uint8_t port)
 	return ret_val;
 }
 
-static int media_isp_device_mcm_set_format(struct visp_dev *isp_dev,
-					   uint8_t port)
-{
-	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
-	int ret_val = VSI_SUCCESS;
-	cam_device_pipe_in_fmt_t InFormat;
-	cam_device_sensor_mode_info_t mode_info;
-	cam_device_pipe_in_path_type_t InPath = CAMDEV_PIPE_INPATH_RDMA;
-
-	memset(&InFormat, 0, sizeof(cam_device_pipe_in_fmt_t));
-	memset(&mode_info, 0, sizeof(cam_device_sensor_mode_info_t));
-
-	ret_val = media_isp_calib_get_mode_info(isp_dev, port, &mode_info);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"%s: port %d get sensor mode info failed, ret is %d",
-			__func__, port, ret_val);
-		return ret_val;
-	}
-
-	InFormat.in_width = mode_info.size.width;
-	InFormat.in_height = mode_info.size.height;
-	InFormat.in_pattern = mode_info.bayer_pattern;
-	InFormat.stitch_mode = mode_info.stitching_mode;
-
-	if (mode_info.sensor_type == CAMDEV_SENSOR_TYPE_STITCHING_HDR) {
-		// hardware limit, may cause accuracy loss for bitwidth
-		InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
-	} else {
-		switch (mode_info.bit_width) {
-		case 8:
-			InFormat.in_format = CAMDEV_INPUT_FMT_RAW8;
-			break;
-		case 10:
-			InFormat.in_format = CAMDEV_INPUT_FMT_RAW10;
-			break;
-		case 12:
-			InFormat.in_format = CAMDEV_INPUT_FMT_RAW12;
-			break;
-		case 14:
-			InFormat.in_format = CAMDEV_INPUT_FMT_RAW14;
-			break;
-		case 16:
-			InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
-			break;
-		default:
-			InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
-			break;
-		}
-	}
-
-	ret_val = vsi_cam_device_set_in_format(
-	    isp_dev, isp_port->cam_device_handle, InPath, &InFormat);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"CamDevice set input path %d format failed, ret is %d",
-			InPath, ret_val);
-		ret_val = VSI_ERR_ILLEGAL_PARAM;
-		;
-	}
-
-	return ret_val;
-}
-
-static int media_isp_device_mcm_create_buf_pool(struct visp_dev *isp_dev,
-						uint8_t port)
-{
-	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
-	int ret_val = VSI_SUCCESS;
-	uint8_t num_bufs = 0;
-	uint8_t chn = CAMDEV_BUFCHAIN_RDMA;
-	int i = 0;
-
-	// RDMA Path for mcm W/r, require buf num >= displa buf num
-	num_bufs = MEDIA_ISP_MCM_BUF_COUNT;
-	for (i = 0; i < MEDIA_ISP_CHN_MAX; i++) {
-		if (isp_port->isp_chns[i].num_bufs > num_bufs)
-			num_bufs = isp_port->isp_chns[i].num_bufs;
-	}
-
-	isp_port->mcm_attr.num_bufs = (uint8_t)num_bufs;
-
-	ret_val = media_isp_device_create_buf_pool(isp_dev, port, chn);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"%s: port %d chn %d create buf pool failed, ret is %d",
-			__func__, port, chn, ret_val);
-	}
-
-	return ret_val;
-}
-
-static int media_isp_device_mcm_init(struct visp_dev *isp_dev, uint8_t port)
-{
-	int ret_val = VSI_SUCCESS;
-
-	if (!isp_dev) {
-		ret_val = VSI_ERR_NULL_PTR;
-		return ret_val;
-	}
-
-	ret_val = media_isp_device_mcm_set_format(isp_dev, port);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"%s: port %d set mcm format failed, ret is %d",
-			__func__, port, ret_val);
-		return ret_val;
-	}
-
-	ret_val = media_isp_device_mcm_create_buf_pool(isp_dev, port);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"%s: port %d create mcm buf pool failed, ret is %d",
-			__func__, port, ret_val);
-	}
-
-	return ret_val;
-}
-
 int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 {
 	int port = index / MEDIA_ISP_PORT_PAD_COUNT;
@@ -1599,16 +1308,6 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 		goto ERR_TO_RELEASE_CAMCOMMON;
 	}
 
-	if (isp_dev->ports_mask != 0x01) {
-		ret_val = media_isp_device_mcm_init(isp_dev, port);
-		if (ret_val != VSI_SUCCESS) {
-			dev_err(isp_dev->dev,
-				" port %d chn %d init mcm failed, ret is %d",
-				port, chn, ret_val);
-			goto ERR_TO_CLOSE_SENSOR;
-		}
-	}
-
 	memset(&sub_module_init, 0, sizeof(sub_module_init));
 
 	ret_val =
@@ -1617,7 +1316,7 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 		dev_err(isp_dev->dev,
 			" port %d chn %d init submodule failed, ret is %d",
 			port, chn, ret_val);
-		goto ERR_TO_TERMINATE_MCM;
+		goto ERR_TO_CLOSE_SENSOR;
 	}
 
 	ret_val = vsi_cam_device_connect_camera(
@@ -1626,16 +1325,13 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 		dev_err(isp_dev->dev,
 			"CamDevice camera connect failed, ret is %d", ret_val);
 		ret_val = VSI_ERR_ILLEGAL_PARAM;
-		goto ERR_TO_TERMINATE_MCM;
+		goto ERR_TO_CLOSE_SENSOR;
 	}
 
 	isp_dev->isp_ports[port].camera_connect_ref_cnt++;
 
 	return ret_val;
 
-ERR_TO_TERMINATE_MCM:
-	if (isp_dev->ports_mask != 0x01)
-		media_isp_device_mcm_terminate(isp_dev, port);
 ERR_TO_CLOSE_SENSOR:
 	ret_val =
 	    vsi_cam_device_sensor_close(isp_dev, isp_port->cam_device_handle);
@@ -1646,76 +1342,7 @@ ERR_TO_CLOSE_SENSOR:
 	}
 
 ERR_TO_RELEASE_CAMCOMMON:
-	//    vsi_cam_common_destroy(&CamCommon);
 	return ret_val;
-}
-
-int visp_buf_done(struct v4l2_subdev *sd, void *arg);
-
-int media_isp_hal_buf_done(struct v4l2_subdev *sd, int pad,
-			   const media_buf *buf)
-{
-	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
-	struct visp_buf KernelBuf;
-	uint32_t i;
-	int ret_val = 0;
-
-	if (!buf || !isp_dev) {
-		dev_err(isp_dev->dev, "Got a NULL BUFFER BUFFER\n");
-		return -EINVAL;
-	}
-	KernelBuf.index = buf->index;
-	KernelBuf.num_planes = buf->num_planes;
-	for (i = 0; i < KernelBuf.num_planes; i++) {
-		KernelBuf.planes[i].dma_addr = buf->planes[i].dma_addr;
-		KernelBuf.planes[i].size = buf->planes[i].dma_size;
-	}
-	KernelBuf.pad = pad;
-
-	ret_val = visp_buf_done(sd, &KernelBuf);
-	if (ret_val != 0) {
-		dev_dbg(isp_dev->dev, "Failed to signal BufDone\n");
-		return ret_val;
-	}
-	return VSI_SUCCESS;
-}
-
-int read_dq_buf_info(void *data, struct visp_dev *isp_dev, struct Chn_info *info,
-		    uint8_t *buf_index)
-{
-	uint8_t *p_data = NULL;
-	uint32_t hw_id_t = 100;
-	uint8_t idx;
-
-	payload_packet *packet = data;
-
-	if (!packet) {
-		dev_err(isp_dev->dev, "NO data in DQ Payload %s %d\n", __func__,
-			__LINE__);
-		return -ENOMEM;
-	}
-
-	p_data = packet->payload;
-
-	memcpy(&(hw_id_t), p_data, sizeof(uint32_t));
-	p_data += sizeof(uint32_t);
-
-	memcpy(info, p_data, sizeof(struct Chn_info));
-	p_data += sizeof(struct Chn_info);
-
-	p_data += sizeof(uint32_t);
-
-	memcpy(&(idx), p_data, sizeof(uint8_t));
-	*buf_index = idx;
-	p_data += sizeof(uint8_t);
-
-	output_buffer_t *output_buffer = NULL;
-	media_isp_chn_attr *isp_chns =
-	    &isp_dev->isp_ports[info->vt_id].isp_chns[info->path];
-	output_buffer = isp_chns->cam_device_bufs[*buf_index];
-
-	memcpy(&(output_buffer->p_owner), p_data, sizeof(uint32_t));
-	return 0;
 }
 
 /* Fill to the struct , which should be sent to RPU*/
@@ -2162,17 +1789,9 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	if (isp_port->cam_device_handle)
 		goto CHANGE_SENSOR_MODE;
 
-	if (isp_dev->ports_mask != 0x01) {
-		CamConfig.work_cfg.work_mode = CAMDEV_WORK_MODE_MCM;
-		CamConfig.work_cfg.mode_cfg.mcm.port_id =
-		    port + 1; //"1:CAMDEV_MCM_PORT_0, 2:CAMDEV_MCM_PORT_1, ..."
-		CamConfig.work_cfg.mode_cfg.mcm.mcm_op =
-		    1; //"1:CAMDEV_MCM_OP_SW, 2:CAMDEV_MCM_OP_HW"
-	} else {
-		CamConfig.work_cfg.work_mode = CAMDEV_WORK_MODE_STREAM;
-		CamConfig.work_cfg.mode_cfg.stream.port_id =
-		    port + 1; //"1:CAMDEV_MCM_PORT_0, 2:CAMDEV_MCM_PORT_1, ..."
-	}
+	CamConfig.work_cfg.work_mode = CAMDEV_WORK_MODE_STREAM;
+	CamConfig.work_cfg.mode_cfg.stream.port_id = port + 1;
+
 	int len = strlen(isp_dev->ss_mode_i0);
 
 	if (strncmp(&isp_dev->ss_mode_i0[len - 2], "lo", 2) == 0)
