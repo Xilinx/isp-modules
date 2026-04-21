@@ -123,6 +123,16 @@ EXPORT_SYMBOL_GPL(visp_align_bytes);
 
 static uint32_t sensor_dev_id[VISP_PORT_NR] = {2, 6, 5, 10};
 
+#define VISP_MAX_SHARED_SUBDEVS 32
+
+struct visp_shared_subdev_ref {
+	struct v4l2_subdev *sd;
+	u32 refcnt;
+};
+
+static DEFINE_MUTEX(visp_shared_subdev_lock);
+static struct visp_shared_subdev_ref visp_shared_subdev_refs[VISP_MAX_SHARED_SUBDEVS];
+
 struct visp_format visp_mp_fmts[] = {
 	{
 		.fourcc = V4L2_PIX_FMT_NV16,
@@ -982,12 +992,387 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev,
 	}
 
 	subdev = media_entity_to_v4l2_subdev(remote_pad->entity);
-	dev_info(isp_dev->dev, "Found input sub-device: %s on pad %d\n",
+	dev_dbg(isp_dev->dev, "Found input sub-device: %s on pad %d\n",
 		 subdev->name, pad);
 
 	return subdev; /* Return the first valid input sub-device found */
 }
 #endif
+
+static int visp_shared_subdev_find_slot(struct v4l2_subdev *sd)
+{
+	int i;
+
+	for (i = 0; i < VISP_MAX_SHARED_SUBDEVS; i++) {
+		if (visp_shared_subdev_refs[i].sd == sd)
+			return i;
+	}
+
+	return -1;
+}
+
+static int visp_shared_subdev_find_free_slot(void)
+{
+	int i;
+
+	for (i = 0; i < VISP_MAX_SHARED_SUBDEVS; i++) {
+		if (!visp_shared_subdev_refs[i].sd)
+			return i;
+	}
+
+	return -1;
+}
+
+static int visp_shared_subdev_stream_get(struct v4l2_subdev *sd)
+{
+	int slot;
+	int ret = 0;
+	bool need_stream_on = false;
+	u32 refcnt = 0;
+
+	if (!sd || !sd->ops || !sd->ops->video || !sd->ops->video->s_stream)
+		return 0;
+
+	mutex_lock(&visp_shared_subdev_lock);
+
+	slot = visp_shared_subdev_find_slot(sd);
+	if (slot >= 0) {
+		visp_shared_subdev_refs[slot].refcnt++;
+		refcnt = visp_shared_subdev_refs[slot].refcnt;
+		mutex_unlock(&visp_shared_subdev_lock);
+		if (sd->dev)
+			dev_dbg(sd->dev,
+				 "Upstream subdev '%s': stream_get ref++ slot=%d refcnt=%u (s_stream skipped)\n",
+				 sd->name, slot, refcnt);
+		return 0;
+	}
+
+	slot = visp_shared_subdev_find_free_slot();
+	if (slot < 0) {
+		mutex_unlock(&visp_shared_subdev_lock);
+		return -ENOSPC;
+	}
+
+	visp_shared_subdev_refs[slot].sd = sd;
+	visp_shared_subdev_refs[slot].refcnt = 1;
+	need_stream_on = true;
+	mutex_unlock(&visp_shared_subdev_lock);
+
+	if (need_stream_on) {
+		if (sd->dev)
+			dev_dbg(sd->dev,
+				 "Upstream subdev '%s': stream_get slot=%d refcnt=1, calling s_stream(1)\n",
+				 sd->name, slot);
+		ret = sd->ops->video->s_stream(sd, 1);
+		if (ret) {
+			if (sd->dev)
+				dev_err(sd->dev,
+					"Upstream subdev '%s': s_stream(1) failed: %d\n",
+					sd->name, ret);
+			mutex_lock(&visp_shared_subdev_lock);
+			if (visp_shared_subdev_refs[slot].sd == sd &&
+			    visp_shared_subdev_refs[slot].refcnt == 1) {
+				visp_shared_subdev_refs[slot].sd = NULL;
+				visp_shared_subdev_refs[slot].refcnt = 0;
+			}
+			mutex_unlock(&visp_shared_subdev_lock);
+		} else if (sd->dev) {
+			dev_dbg(sd->dev,
+				 "Upstream subdev '%s': s_stream(1) success slot=%d\n",
+				 sd->name, slot);
+		}
+	}
+
+	return ret;
+}
+
+static int visp_shared_subdev_stream_put(struct v4l2_subdev *sd)
+{
+	int slot;
+	int ret = 0;
+	bool need_stream_off = false;
+	u32 refcnt = 0;
+
+	if (!sd || !sd->ops || !sd->ops->video || !sd->ops->video->s_stream)
+		return 0;
+
+	mutex_lock(&visp_shared_subdev_lock);
+
+	slot = visp_shared_subdev_find_slot(sd);
+	if (slot < 0) {
+		mutex_unlock(&visp_shared_subdev_lock);
+		if (sd->dev)
+			dev_dbg(sd->dev,
+				"Upstream subdev '%s': stream_put without tracked ref (already zero)\n",
+				sd->name);
+		return 0;
+	}
+
+	if (visp_shared_subdev_refs[slot].refcnt > 0)
+		visp_shared_subdev_refs[slot].refcnt--;
+
+	refcnt = visp_shared_subdev_refs[slot].refcnt;
+
+	if (visp_shared_subdev_refs[slot].refcnt == 0) {
+		visp_shared_subdev_refs[slot].sd = NULL;
+		need_stream_off = true;
+	}
+
+	mutex_unlock(&visp_shared_subdev_lock);
+
+	if (sd->dev)
+		dev_dbg(sd->dev,
+			 "Upstream subdev '%s': stream_put slot=%d new_refcnt=%u%s\n",
+			 sd->name, slot, refcnt,
+			 need_stream_off ? ", calling s_stream(0)" : " (s_stream skipped)");
+
+	if (need_stream_off)
+		ret = sd->ops->video->s_stream(sd, 0);
+
+	if (need_stream_off && sd->dev) {
+		if (ret)
+			dev_warn(sd->dev,
+				 "Upstream subdev '%s': s_stream(0) failed: %d\n",
+				 sd->name, ret);
+		else
+			dev_dbg(sd->dev,
+				 "Upstream subdev '%s': s_stream(0) success\n",
+				 sd->name);
+	}
+
+	return ret;
+}
+
+static struct device_node *visp_get_remote_parent_for_port(struct device_node *np,
+							    u32 port)
+{
+	struct device_node *ep;
+
+	for_each_endpoint_of_node(np, ep) {
+		struct device_node *remote;
+		struct of_endpoint endpoint = {};
+
+		if (of_graph_parse_endpoint(ep, &endpoint))
+			continue;
+
+		if (endpoint.port != port)
+			continue;
+
+		remote = of_graph_get_remote_port_parent(ep);
+		of_node_put(ep);
+		return remote;
+	}
+
+	return NULL;
+}
+
+/*
+ * visp_get_remote_endpoint_port - Return the port number on the remote side
+ * of a local endpoint identified by (np, local_port).
+ * e.g. ISP1 port@0 connects to broadcaster port@2 → returns 2.
+ */
+static int visp_get_remote_endpoint_port(struct device_node *np, u32 local_port)
+{
+	struct device_node *ep;
+	int remote_port = -1;
+
+	for_each_endpoint_of_node(np, ep) {
+		struct of_endpoint local_ep_info = {};
+		struct device_node *remote_ep;
+		struct of_endpoint remote_ep_info = {};
+
+		if (of_graph_parse_endpoint(ep, &local_ep_info))
+			continue;
+
+		if (local_ep_info.port != local_port)
+			continue;
+
+		remote_ep = of_graph_get_remote_endpoint(ep);
+		if (remote_ep) {
+			if (!of_graph_parse_endpoint(remote_ep, &remote_ep_info))
+				remote_port = (int)remote_ep_info.port;
+			of_node_put(remote_ep);
+		}
+		of_node_put(ep);
+		break;
+	}
+
+	return remote_port;
+}
+
+static void visp_release_upstream_nodes_dt(struct visp_dev *isp_dev)
+{
+	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
+	u32 port;
+
+	for (port = 0; port < VISP_PORT_NR; port++) {
+		u32 i;
+
+		for (i = 0; i < ext->upstream_node_count[port]; i++) {
+			of_node_put(ext->upstream_nodes[port][i]);
+			ext->upstream_nodes[port][i] = NULL;
+		}
+
+		ext->upstream_node_count[port] = 0;
+	}
+}
+
+static bool visp_node_already_parsed(struct device_node **nodes, u32 count,
+				     struct device_node *np)
+{
+	u32 i;
+
+	for (i = 0; i < count; i++) {
+		if (nodes[i] == np)
+			return true;
+	}
+
+	return false;
+}
+
+static int visp_build_upstream_nodes_dt(struct visp_dev *isp_dev)
+{
+	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
+	struct device_node *isp_np = isp_dev->dev->of_node;
+	u32 port;
+
+	visp_release_upstream_nodes_dt(isp_dev);
+
+	if (!isp_np)
+		return -ENODEV;
+
+	for (port = 0; port < min_t(u32, isp_dev->num_streams, VISP_PORT_NR); port++) {
+		struct device_node *cur_node;
+		bool first_hop = true;
+		/*
+		 * MCM mapping: logical ISP port N occupies DT port@(N*VISP_PORT_PAD_NR).
+		 * e.g. for num_streams=4: port@0, port@5, port@10, port@15 are the
+		 * four sink ports; single-stream ISPs only use port@0 (N=0, 0*5=0).
+		 */
+		u32 dt_port = port * VISP_PORT_PAD_NR;
+
+		cur_node = visp_get_remote_parent_for_port(isp_np, dt_port);
+		if (cur_node) {
+			int bc_port = visp_get_remote_endpoint_port(isp_np, dt_port);
+
+			dev_dbg(isp_dev->dev,
+				"ISP %d logical port %u (DT port@%u) -> '%s' via its port %d\n",
+				isp_dev->id, port, dt_port,
+				cur_node->full_name ? cur_node->full_name : cur_node->name,
+				bc_port);
+		}
+
+		while (cur_node && ext->upstream_node_count[port] < VISP_MAX_UPSTREAM_NODES) {
+			struct device_node *next;
+			u32 idx = ext->upstream_node_count[port];
+
+			if (cur_node == isp_np ||
+			    visp_node_already_parsed(ext->upstream_nodes[port], idx, cur_node)) {
+				of_node_put(cur_node);
+				break;
+			}
+
+			ext->upstream_nodes[port][idx] = cur_node;
+			ext->upstream_node_count[port]++;
+			dev_dbg(isp_dev->dev,
+				 "ISP %d logical port %u (DT port@%u) upstream_node[%u]: %s\n",
+				 isp_dev->id, port, dt_port, idx,
+				 cur_node->full_name ? cur_node->full_name : cur_node->name);
+
+			/*
+			 * On the first hop (ISP → broadcaster) use the broadcaster's
+			 * sink port (port 0 per Xilinx DT convention) to walk further
+			 * upstream toward the sensor. Subsequent hops always use port 0
+			 * (each IP's sink is port@0 in Xilinx generated DTs).
+			 */
+			if (first_hop) {
+				dev_dbg(isp_dev->dev,
+					"  Traversing upstream from '%s' via its sink port 0\n",
+					cur_node->full_name ? cur_node->full_name : cur_node->name);
+				first_hop = false;
+			}
+
+			next = visp_get_remote_parent_for_port(cur_node, 0);
+			if (!next)
+				break;
+
+			if (ext->upstream_node_count[port] >= VISP_MAX_UPSTREAM_NODES) {
+				of_node_put(next);
+				break;
+			}
+
+			cur_node = next;
+		}
+
+		dev_dbg(isp_dev->dev, "Parsed %u upstream DT nodes for ISP %d logical port %u (DT port@%u)\n",
+			 ext->upstream_node_count[port], isp_dev->id, port, dt_port);
+	}
+
+	return 0;
+}
+
+/* Module-level list of all probed visp_dev instances.
+ * Used for cross-ISP subdev lookup: when ISP1 needs to s_stream broadcaster/MIPI/sensor
+ * that live in ISP0's media_device (because ISP1's sub-notifier returned -EEXIST),
+ * visp_find_subdev_any() searches all registered ISP media devices.
+ */
+static LIST_HEAD(visp_dev_global_list);
+static DEFINE_MUTEX(visp_dev_global_mutex);
+
+static struct v4l2_subdev *visp_find_subdev_by_of_node(struct visp_dev *isp_dev,
+						struct device_node *np)
+{
+	struct media_device *mdev = isp_dev->sd.entity.graph_obj.mdev;
+	struct media_entity *entity;
+	struct v4l2_subdev *sd;
+
+	if (!mdev || !np)
+		return NULL;
+
+	media_device_for_each_entity(entity, mdev) {
+		if (!is_media_entity_v4l2_subdev(entity))
+			continue;
+
+		sd = media_entity_to_v4l2_subdev(entity);
+		if (!sd || sd == &isp_dev->sd)
+			continue;
+
+		if ((sd->dev && sd->dev->of_node == np) ||
+		    (sd->fwnode && to_of_node(sd->fwnode) == np))
+			return sd;
+	}
+
+	return NULL;
+}
+
+/**
+ * visp_find_subdev_any - Find a v4l2_subdev by OF node across ALL ISP media devices.
+ *
+ * ISP0 owns the upstream chain (broadcaster, MIPI, sensor) in its media_device.
+ * ISP1's sub-notifier gets -EEXIST (shared nodes) so those subdevs are absent from
+ * ISP1's media_device.  This function falls back to searching every registered
+ * visp_dev instance so ISP1 can still find and s_stream the shared subdevs.
+ *
+ * Returns the matching v4l2_subdev, or NULL if not found.
+ */
+static struct v4l2_subdev *visp_find_subdev_any(struct device_node *np)
+{
+	struct visp_dev *peer;
+	struct v4l2_subdev *sd = NULL;
+
+	if (!np)
+		return NULL;
+
+	mutex_lock(&visp_dev_global_mutex);
+	list_for_each_entry(peer, &visp_dev_global_list, global_entry) {
+		sd = visp_find_subdev_by_of_node(peer, np);
+		if (sd)
+			break;
+	}
+	mutex_unlock(&visp_dev_global_mutex);
+
+	return sd;
+}
 
 /**
  * visp_discover_pipeline_subdevs - Discover all subdevices in the pipeline
@@ -1012,7 +1397,7 @@ static int visp_discover_pipeline_subdevs(struct visp_dev *isp_dev, int port,
 	if (!mdev || !subdevs || max_subdevs <= 0)
 		return 0;
 
-	dev_info(isp_dev->dev, "=== Discovering pipeline subdevices for port %d ===\n", port);
+	dev_dbg(isp_dev->dev, "=== Discovering pipeline subdevices for port %d ===\n", port);
 
 	/* Walk through all entities in the media device */
 	media_device_for_each_entity(entity, mdev) {
@@ -1038,6 +1423,10 @@ static int visp_discover_pipeline_subdevs(struct visp_dev *isp_dev, int port,
 
 			/* Check if connected to our ISP entity */
 			if (remote_entity == &isp_dev->sd.entity) {
+				dev_dbg(isp_dev->dev,
+					"  Candidate upstream subdev for port %d: %s (func=0x%x) via enabled link\n",
+					port, sd->name, sd->entity.function);
+
 				/* Avoid duplicates */
 				for (i = 0; i < count; i++) {
 					if (subdevs[i] == sd)
@@ -1046,16 +1435,93 @@ static int visp_discover_pipeline_subdevs(struct visp_dev *isp_dev, int port,
 
 				if (i == count && count < max_subdevs) {
 					subdevs[count] = sd;
-					dev_info(isp_dev->dev, "  Found subdev[%d]: %s (function: 0x%x)\n",
-						 count, sd->name, sd->entity.function);
+					dev_dbg(isp_dev->dev,
+						 "  Identified upstream subdev[%d] for port %d: %s (function: 0x%x)\n",
+						 count, port, sd->name, sd->entity.function);
 					count++;
+				} else if (i < count) {
+					dev_dbg(isp_dev->dev,
+						"  Duplicate upstream subdev for port %d ignored: %s\n",
+						port, sd->name);
+				} else {
+					dev_warn(isp_dev->dev,
+						 "  Upstream subdev list full for port %d, dropping %s (max=%d)\n",
+						 port, sd->name, max_subdevs);
 				}
 				break;
 			}
 		}
 	}
 
-	dev_info(isp_dev->dev, "=== Pipeline discovery complete: found %d subdevices ===\n", count);
+	dev_dbg(isp_dev->dev, "=== Pipeline discovery complete: found %d subdevices ===\n", count);
+	return count;
+}
+
+static int visp_collect_upstream_subdevs(struct visp_dev *isp_dev, int port,
+					 struct v4l2_subdev **subdevs, int max_subdevs)
+{
+	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
+	int count = 0;
+	int i;
+
+	if (!isp_dev || !subdevs || max_subdevs <= 0 || port < 0 || port >= VISP_PORT_NR)
+		return 0;
+
+	if (ext->upstream_node_count[port] == 0)
+		return visp_discover_pipeline_subdevs(isp_dev, port, subdevs, max_subdevs);
+
+	for (i = 0; i < ext->upstream_node_count[port] && count < max_subdevs; i++) {
+		struct v4l2_subdev *sd;
+		int j;
+		struct device_node *np = ext->upstream_nodes[port][i];
+
+		sd = visp_find_subdev_by_of_node(isp_dev, np);
+		if (!sd) {
+			/*
+			 * Not found in this ISP's media device.  Try the global
+			 * list — upstream nodes shared with a peer ISP (e.g.
+			 * broadcaster/MIPI/sensor registered in ISP0's media
+			 * device when ISP1's notifier returned -EEXIST) are still
+			 * reachable this way for s_stream ref-counting purposes.
+			 */
+			sd = visp_find_subdev_any(np);
+		}
+		if (!sd) {
+			/*
+			 * Subdev not found in any registered media device.
+			 * For secondary ISPs (notifier_registered=false) this means
+			 * the primary ISP's notifier has not yet bound this upstream
+			 * subdev.  At user-space stream time this should not happen;
+			 * log a warning so it is visible in dmesg.
+			 */
+			dev_warn(isp_dev->dev,
+				 "ISP %d port %d: upstream_node[%d] '%s' has no subdev%s\n",
+				 isp_dev->id, port, i,
+				 np ? (np->full_name ? np->full_name : np->name) : "NULL",
+				 ISP_DEV_EXTENDED(isp_dev)->notifier_registered ?
+				 "" : " (secondary ISP)");
+			continue;
+		}
+
+		for (j = 0; j < count; j++) {
+			if (subdevs[j] == sd)
+				break;
+		}
+
+		if (j == count) {
+			subdevs[count++] = sd;
+			dev_dbg(isp_dev->dev,
+				 "ISP %d port %d upstream_node[%d] (%s) -> subdev[%d] '%s'\n",
+				 isp_dev->id, port, i,
+				 np ? (np->full_name ? np->full_name : np->name) : "NULL",
+				 count - 1, sd->name);
+		} else {
+			dev_dbg(isp_dev->dev,
+				"ISP %d port %d upstream_node[%d] maps to duplicate subdev '%s' (ignored)\n",
+				isp_dev->id, port, i, sd->name);
+		}
+	}
+
 	return count;
 }
 
@@ -1075,10 +1541,10 @@ int visp_get_pipeline_subdev_count(struct visp_dev *isp_dev, int port)
 		return 0;
 	}
 
-	/* Use discovery function to count subdevices */
-	count = visp_discover_pipeline_subdevs(isp_dev, port, subdevs, ARRAY_SIZE(subdevs));
+	/* Use OF-node based collection (falls back to graph discovery if no DT nodes) */
+	count = visp_collect_upstream_subdevs(isp_dev, port, subdevs, ARRAY_SIZE(subdevs));
 
-	dev_info(isp_dev->dev, "Pipeline discovery for port %d found %d subdevices\n", port, count);
+	dev_dbg(isp_dev->dev, "Pipeline discovery for port %d found %d subdevices\n", port, count);
 
 	return count;
 }
@@ -1100,8 +1566,8 @@ struct v4l2_subdev *visp_get_pipeline_subdev(struct visp_dev *isp_dev, int port,
 		return NULL;
 	}
 
-	/* Use discovery function to get subdevices */
-	count = visp_discover_pipeline_subdevs(isp_dev, port, subdevs, ARRAY_SIZE(subdevs));
+	/* Use OF-node based collection (falls back to graph discovery if no DT nodes) */
+	count = visp_collect_upstream_subdevs(isp_dev, port, subdevs, ARRAY_SIZE(subdevs));
 
 	if (index >= count) {
 		dev_dbg(isp_dev->dev, "Request for subdev index %d >= count %d for port %d\n",
@@ -1126,47 +1592,67 @@ struct v4l2_subdev *visp_get_pipeline_subdev(struct visp_dev *isp_dev, int port,
  */
 static int visp_stream_pipeline_subdevs(struct visp_dev *isp_dev, int port, int enable)
 {
-	int i, ret = 0;
+	int i, j, ret = 0;
 	int count = visp_get_pipeline_subdev_count(isp_dev, port);
 
-	dev_info(isp_dev->dev, "=== Pipeline Streaming %s for port %d ===\n",
+	dev_dbg(isp_dev->dev, "=== Pipeline Streaming %s for port %d ===\n",
 		 enable ? "ON" : "OFF", port);
 
 	if (count == 0) {
-		dev_warn(isp_dev->dev, "No pipeline subdevices found for port %d\n", port);
+		struct visp_limo_isp_dev_extended *_ext = ISP_DEV_EXTENDED(isp_dev);
+
+		if (_ext->upstream_node_count[port] > 0) {
+			/*
+			 * DT upstream nodes are known but no subdevs were found.
+			 * For secondary ISPs (notifier_registered=false) this means
+			 * the primary ISP's upstream chain is not yet available.
+			 * Streaming without upstream will result in no sensor data.
+			 */
+			dev_err(isp_dev->dev,
+				"ISP %d port %d: %u upstream DT nodes but no subdevs - %s\n",
+				isp_dev->id, port, _ext->upstream_node_count[port],
+				_ext->notifier_registered ?
+				"primary ISP: check notifier completion" :
+				"secondary ISP: peer ISP notifier may not have completed");
+		} else {
+			dev_warn(isp_dev->dev,
+				 "ISP %d port %d: no pipeline subdevices found (no DT upstream nodes)\n",
+				 isp_dev->id, port);
+		}
 		return 0;
 	}
 
-	dev_info(isp_dev->dev, "Found %d pipeline subdevices for port %d\n", count, port);
+	dev_dbg(isp_dev->dev, "Found %d pipeline subdevices for port %d\n", count, port);
 
 	if (enable) {
 		/* Stream on: Start from the furthest upstream (sensor) to downstream (ISP) */
-		dev_info(isp_dev->dev, "Starting streaming from sensor to ISP (reverse order):\n");
+		dev_dbg(isp_dev->dev, "Starting streaming from sensor to ISP (reverse order):\n");
 		for (i = count - 1; i >= 0; i--) {
 			struct v4l2_subdev *subdev = visp_get_pipeline_subdev(isp_dev, port, i);
-			dev_info(isp_dev->dev, "  [%d] Attempting to stream ON: %s\n",
+			dev_dbg(isp_dev->dev, "  [%d] Attempting to stream ON: %s\n",
 				 i, subdev ? subdev->name : "NULL");
 
 			if (subdev && subdev->ops && subdev->ops->video && subdev->ops->video->s_stream) {
-				dev_info(isp_dev->dev, "  [%d] Calling s_stream(1) on %s\n", i, subdev->name);
-				ret = subdev->ops->video->s_stream(subdev, 1);
+				ret = visp_shared_subdev_stream_get(subdev);
 				if (ret) {
-					dev_err(isp_dev->dev, "Failed to start streaming on '%s': %d\n",
+					dev_err(isp_dev->dev,
+						"Failed to start streaming on '%s': %d\n",
 						subdev->name, ret);
-					/* Stream off the devices we already started */
-					{
-						int j;
-						for (j = i + 1; j < count; j++) {
-							struct v4l2_subdev *prev_subdev = visp_get_pipeline_subdev(isp_dev, port, j);
-							if (prev_subdev && prev_subdev->ops && prev_subdev->ops->video &&
-							    prev_subdev->ops->video->s_stream) {
-								prev_subdev->ops->video->s_stream(prev_subdev, 0);
-							}
-						}
+					/* Drop refs for already-started devices. */
+					for (j = i + 1; j < count; j++) {
+						struct v4l2_subdev *prev;
+
+						prev = visp_get_pipeline_subdev(isp_dev, port, j);
+						if (prev && prev->ops &&
+						    prev->ops->video &&
+						    prev->ops->video->s_stream)
+							visp_shared_subdev_stream_put(prev);
 					}
 					return ret;
 				}
-				dev_info(isp_dev->dev, "  [%d] Successfully started streaming on '%s'\n", i, subdev->name);
+				dev_dbg(isp_dev->dev,
+					 "  [%d] Upstream streaming ref acquired on '%s'\n",
+					 i, subdev->name);
 			} else {
 				dev_warn(isp_dev->dev, "  [%d] Subdev %s has no s_stream operation\n",
 					 i, subdev ? subdev->name : "NULL");
@@ -1174,21 +1660,22 @@ static int visp_stream_pipeline_subdevs(struct visp_dev *isp_dev, int port, int 
 		}
 	} else {
 		/* Stream off: Start from downstream (ISP) to upstream (sensor) */
-		dev_info(isp_dev->dev, "Stopping streaming from ISP to sensor (forward order):\n");
+		dev_dbg(isp_dev->dev, "Stopping streaming from ISP to sensor (forward order):\n");
 		for (i = 0; i < count; i++) {
 			struct v4l2_subdev *subdev = visp_get_pipeline_subdev(isp_dev, port, i);
-			dev_info(isp_dev->dev, "  [%d] Attempting to stream OFF: %s\n",
+			dev_dbg(isp_dev->dev, "  [%d] Attempting to stream OFF: %s\n",
 				 i, subdev ? subdev->name : "NULL");
 
 			if (subdev && subdev->ops && subdev->ops->video && subdev->ops->video->s_stream) {
-				dev_info(isp_dev->dev, "  [%d] Calling s_stream(0) on %s\n", i, subdev->name);
-				ret = subdev->ops->video->s_stream(subdev, 0);
+				ret = visp_shared_subdev_stream_put(subdev);
 				if (ret) {
 					dev_warn(isp_dev->dev, "Failed to stop streaming on '%s': %d\n",
 						 subdev->name, ret);
 					/* Continue trying to stop other devices */
 				} else {
-					dev_info(isp_dev->dev, "  [%d] Successfully stopped streaming on '%s'\n", i, subdev->name);
+					dev_dbg(isp_dev->dev,
+						 "  [%d] Upstream streaming ref released on '%s'\n",
+						 i, subdev->name);
 				}
 			} else {
 				dev_warn(isp_dev->dev, "  [%d] Subdev %s has no s_stream operation\n",
@@ -1212,6 +1699,15 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		return -EINVAL;
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+	/*
+	 * The SP1 path (video1 / "self path", chn == MEDIA_ISP_PORT_PAD_SOURCE_SP1-1)
+	 * taps the ISP's internal data flow.  Its upstream pipeline connections
+	 * (sensor → MIPI → ISP) are already managed by the MP / RAW paths and
+	 * the firmware stream_id mechanism.  SP1 must therefore NOT call
+	 * visp_stream_pipeline_subdevs() and must NOT touch subdev_streamon_count,
+	 * which is the reference counter that gates those calls.
+	 */
+	bool is_self_path = (chn == (MEDIA_ISP_PORT_PAD_SOURCE_SP1 - 1));
 
 	if (pad_stream->status == 1) {
 
@@ -1226,17 +1722,24 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 
 		/*
-		 * the subdev_streamon_count[port] holds the count of number of
-		 * piplines MP/SP/RAW are up on a port
+		 * subdev_streamon_count[port] counts only non-self-path channels
+		 * (MP, SP2, RAW).  SP1 bypasses this entirely - its upstream
+		 * pipeline is controlled via stream_id, not V4L2 s_stream.
 		 */
-		if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
-		/* Stream on all pipeline subdevices */
-			ret = visp_stream_pipeline_subdevs(isp_dev, port, 1);
-			if (ret) {
-				dev_err(isp_dev->dev, "Failed to start pipeline streaming on port %d: %d\n",
-					port, ret);
-				goto ERR_TO_RPU_LOCK;
+		if (!is_self_path) {
+			if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
+				/* Stream on all pipeline subdevices */
+				ret = visp_stream_pipeline_subdevs(isp_dev, port, 1);
+				if (ret) {
+					dev_err(isp_dev->dev, "Failed to start pipeline streaming on port %d: %d\n",
+						port, ret);
+					goto ERR_TO_RPU_LOCK;
+				}
 			}
+		} else {
+			dev_dbg(isp_dev->dev,
+				 "ISP:%d port:%d chn:%d (SP1/self-path) stream-on: skipping upstream pipeline\n",
+				 isp_dev->id, port, chn);
 		}
 
 		ret = media_isp_device_set_frame_rate(isp_dev, port,
@@ -1264,11 +1767,13 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			ret = -EINVAL;
 			goto ERR_TO_RPU_LOCK;
 		}
-		/* only all subdev stream on, then mark subdev_streamon_count */
-		ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
+		/* Only non-self-path channels increment the upstream pipeline refcount */
+		if (!is_self_path)
+			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
 		/* EXIT PORT Level CRITICAL SECTION */
 	} else {
-		if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]) {
+		if (!is_self_path &&
+		    ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]) {
 			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]--;
 			media_isp_stream_off(isp_dev, port, chn);
 			/* subdev_streamon_count
@@ -1290,6 +1795,11 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 						 isp_dev->id, port, ret);
 				}
 			}
+		} else if (is_self_path) {
+			dev_dbg(isp_dev->dev,
+				 "ISP:%d port:%d chn:%d (SP1/self-path) stream-off: skipping upstream pipeline\n",
+				 isp_dev->id, port, chn);
+			media_isp_stream_off(isp_dev, port, chn);
 		}
 		isp_dev->streamon[pad_stream->pad] = 0;
 		isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
@@ -1537,7 +2047,7 @@ static int visp_buffer_alloc(struct v4l2_subdev *sd, void *arg)
 		return -ENOMEM;
 	}
 
-	dev_info(isp_dev->dev, "RDMA Buffer is %llx\n",ext_dma_buf->addr);
+		dev_dbg(isp_dev->dev, "RDMA Buffer is %llx\n", ext_dma_buf->addr);
 
 	ext_dma_buf->size = ext_buf_info->plane.size;
 	ext_buf_info->plane.dma_addr = (uint32_t)ext_dma_buf->addr;
@@ -1621,7 +2131,8 @@ int visp_buffer_alloc_public(struct visp_dev *isp_dev,
 		return -ENOMEM;
 	}
 
-	dev_info(isp_dev->dev, "ISP:%d Port:%d RDMA Buffer is 0x%llx\n", isp_dev->id, ext_buf_info->port, ext_dma_buf->addr);
+dev_dbg(isp_dev->dev, "ISP:%d Port:%d RDMA Buffer is 0x%llx\n",
+				isp_dev->id, ext_buf_info->port, ext_dma_buf->addr);
 
 	ext_dma_buf->size = ext_buf_info->plane.size;
 	ext_buf_info->plane.dma_addr = (uint32_t)ext_dma_buf->addr;
@@ -1660,7 +2171,7 @@ int visp_buffer_free_public(struct visp_dev *isp_dev,
 	if (ext_dma_buf) {
 		dma_free_coherent(isp_dev->dev, ext_dma_buf->size,
 				  ext_dma_buf->vaddr, ext_dma_buf->addr);
-		dev_info(isp_dev->dev, "%s: dma_addr: 0x%x is free\n", __func__,
+		dev_dbg(isp_dev->dev, "%s: dma_addr: 0x%x is free\n", __func__,
 			 (uint32_t)ext_dma_buf->addr);
 		kfree(ext_dma_buf);
 	}
@@ -1767,7 +2278,7 @@ static void visp_dmabuf_release(struct dma_buf *dmabuf)
 	/* Clear dmabuf pointer so it can be re-created on next use */
 	if (event_shm) {
 		event_shm->dmabuf = NULL;
-		dev_info(event_shm->dev, "DMA-BUF released, will re-export on next use\n");
+		dev_dbg(event_shm->dev, "DMA-BUF released, will re-export on next use\n");
 	}
 
 	/* Note: DMA memory is NOT freed here - it persists for re-use */
@@ -1815,7 +2326,7 @@ static int visp_export_dmabuf(struct device *dev, struct visp_event_shm *event_s
 	event_shm->dmabuf = dmabuf;
 	event_shm->dmabuf_fd = -1; /* fd created per-process via ioctl */
 
-	dev_info(dev, "DMA-BUF exported successfully: virt=%p dma=%pad size=%d\n",
+	dev_dbg(dev, "DMA-BUF exported successfully: virt=%p dma=%pad size=%d\n",
 		 event_shm->virt_addr, &event_shm->dma_handle, event_shm->size);
 
 	return 0;
@@ -1917,7 +2428,7 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 					"VISP_GET_EVENT_SHM_FD: dmabuf export failed: %d\n", ret);
 				break;
 			}
-			dev_info(isp_dev->event_shm.dev, "DMA-BUF exported on first use\n");
+			dev_dbg(isp_dev->event_shm.dev, "DMA-BUF exported on first use\n");
 		}
 
 		/* Create per-process fd - dma_buf_fd() takes the reference from export */
@@ -1927,7 +2438,7 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 				"VISP_GET_EVENT_SHM_FD: dma_buf_fd failed: %d\n", *(int *)arg);
 			ret = *(int *)arg;
 		} else {
-			dev_info(isp_dev->event_shm.dev,
+			dev_dbg(isp_dev->event_shm.dev,
 				 "VISP_GET_EVENT_SHM_FD: returned fd=%d\n", *(int *)arg);
 			ret = 0;
 		}
@@ -2382,51 +2893,120 @@ static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
 	struct media_entity *source, *sink;
 	unsigned int source_pad, sink_pad;
 
+	dev_dbg(dev, "ISP %d notifier_bound: '%s'\n", isp_dev->id, sd->name);
+
 	if (!sd->fwnode) {
-		dev_err(dev,
-			"Subdev %s has no fwnode, skipping link creation\n",
+		dev_err(dev, "Subdev %s has no fwnode, skipping link creation\n",
 			sd->name);
 		return -EINVAL;
 	}
 
-	/* Loop through all available endpoints */
 	while ((ep = fwnode_graph_get_next_endpoint(sd->fwnode, ep))) {
 		ret = v4l2_fwnode_parse_link(ep, &link);
 		if (ret < 0) {
 			dev_err(dev, "Failed to parse link for %pOF: %d\n",
 				to_of_node(ep), ret);
+			/* ep reference will be released by
+			 * fwnode_graph_get_next_endpoint on the next
+			 * iteration or when the loop terminates.
+			 */
 			continue;
 		}
 
-		/* Ensure the subdev is actually a source */
-		if (sd->entity.pads[link.local_port].flags &
-		    MEDIA_PAD_FL_SINK) {
+		/* Guard against DT port numbers exceeding the entity's pad count */
+		if (link.local_port >= sd->entity.num_pads) {
 			v4l2_fwnode_put_link(&link);
 			continue;
 		}
 
-		source = &sd->entity; // The remote source (MIPI)
-		source_pad =
-		    link.local_port; // The pad number on the source subdev
-		sink = &isp_dev->sd.entity;  // The ISP subdev
-		sink_pad = link.remote_port; // The corresponding pad on the ISP
+		/* Only process source pads on the bound subdev */
+		if (sd->entity.pads[link.local_port].flags & MEDIA_PAD_FL_SINK) {
+			v4l2_fwnode_put_link(&link);
+			continue;
+		}
+
+		/*
+		 * Only create a link if the remote end of this source endpoint
+		 * is THIS ISP instance.  The broadcaster has multiple source
+		 * ports (one per ISP); without this check every broadcaster
+		 * source pad would be linked to this ISP's sink pad, producing
+		 * duplicate/wrong links like:
+		 *   broadcaster:1 -> ISP0:0  (correct)
+		 *   broadcaster:2 -> ISP0:0  (wrong - belongs to ISP1)
+		 */
+		if (link.remote_node != dev_fwnode(dev)) {
+			/*
+			 * The remote endpoint is a peer ISP (not this one).
+			 * Try to find that ISP subdev via the global list and
+			 * create the broadcaster→peer_ISP link.  Both entities
+			 * must share the same media device for media_create_pad_link
+			 * to succeed; if they are in different devices the call
+			 * will fail and is silently ignored.
+			 *
+			 * snk_pad = link.remote_port directly because the DT
+			 * port@N number IS the pad index on the ISP entity.
+			 * e.g. port@0  → pad 0  (single-stream sink)
+			 *      port@5  → pad 5  (MCM logical port 1 sink)
+			 *      port@10 → pad 10 (MCM logical port 2 sink)
+			 * Using link.remote_port * VISP_PORT_PAD_NR would give
+			 * wrong results for MCM (port@5 → 5*5+0=25, out of range).
+			 */
+			struct v4l2_subdev *peer_isp =
+				visp_find_subdev_any(to_of_node(link.remote_node));
+
+			if (peer_isp &&
+			    peer_isp->entity.graph_obj.mdev ==
+			    sd->entity.graph_obj.mdev) {
+				unsigned int src_pad = link.local_port;
+				unsigned int snk_pad = link.remote_port;
+
+				v4l2_fwnode_put_link(&link);
+
+				ret = media_create_pad_link(&sd->entity, src_pad,
+							    &peer_isp->entity,
+							    snk_pad,
+							    MEDIA_LNK_FL_ENABLED);
+				if (ret && ret != -EEXIST)
+					dev_warn(dev,
+						 "Peer ISP link %s:%u -> %s:%u failed: %d\n",
+						 sd->name, src_pad,
+						 peer_isp->entity.name, snk_pad,
+						 ret);
+				else if (ret == 0)
+					dev_dbg(dev,
+						 "Peer ISP linked %s:%u -> %s:%u\n",
+						 sd->name, src_pad,
+						 peer_isp->entity.name, snk_pad);
+				ret = 0;
+			} else {
+				dev_dbg(dev,
+					"Notifier bound: %s:%u -> remote is not this ISP, skipping\n",
+					sd->name, link.local_port);
+				v4l2_fwnode_put_link(&link);
+			}
+			continue;
+		}
+
+		source     = &sd->entity;
+		source_pad = link.local_port;
+		sink       = &isp_dev->sd.entity;
+		sink_pad   = link.remote_port;
 
 		v4l2_fwnode_put_link(&link);
 
-		/* Create media pad link */
 		ret = media_create_pad_link(source, source_pad, sink, sink_pad,
 					    MEDIA_LNK_FL_ENABLED);
-		if (ret) {
-			dev_err(dev, "Failed to create link: %s:%u -> %s:%u\n",
-				source->name, source_pad, sink->name, sink_pad);
-			break;
+		if (ret && ret != -EEXIST) {
+			dev_err(dev, "Failed to create link: %s:%u -> %s:%u: %d\n",
+				source->name, source_pad, sink->name, sink_pad,
+				ret);
+			fwnode_handle_put(ep);
+			return ret;
 		}
-
-		dev_info(dev, "Successfully linked %s:%u -> %s:%u\n",
-			 source->name, source_pad, sink->name, sink_pad);
-
-		/* Update ports_mask */
-		fwnode_handle_put(ep);
+		if (ret == 0)
+			dev_dbg(dev, "Linked %s:%u -> %s:%u\n",
+				 source->name, source_pad, sink->name, sink_pad);
+		ret = 0;
 	}
 
 	return ret;
@@ -2444,38 +3024,133 @@ static void visp_notifier_unbound(struct v4l2_async_notifier *notifier,
 static int visp_notifier_complete(struct v4l2_async_notifier *notifier)
 {
 	struct visp_dev *isp_dev = container_of(notifier, struct visp_dev, notifier);
-	int i;
+	struct v4l2_async_connection *asc;
+	int ret = 0;
 
-	dev_info(isp_dev->dev, "=== Async notifier complete - all subdevices bound ===\n");
-	dev_info(isp_dev->dev, "ISP entity: %s (num_pads=%u)\n",
-		 isp_dev->sd.entity.name, isp_dev->sd.entity.num_pads);
+	dev_dbg(isp_dev->dev, "=== Async notifier complete - creating inter-subdev links ===\n");
 
-	/* Print ISP pad information */
-	for (i = 0; i < isp_dev->num_pads; i++) {
-		dev_info(isp_dev->dev, "  ISP pad[%d]: %s\n", i,
-			 (isp_dev->pads[i].flags & MEDIA_PAD_FL_SOURCE) ? "source" : "sink");
+	/*
+	 * For every bound upstream subdev (broadcaster, MIPI, sensor), walk its
+	 * SOURCE endpoints and create media pad links to whatever is on the other
+	 * side, as long as the remote is also a bound subdev in this notifier.
+	 *
+	 * Links into the ISP itself (remote_node == our ISP device) are skipped
+	 * here because visp_notifier_bound() already created those.
+	 *
+	 * Expected results (sensor pad0:src → MIPI pad1:sink,
+	 *                   MIPI pad1:src  → broadcaster pad0:sink).
+	 */
+	list_for_each_entry(asc, &notifier->done_list, asc_entry) {
+		struct device_node *src_np = to_of_node(asc->match.fwnode);
+		struct v4l2_subdev *src_sd;
+		struct fwnode_handle *ep = NULL;
+		struct v4l2_fwnode_link link;
+
+		src_sd = visp_find_subdev_by_of_node(isp_dev, src_np);
+		if (!src_sd || !src_sd->fwnode)
+			continue;
+
+		while ((ep = fwnode_graph_get_next_endpoint(src_sd->fwnode, ep))) {
+			struct v4l2_subdev *remote_sd;
+			unsigned int source_pad, sink_pad;
+
+			if (v4l2_fwnode_parse_link(ep, &link) < 0)
+				continue;
+
+			/* Only process source pads */
+			if (src_sd->entity.pads[link.local_port].flags &
+			    MEDIA_PAD_FL_SINK) {
+				v4l2_fwnode_put_link(&link);
+				continue;
+			}
+
+			/* Skip: this link terminates at our ISP, handled by bound() */
+			if (link.remote_node == dev_fwnode(isp_dev->dev)) {
+				v4l2_fwnode_put_link(&link);
+				continue;
+			}
+
+			remote_sd = visp_find_subdev_by_of_node(
+					isp_dev, to_of_node(link.remote_node));
+			if (!remote_sd) {
+				/*
+				 * Not found in this ISP's media graph.
+				 * Fall back to the global list - the remote may
+				 * be owned by a peer ISP that registered the
+				 * shared upstream chain first.
+				 */
+				remote_sd = visp_find_subdev_any(
+						to_of_node(link.remote_node));
+			}
+			if (!remote_sd) {
+				dev_dbg(isp_dev->dev,
+					"complete: remote '%pOF' not found anywhere, skipping\n",
+					to_of_node(link.remote_node));
+				v4l2_fwnode_put_link(&link);
+				continue;
+			}
+
+			source_pad = link.local_port;
+			sink_pad   = link.remote_port;
+			v4l2_fwnode_put_link(&link);
+
+			ret = media_create_pad_link(&src_sd->entity, source_pad,
+						    &remote_sd->entity, sink_pad,
+						    MEDIA_LNK_FL_ENABLED);
+			if (ret && ret != -EEXIST) {
+				dev_warn(isp_dev->dev,
+					 "complete: link %s:%u -> %s:%u failed: %d\n",
+					 src_sd->entity.name, source_pad,
+					 remote_sd->entity.name, sink_pad, ret);
+			} else {
+				if (ret == 0)
+					dev_dbg(isp_dev->dev,
+						 "complete: linked %s:%u -> %s:%u\n",
+						 src_sd->entity.name, source_pad,
+						 remote_sd->entity.name, sink_pad);
+				ret = 0;
+			}
+		}
 	}
 
-	/* Now that all subdevices are bound, discover the complete pipeline */
-	dev_info(isp_dev->dev, "=== Pipeline discovery after all bindings ===\n");
+	return ret;
+}
 
-	return 0;
+/*
+ * visp_notifier_has_fwnode - check if fwnode is already in this ISP's notifier
+ *
+ * v4l2_async_nf_add_fwnode() does NOT deduplicate — it always appends a new
+ * entry to waiting_list.  Duplicate entries for the same device fwnode (e.g.
+ * broadcaster_0 shared by logical ports 0 and 1 in MCM) cause
+ * v4l2_async_nf_register() to return -EEXIST when it validates the list, even
+ * though the duplicates are within our OWN notifier.  Perform explicit dedup
+ * before calling v4l2_async_nf_add_fwnode to avoid this.
+ */
+static bool visp_notifier_has_fwnode(struct visp_dev *isp_dev,
+				     struct fwnode_handle *fwnode)
+{
+	struct v4l2_async_connection *asc;
+
+	list_for_each_entry(asc, &isp_dev->notifier.waiting_list, asc_entry) {
+		if (asc->match.fwnode == fwnode)
+			return true;
+	}
+	return false;
 }
 
 static const struct v4l2_async_notifier_operations visp_notify_ops = {
-	.bound = visp_notifier_bound,
+	.bound  = visp_notifier_bound,
 	.unbind = visp_notifier_unbound,
 	.complete = visp_notifier_complete,
 };
 
 static int visp_async_notifier(struct visp_dev *isp_dev)
 {
-	struct fwnode_handle *ep;
-	struct fwnode_handle *remote_ep;
+	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
 	struct v4l2_async_connection *asc;
 	struct device *dev = isp_dev->dev;
 	int ret = 0;
-	int pad = 0;
+	u32 port, i;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 	v4l2_async_subdev_nf_init(&isp_dev->notifier, &isp_dev->sd);
@@ -2488,33 +3163,63 @@ static int visp_async_notifier(struct visp_dev *isp_dev)
 	if (dev_fwnode(isp_dev->dev) == NULL)
 		return 0;
 
-	for (pad = 0; pad < isp_dev->num_pads; pad++) {
-		if (isp_dev->pads[pad].flags != MEDIA_PAD_FL_SINK)
-			continue;
+	/*
+	 * Add all upstream nodes (broadcaster, MIPI CSI-2 RX, sensor) by their
+	 * DEVICE fwnodes so each subdev is represented exactly once in the
+	 * notifier.  upstream_nodes[] is populated by visp_build_upstream_nodes_dt:
+	 *   [port][0] = broadcaster (direct upstream of the ISP's DT sink port)
+	 *   [port][1] = MIPI CSI-2 RX
+	 *   [port][2] = sensor
+	 *
+	 * MCM case (num_streams > 1): multiple logical ports may share the same
+	 * upstream node (e.g. broadcaster_0 feeds both ISP logical port 0 and 1).
+	 * -EEXIST from v4l2_async_nf_add_fwnode is silently ignored so each
+	 * unique device node is tracked exactly once regardless of how many
+	 * logical ports reference it.
+	 *
+	 * IMPORTANT: Do NOT use v4l2_async_nf_add_fwnode_remote() here.  That
+	 * API stores the remote ENDPOINT fwnode, which is a different fwnode
+	 * object from the device fwnode stored in upstream_nodes[].  Having both
+	 * endpoint-fwnode and device-fwnode entries for the same broadcaster
+	 * causes the async framework to call visp_notifier_bound() TWICE for
+	 * that subdev, creating a duplicate broadcaster→ISP pad link.
+	 */
+	for (port = 0; port < min_t(u32, isp_dev->num_streams, VISP_PORT_NR); port++) {
+		for (i = 0; i < ext->upstream_node_count[port]; i++) {
+			struct device_node *np = ext->upstream_nodes[port][i];
+			struct fwnode_handle *fwh;
 
-		ep = fwnode_graph_get_endpoint_by_id(
-		    dev_fwnode(dev), pad, 0, FWNODE_GRAPH_ENDPOINT_NEXT);
-		if (!ep)
-			continue;
-		remote_ep = fwnode_graph_get_remote_endpoint(ep);
-		if (!remote_ep) {
-			fwnode_handle_put(ep);
-			continue;
-		}
-		fwnode_handle_put(remote_ep);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
-		asc = v4l2_async_nf_add_fwnode_remote(
-		    &isp_dev->notifier, ep, struct v4l2_async_connection);
-#else
-		asd = v4l2_async_notifier_add_fwnode_remote_subdev(
-		    &isp_dev->notifier, ep, struct v4l2_async_subdev);
-#endif
+			if (!np)
+				continue;
 
-		fwnode_handle_put(ep);
+			fwh = of_fwnode_handle(np);
 
-		if (IS_ERR(asc)) {
-			ret = PTR_ERR(asc);
-			if (ret != -EEXIST) {
+			/*
+			 * Explicit dedup: v4l2_async_nf_add_fwnode() does NOT
+			 * deduplicate — it appends unconditionally.  In MCM,
+			 * logical ports 0 and 1 share broadcaster_0 (and MIPI_0,
+			 * sensor_0), so the same fwnode would be added twice.
+			 * v4l2_async_nf_register() then sees the duplicate within
+			 * our own notifier and returns -EEXIST, causing ISP 0 to
+			 * incorrectly take the "secondary ISP path".
+			 */
+			if (visp_notifier_has_fwnode(isp_dev, fwh)) {
+				dev_dbg(dev, "ISP %d: skip dup upstream node '%s'\n",
+					isp_dev->id,
+					np->full_name ? np->full_name : np->name);
+				continue;
+			}
+
+			asc = v4l2_async_nf_add_fwnode(
+				&isp_dev->notifier,
+				fwh,
+				struct v4l2_async_connection);
+			if (IS_ERR(asc)) {
+				ret = PTR_ERR(asc);
+				dev_err(dev,
+					"Failed to add upstream node '%s': %d\n",
+					np->full_name ? np->full_name : np->name,
+					ret);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 				v4l2_async_nf_cleanup(&isp_dev->notifier);
 #else
@@ -2522,12 +3227,62 @@ static int visp_async_notifier(struct visp_dev *isp_dev)
 #endif
 				return ret;
 			}
+			dev_dbg(dev, "ISP %d: watching upstream node '%s' for async bind\n",
+				 isp_dev->id,
+				 np->full_name ? np->full_name : np->name);
 		}
 	}
 
+	dev_dbg(dev, "ISP %d: %u subdev(s) queued in notifier waiting list\n",
+		 isp_dev->id,
+		 (unsigned int)list_count_nodes(&isp_dev->notifier.waiting_list));
+
 	ret = v4l2_async_nf_register(&isp_dev->notifier);
+	if (ret == 0) {
+		/* Primary ISP: sub-notifier registered successfully. */
+		ISP_DEV_EXTENDED(isp_dev)->notifier_registered = true;
+		dev_dbg(dev, "ISP %d: upstream sub-notifier registered (primary ISP path)\n",
+			 isp_dev->id);
+	}
 	if (ret) {
-		dev_err(isp_dev->dev, "Async notifier register error\n");
+		/*
+		 * -EEXIST (-17): one or more upstream fwnodes are already tracked
+		 * by ISP0's notifier.  ISP0 and ISP1 share the same broadcaster /
+		 * MIPI / sensor chain, so this is expected on the second ISP to
+		 * probe.  The shared subdevs are bound through ISP0; treat as
+		 * success so ISP1 probes correctly.
+		 *
+		 * When this ISP's notifier is skipped, the broadcaster→this_ISP
+		 * sink link is not created by visp_notifier_bound().  Create it
+		 * here directly using the global subdev list.  The broadcaster is
+		 * already registered and bound to a peer ISP's media device;
+		 * media_create_pad_link() will only succeed if both the broadcaster
+		 * and this ISP entity share the same media device.
+		 */
+		if (ret == -EEXIST) {
+			dev_dbg(isp_dev->dev,
+				 "Async notifier: shared subdevs already claimed by peer ISP (secondary ISP path)\n");
+			dev_dbg(isp_dev->dev,
+				 "ISP %d will use visp_find_subdev_any() to locate shared upstream subdevs at stream time\n",
+				 isp_dev->id);
+
+			/*
+			 * Clean up the notifier entries that were added via
+			 * v4l2_async_nf_add_fwnode() but never registered.
+			 * Without this cleanup the waiting_list entries would
+			 * leak until visp_remove() calls v4l2_async_nf_cleanup().
+			 * visp_remove() still calls unregister+cleanup safely
+			 * (unregister is a no-op for a notifier not in the list).
+			 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+			v4l2_async_nf_cleanup(&isp_dev->notifier);
+#else
+			v4l2_async_notifier_cleanup(&isp_dev->notifier);
+#endif
+			/* notifier_registered stays false - secondary ISP path */
+			return 0;
+		}
+		dev_err(isp_dev->dev, "Async notifier register error: %d\n", ret);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 		v4l2_async_nf_cleanup(&isp_dev->notifier);
 #else
@@ -2792,7 +3547,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		/* Read xlnx,llpath0-iba (optional, no error if missing) */
 		ret = of_property_read_u32(node, "xlnx,llpath0-iba", &llpath0_iba);
 		if (!ret) {
-			dev_info(&pdev->dev, "xlnx,llpath0-iba: %u\n", llpath0_iba);
+			dev_dbg(&pdev->dev, "xlnx,llpath0-iba: %u\n", llpath0_iba);
 		} else {
 			dev_dbg(&pdev->dev, "xlnx,llpath0-iba not found (optional)\n");
 		}
@@ -2800,7 +3555,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		/* Read xlnx,llpath0-oba (optional, no error if missing) */
 		ret = of_property_read_u32(node, "xlnx,llpath0-oba", &llpath0_oba);
 		if (!ret) {
-			dev_info(&pdev->dev, "xlnx,llpath0-oba: %u\n", llpath0_oba);
+			dev_dbg(&pdev->dev, "xlnx,llpath0-oba: %u\n", llpath0_oba);
 
 			/* Check if xlnx,llpath0-tile0-enabled is present (boolean property) */
 			llpath0_tile0_enabled = of_property_read_bool(node, "xlnx,llpath0-tile0-enabled");
@@ -2809,7 +3564,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 			if (llpath0_tile0_enabled && llpath0_oba < 4) {
 				ISP_DEV_EXTENDED(isp_dev)->llp_capable[llpath0_oba] = 1;
 				ISP_DEV_EXTENDED(isp_dev)->llp[llpath0_oba] = 1;
-				dev_info(&pdev->dev,
+				dev_dbg(&pdev->dev,
 					"LLP capable and enabled for OBA path %u (llpath0-tile0-enabled is set)\n",
 					llpath0_oba);
 			} else if (llpath0_tile0_enabled && llpath0_oba >= 4) {
@@ -2943,11 +3698,21 @@ static int visp_probe(struct platform_device *pdev)
 	isp_dev->dev = &pdev->dev;
 	platform_set_drvdata(pdev, isp_dev);
 
+	/* Register in the module-wide list for cross-ISP subdev lookup */
+	mutex_lock(&visp_dev_global_mutex);
+	list_add(&isp_dev->global_entry, &visp_dev_global_list);
+	mutex_unlock(&visp_dev_global_mutex);
+
 	ret = visp_parse_params(isp_dev, pdev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to parse params\n");
 		return -EINVAL;
 	}
+
+	ret = visp_build_upstream_nodes_dt(isp_dev);
+	if (ret && ret != -ENODEV)
+		dev_warn(&pdev->dev, "failed to parse upstream DT forward nodes: %d\n", ret);
+
 	ret = xlnx_link_mbox(isp_dev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to init mbox\n");
@@ -2994,15 +3759,9 @@ static int visp_probe(struct platform_device *pdev)
 		goto err_async_register_subdev;
 	}
 
-	dev_info(dev, "ISP subdev registered successfully with name: %s\n", isp_dev->sd.name);
-	dev_info(dev, "ISP entity function: 0x%x, obj_type: %d\n",
-		 isp_dev->sd.entity.function, isp_dev->sd.entity.obj_type);
-	dev_info(dev, "ISP subdev flags: 0x%x\n", isp_dev->sd.flags);
-
-	dev_info(dev, "ISP: Subdevice registered: %s (entity: %s)\n",
-		 isp_dev->sd.name, isp_dev->sd.entity.name);
-	dev_info(dev, "ISP: Entity function: 0x%x, pads: %u\n",
-		 isp_dev->sd.entity.function, isp_dev->sd.entity.num_pads);
+	dev_dbg(dev, "V4L2 subdev registered: '%s' entity='%s' pads=%u\n",
+		 isp_dev->sd.name, isp_dev->sd.entity.name,
+		 isp_dev->sd.entity.num_pads);
 
 	/* Assign the CALIB path to sensor_info[0].calib */
 	ret = visp_procfs_register(isp_dev, &isp_dev->pde);
@@ -3109,7 +3868,6 @@ err_async_register_subdev:
 	v4l2_async_notifier_unregister(&isp_dev->notifier);
 	v4l2_async_notifier_cleanup(&isp_dev->notifier);
 #endif
-
 err_async_notifier:
 	media_entity_cleanup(&isp_dev->sd.entity);
 	return ret;
@@ -3120,16 +3878,32 @@ static void visp_remove(struct platform_device *pdev)
 	struct visp_dev *isp_dev;
 
 	isp_dev = platform_get_drvdata(pdev);
+	visp_release_upstream_nodes_dt(isp_dev);
+
+	/* Unregister from the module-wide list */
+	mutex_lock(&visp_dev_global_mutex);
+	list_del(&isp_dev->global_entry);
+	mutex_unlock(&visp_dev_global_mutex);
 
 	visp_destroy_enq_wqs(isp_dev);
 
 	visp_procfs_unregister(isp_dev->pde);
 	v4l2_async_unregister_subdev(&isp_dev->sd);
+	/*
+	 * For the primary ISP (notifier_registered=true) unregister the
+	 * sub-notifier before cleanup.  For the secondary ISP the notifier
+	 * was already cleaned up at -EEXIST time inside visp_async_notifier();
+	 * v4l2_async_nf_unregister() is a no-op for an unregistered notifier
+	 * but v4l2_async_nf_cleanup() must still be called to free any entries
+	 * that may remain.
+	 */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
-	v4l2_async_nf_unregister(&isp_dev->notifier);
+	if (ISP_DEV_EXTENDED(isp_dev)->notifier_registered)
+		v4l2_async_nf_unregister(&isp_dev->notifier);
 	v4l2_async_nf_cleanup(&isp_dev->notifier);
 #else
-	v4l2_async_notifier_unregister(&isp_dev->notifier);
+	if (ISP_DEV_EXTENDED(isp_dev)->notifier_registered)
+		v4l2_async_notifier_unregister(&isp_dev->notifier);
 	v4l2_async_notifier_cleanup(&isp_dev->notifier);
 #endif
 	media_entity_cleanup(&isp_dev->sd.entity);
@@ -3148,7 +3922,7 @@ static void visp_remove(struct platform_device *pdev)
 		dma_free_coherent(isp_dev->event_shm.dev, isp_dev->event_shm.size,
 				  isp_dev->event_shm.virt_addr,
 				  isp_dev->event_shm.dma_handle);
-		dev_info(isp_dev->event_shm.dev, "Freed DMA coherent memory: %u bytes\n",
+		dev_dbg(isp_dev->event_shm.dev, "Freed DMA coherent memory: %u bytes\n",
 			 isp_dev->event_shm.size);
 		isp_dev->event_shm.virt_addr = NULL;
 	}

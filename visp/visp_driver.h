@@ -96,6 +96,7 @@
 #define MAX_BANKS 4U
 #define MAX_PORTS 4 // Number of ports to parse
 #define MAX_NO_ISP 6
+#define VISP_MAX_UPSTREAM_NODES 16
 /* Allow MP+SP on the same port to enqueue in parallel */
 #define ENQ_WQ_MAX_ACTIVE 1
 /* Per-port per-chain enqueue workqueues (MP/SP1 only) */
@@ -237,6 +238,16 @@ enum isp_mode {
 struct visp_limo_isp_dev_extended {
 	int id;
 	int subdev_streamon_count[VISP_PORT_PAD_NR];
+	struct device_node *upstream_nodes[VISP_PORT_NR][VISP_MAX_UPSTREAM_NODES];
+	u32 upstream_node_count[VISP_PORT_NR];
+	/*
+	 * True when this ISP's upstream sub-notifier was successfully registered
+	 * via v4l2_async_nf_register().  False for secondary ISPs whose upstream
+	 * fwnodes are already claimed by the primary ISP's notifier (-EEXIST).
+	 * Secondary ISPs rely on visp_find_subdev_any() to locate shared upstream
+	 * subdevs (broadcaster, MIPI, sensor) at stream time.
+	 */
+	bool notifier_registered;
 	uint8_t llp[4]; /* LLP mode per path: 0=MP, 1=SP1, 2=SP2, 3=RAW (CAMDEV_BUFCHAIN_RAW) */
 	uint8_t llp_capable[4]; /* LLP capability from device tree (which paths can have LLP) */
 };
@@ -370,6 +381,10 @@ struct visp_dev {
 	unsigned int cap_fmt;
 	unsigned int isp_dq_out_index;
 	void *extended_struct;
+	/* Entry in the module-wide visp_dev_global_list (for cross-ISP subdev lookup).
+	 * Placed last so it does not affect offsets of fields used by other modules.
+	 */
+	struct list_head global_entry;
 };
 
 /* Pipeline management function declarations */

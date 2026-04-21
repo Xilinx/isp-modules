@@ -87,27 +87,27 @@ static int visp_video_discover_pipeline_subdevs(struct visp_media_dev *visp_mdev
 	struct media_entity *entity;
 	int discovered_count = 0;
 
-	dev_info(visp_mdev->dev, "=== Starting generic pipeline discovery ===\n");
+	dev_dbg(visp_mdev->dev, "=== Starting generic pipeline discovery ===\n");
 
 	/* Iterate through all entities in the media graph */
 	media_device_for_each_entity(entity, &visp_mdev->mdev) {
 		if (is_media_entity_v4l2_subdev(entity)) {
 			subdev = media_entity_to_v4l2_subdev(entity);
-			dev_info(visp_mdev->dev,
+			dev_dbg(visp_mdev->dev,
 				 "Found subdev: '%s' (entity_id=%u, function=0x%x, pads=%u)\n",
 				 subdev->name, entity->graph_obj.id,
 				 entity->function, entity->num_pads);
 			discovered_count++;
 		} else if (is_media_entity_v4l2_video_device(entity)) {
 			struct video_device *vdev = media_entity_to_video_device(entity);
-			dev_info(visp_mdev->dev,
+			dev_dbg(visp_mdev->dev,
 				 "Found video device: '%s' (entity_id=%u, minor=%d)\n",
 				 video_device_node_name(vdev), entity->graph_obj.id,
 				 vdev->minor);
 		}
 	}
 
-	dev_info(visp_mdev->dev,
+	dev_dbg(visp_mdev->dev,
 		 "=== Pipeline discovery complete: %d subdevices found ===\n",
 		 discovered_count);
 	return 0;
@@ -124,7 +124,7 @@ static void visp_video_list_pipeline_connections(struct visp_media_dev *visp_mde
 	struct media_pad *pad;
 	int link_count = 0;
 
-	dev_info(visp_mdev->dev, "=== Media Pipeline Links ===\n");
+	dev_dbg(visp_mdev->dev, "=== Media Pipeline Links ===\n");
 
 	media_device_for_each_entity(entity, &visp_mdev->mdev) {
 		/* List all pads for this entity */
@@ -133,7 +133,7 @@ static void visp_video_list_pipeline_connections(struct visp_media_dev *visp_mde
 			if (pad->flags & MEDIA_PAD_FL_SOURCE) {
 				list_for_each_entry(link, &entity->links, list) {
 					if (link->source == pad) {
-						dev_info(visp_mdev->dev,
+						dev_dbg(visp_mdev->dev,
 							 "Link %d: %s:%u -> %s:%u %s\n",
 							 ++link_count,
 							 link->source->entity->name, link->source->index,
@@ -146,9 +146,9 @@ static void visp_video_list_pipeline_connections(struct visp_media_dev *visp_mde
 	}
 
 	if (link_count == 0) {
-		dev_info(visp_mdev->dev, "No media links found in pipeline\n");
+		dev_dbg(visp_mdev->dev, "No media links found in pipeline\n");
 	} else {
-		dev_info(visp_mdev->dev, "=== Total %d media links ===\n", link_count);
+		dev_dbg(visp_mdev->dev, "=== Total %d media links ===\n", link_count);
 	}
 }
 
@@ -187,59 +187,147 @@ static int visp_video_unregister_ports(struct visp_media_dev *visp_mdev)
 	return 0;
 }
 
+/*
+ * visp_video_find_entity_by_of_node - find a media entity by its OF device node
+ *
+ * Searches all entities in visp_mdev's media device.  Matches subdevs by
+ * comparing their fwnode OR their dev->of_node.
+ */
+static struct media_entity *
+visp_video_find_entity_by_of_node(struct visp_media_dev *visp_mdev,
+				   struct device_node *np)
+{
+	struct media_entity *entity;
+	struct v4l2_subdev *sd;
+
+	if (!np)
+		return NULL;
+
+	media_device_for_each_entity(entity, &visp_mdev->mdev) {
+		if (!is_media_entity_v4l2_subdev(entity))
+			continue;
+		sd = media_entity_to_v4l2_subdev(entity);
+		if (sd->fwnode && to_of_node(sd->fwnode) == np)
+			return entity;
+		if (sd->dev && sd->dev->of_node == np)
+			return entity;
+	}
+	return NULL;
+}
+
+/*
+ * visp_video_graph_build_one - create source-side media pad links for one entity
+ *
+ * Mirrors xvip_graph_build_one() / visp_graph_build_one() pattern.
+ * Walks every SOURCE endpoint of the entity described by @asc.  For links
+ * terminating at the visp_video device itself, the sink is the corresponding
+ * video_device entity.  For all other links the sink is looked up in the
+ * media device graph by OF node.
+ */
+static int visp_video_graph_build_one(struct visp_media_dev *visp_mdev,
+				      struct v4l2_async_connection *asc)
+{
+	struct fwnode_handle *fwnode = asc->match.fwnode;
+	struct device_node *np = to_of_node(fwnode);
+	struct media_entity *local;
+	struct v4l2_fwnode_link link;
+	struct fwnode_handle *ep = NULL;
+	int ret = 0;
+
+	local = visp_video_find_entity_by_of_node(visp_mdev, np);
+	if (!local) {
+		dev_dbg(visp_mdev->dev,
+			"build_one: no entity for '%pOF' - skipping\n", np);
+		return 0;
+	}
+
+	dev_dbg(visp_mdev->dev, "build_one: creating links for '%s'\n",
+		local->name);
+
+	while ((ep = fwnode_graph_get_next_endpoint(fwnode, ep))) {
+		struct media_entity *remote_ent;
+		unsigned int remote_pad_idx;
+
+		ret = v4l2_fwnode_parse_link(ep, &link);
+		if (ret < 0) {
+			continue;
+		}
+
+		if (link.local_port >= local->num_pads) {
+			v4l2_fwnode_put_link(&link);
+			continue;
+		}
+
+		/* Only create links originating from source pads */
+		if (local->pads[link.local_port].flags & MEDIA_PAD_FL_SINK) {
+			v4l2_fwnode_put_link(&link);
+			continue;
+		}
+
+		if (link.remote_node == dev_fwnode(visp_mdev->dev)) {
+			/*
+			 * Remote is the visp_video platform device -> link to the
+			 * corresponding video_device entity.  link.remote_port is
+			 * the port index on the visp_video DT node which maps
+			 * directly to visp_mdev->video_devs[].
+			 */
+			if (link.remote_port >= (unsigned int)visp_mdev->ports) {
+				v4l2_fwnode_put_link(&link);
+				continue;
+			}
+			remote_ent = &visp_mdev->video_devs[link.remote_port]->video->entity;
+			remote_pad_idx = 0; /* video_device has a single pad */
+		} else {
+			remote_ent = visp_video_find_entity_by_of_node(
+					visp_mdev, to_of_node(link.remote_node));
+			if (!remote_ent) {
+				dev_dbg(visp_mdev->dev,
+					"build_one: '%s':%u remote '%pOF' not in graph\n",
+					local->name, link.local_port,
+					to_of_node(link.remote_node));
+				v4l2_fwnode_put_link(&link);
+				continue;
+			}
+			remote_pad_idx = link.remote_port;
+		}
+
+		if (remote_pad_idx >= remote_ent->num_pads) {
+			v4l2_fwnode_put_link(&link);
+			continue;
+		}
+
+		v4l2_fwnode_put_link(&link);
+
+		ret = media_create_pad_link(local, link.local_port,
+					    remote_ent, remote_pad_idx,
+					    MEDIA_LNK_FL_ENABLED);
+		if (ret < 0 && ret != -EEXIST) {
+			dev_err(visp_mdev->dev,
+				"build_one: link %s:%u -> %s:%u failed: %d\n",
+				local->name, link.local_port,
+				remote_ent->name, remote_pad_idx, ret);
+			break;
+		}
+		if (ret == 0)
+			dev_dbg(visp_mdev->dev,
+				 "build_one: linked %s:%u -> %s:%u\n",
+				 local->name, link.local_port,
+				 remote_ent->name, remote_pad_idx);
+		ret = 0;
+	}
+
+	return ret;
+}
+
+/* bound: just log - all link creation happens in complete */
 static int visp_video_notifier_bound(struct v4l2_async_notifier *notifier,
 				     struct v4l2_subdev *sd,
 				     struct v4l2_async_connection *asc)
 {
 	struct visp_media_dev *visp_mdev =
 	    container_of(notifier, struct visp_media_dev, notifier);
-	struct device *dev = visp_mdev->dev;
-	struct fwnode_handle *ep = NULL;
-	struct v4l2_fwnode_link link;
-	struct media_entity *source, *sink;
-	unsigned int source_pad, sink_pad;
-	struct visp_video_dev *visp_vdev;
-	struct video_device *vdev;
-	int ret;
 
-	while (1) {
-		ep = fwnode_graph_get_next_endpoint(sd->fwnode, ep);
-		if (!ep)
-			break;
-		ret = v4l2_fwnode_parse_link(ep, &link);
-		if (ret < 0) {
-			dev_err(dev, "failed to parse link for %pOF: %d\n",
-				to_of_node(ep), ret);
-			continue;
-		}
-
-		if (sd->entity.pads[link.local_port].flags == MEDIA_PAD_FL_SINK)
-			continue;
-
-	if (link.remote_port >= VISP_VIDEO_PORT_MAX) {
-		dev_err(dev, "remote_port %u exceeds max %d\n",
-			link.remote_port, VISP_VIDEO_PORT_MAX);
-		v4l2_fwnode_put_link(&link);
-		continue;
-	}
-
-		visp_vdev = visp_mdev->video_devs[link.remote_port];
-		vdev = visp_vdev->video;
-		source = &sd->entity;
-		source_pad = link.local_port;
-		sink = &vdev->entity;
-		sink_pad = 0;
-		v4l2_fwnode_put_link(&link);
-		ret = media_create_pad_link(source, source_pad, sink, sink_pad,
-					    MEDIA_LNK_FL_ENABLED);
-		if (ret) {
-			dev_err(dev, "failed to create %s:%u -> %s:%u link\n",
-				source->name, source_pad, sink->name, sink_pad);
-			break;
-		}
-	}
-	fwnode_handle_put(ep);
-
+	dev_dbg(visp_mdev->dev, "Notifier bound: subdev '%s'\n", sd->name);
 	return 0;
 }
 
@@ -249,12 +337,39 @@ static void visp_video_notifier_unbound(struct v4l2_async_notifier *notifier,
 {
 }
 
+/*
+ * visp_video_notifier_complete - create all pipeline media links
+ *
+ * Called once all async subdevs are bound.  Calls visp_video_graph_build_one()
+ * for every entity in done_list (mirrors xvip_graph_notify_complete()), then
+ * registers subdev device nodes and dumps the pipeline topology.
+ */
 static int visp_video_notifier_complete(struct v4l2_async_notifier *notifier)
 {
 	struct visp_media_dev *visp_mdev =
 	    container_of(notifier, struct visp_media_dev, notifier);
+	struct v4l2_async_connection *asc;
+	int ret;
 
-	return v4l2_device_register_subdev_nodes(&visp_mdev->v4l2_dev);
+	dev_dbg(visp_mdev->dev,
+		 "=== Async notifier complete - creating media pipeline links ===\n");
+
+	list_for_each_entry(asc, &notifier->done_list, asc_entry) {
+		dev_dbg(visp_mdev->dev, "Pipeline bound: '%pOF'\n",
+			 to_of_node(asc->match.fwnode));
+		ret = visp_video_graph_build_one(visp_mdev, asc);
+		if (ret < 0)
+			return ret;
+	}
+
+	ret = v4l2_device_register_subdev_nodes(&visp_mdev->v4l2_dev);
+	if (ret)
+		return ret;
+
+	visp_video_discover_pipeline_subdevs(visp_mdev);
+	visp_video_list_pipeline_connections(visp_mdev);
+
+	return 0;
 }
 
 static const struct v4l2_async_notifier_operations visp_video_async_nf_ops = {
@@ -263,44 +378,122 @@ static const struct v4l2_async_notifier_operations visp_video_async_nf_ops = {
 	.complete = visp_video_notifier_complete,
 };
 
-#if KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE
-static struct v4l2_async_connection *
-visp_video_async_nf_add_fwnode_remote(struct v4l2_async_notifier *notif,
-				      struct fwnode_handle *endpoint,
-				      unsigned int asd_struct_size)
+/*
+ * visp_video_notifier_has_fwnode - check if fwnode is already tracked
+ *
+ * Returns true if fwnode is already in the notifier's waiting_list or
+ * done_list.  Used for explicit dedup because v4l2_async_nf_add_fwnode()
+ * may not return -EEXIST reliably before the notifier is registered.
+ */
+static bool visp_video_notifier_has_fwnode(struct visp_media_dev *visp_mdev,
+					   const struct fwnode_handle *fwnode)
 {
-	struct v4l2_async_connection *asd;
-	struct fwnode_handle *remote;
-	unsigned int i;
+	struct v4l2_async_connection *asc;
 
-	remote = fwnode_graph_get_remote_port_parent(endpoint);
-	if (!remote)
-		return ERR_PTR(-ENOTCONN);
-	// Add the link check
-	struct list_head *lists[] = {&notif->done_list, &notif->waiting_list};
-
-	for (i = 0; i < ARRAY_SIZE(lists); i++) {
-		list_for_each_entry(asd, lists[i], asc_entry) {
-			if (asd->match.fwnode == remote) {
-				fwnode_handle_put(remote);
-				return asd;
-			}
-		}
+	list_for_each_entry(asc, &visp_mdev->notifier.waiting_list, asc_entry) {
+		if (asc->match.fwnode == fwnode)
+			return true;
 	}
-	asd = __v4l2_async_nf_add_fwnode(notif, remote, asd_struct_size);
-	fwnode_handle_put(remote);
-
-	return asd;
+	list_for_each_entry(asc, &visp_mdev->notifier.done_list, asc_entry) {
+		if (asc->match.fwnode == fwnode)
+			return true;
+	}
+	return false;
 }
-#endif
 
+/*
+ * visp_video_graph_parse_one - add all remote subdevs reachable from fwnode
+ *
+ * Mirrors xvip_graph_parse_one() from xilinx-vipp.c.
+ * Walks every graph endpoint of @fwnode and registers each remote device
+ * parent with v4l2_async_nf_add_fwnode().  visp-video nodes are skipped
+ * because they are video_device instances (not v4l2_subdev) and would block
+ * notifier_complete forever.
+ *
+ * Explicit dedup via visp_video_notifier_has_fwnode() prevents the same
+ * node being added multiple times when the DT graph is traversed from
+ * different directions (e.g. ISP0 and ISP1 both connect to the same
+ * broadcaster and sensor).
+ */
+static int visp_video_graph_parse_one(struct visp_media_dev *visp_mdev,
+				      struct fwnode_handle *fwnode)
+{
+	struct fwnode_handle *ep = NULL;
+	struct fwnode_handle *remote;
+	struct v4l2_async_connection *asc;
+	int ret = 0;
+
+	dev_dbg(visp_mdev->dev, "graph_parse_one: %pOF\n", to_of_node(fwnode));
+
+	while ((ep = fwnode_graph_get_next_endpoint(fwnode, ep))) {
+		remote = fwnode_graph_get_remote_port_parent(ep);
+		if (!remote)
+			continue;
+
+		/*
+		 * Skip visp-video nodes: they are registered as video_device,
+		 * not v4l2_subdev, so adding them to the notifier would block
+		 * notifier_complete forever.
+		 */
+		if (is_of_node(remote) &&
+		    of_device_is_compatible(to_of_node(remote), "xlnx,visp-video")) {
+			fwnode_handle_put(remote);
+			continue;
+		}
+
+		/*
+		 * Explicit dedup: check our own lists before calling
+		 * v4l2_async_nf_add_fwnode().  The kernel's -EEXIST path is
+		 * not reliable when the notifier has not yet been registered,
+		 * which leads to the same node being appended to waiting_list
+		 * multiple times and the BFS cycling indefinitely.
+		 */
+		if (visp_video_notifier_has_fwnode(visp_mdev, remote)) {
+			dev_dbg(visp_mdev->dev,
+				"graph_parse_one: skip duplicate '%pOF'\n",
+				to_of_node(remote));
+			fwnode_handle_put(remote);
+			continue;
+		}
+
+		asc = v4l2_async_nf_add_fwnode(&visp_mdev->notifier, remote,
+					       struct v4l2_async_connection);
+		fwnode_handle_put(remote);
+		if (IS_ERR(asc)) {
+			ret = PTR_ERR(asc);
+			if (ret == -EEXIST) {
+				ret = 0;
+				continue;
+			}
+			dev_err(visp_mdev->dev,
+				"graph_parse_one: failed to add remote: %d\n",
+				ret);
+			fwnode_handle_put(ep);
+			return ret;
+		}
+		dev_dbg(visp_mdev->dev, "graph_parse_one: added '%pOF'\n",
+			 to_of_node(asc->match.fwnode));
+	}
+	return 0;
+}
+
+/*
+ * visp_video_async_register_subdev - register the async notifier
+ *
+ * Each visp_video device is wired in DT directly to exactly one ISP subdev
+ * (xlnx,visp-ss-limo-1.0).  The ISP is the pipeline boundary for visp_video:
+ * everything upstream (broadcaster, MIPI, sensor) is shared across ISP
+ * instances and is managed by the visp_driver's own notifier.
+ *
+ * BFS seeds from the visp_video device and adds the directly connected ISP
+ * subdev(s).  Expansion STOPS at ISP nodes — we do not traverse into the
+ * ISP's own upstream graph.  This prevents visp_video_0 from discovering
+ * visp_ss@b1300800 (ISP1) via the broadcaster, and vice-versa.
+ */
 static int visp_video_async_register_subdev(struct visp_media_dev *visp_mdev)
 {
-	int ret = 0;
-	struct fwnode_handle *ep;
-	//	struct v4l2_async_subdev *asd;
-	struct v4l2_async_connection *asd;
-	unsigned int port_id = 0;
+	struct v4l2_async_connection *asc;
+	int ret;
 
 	visp_mdev->notifier.ops = &visp_video_async_nf_ops;
 #if KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE
@@ -309,37 +502,44 @@ static int visp_video_async_register_subdev(struct visp_media_dev *visp_mdev)
 	v4l2_async_notifier_init(&visp_mdev->notifier);
 #endif
 
-	while (1) {
-		ep = fwnode_graph_get_endpoint_by_id(
-		    dev_fwnode(visp_mdev->dev), port_id, 0,
-		    FWNODE_GRAPH_ENDPOINT_NEXT);
-		if (!ep)
-			break;
+	/* Seed BFS: adds only the ISP subdev(s) directly connected to this visp_video */
+	ret = visp_video_graph_parse_one(visp_mdev, dev_fwnode(visp_mdev->dev));
+	if (ret < 0)
+		goto cleanup;
 
-#if KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE
-		asd = visp_video_async_nf_add_fwnode_remote(
-		    &visp_mdev->notifier, ep,
-		    sizeof(struct v4l2_async_connection));
-#else
-		asd = v4l2_async_notifier_add_fwnode_remote_subdev(
-		    &visp_mdev->notifier, ep, struct v4l2_async_subdev);
-#endif
-		fwnode_handle_put(ep);
+	/*
+	 * Log which ISP subdev(s) this visp_video will watch.
+	 * At this point waiting_list contains only the direct ISP neighbours.
+	 */
+	list_for_each_entry(asc, &visp_mdev->notifier.waiting_list, asc_entry) {
+		dev_dbg(visp_mdev->dev,
+			 "Pipeline: watching ISP subdev '%pOF'\n",
+			 to_of_node(asc->match.fwnode));
+	}
 
-		if (IS_ERR(asd)) {
-			ret = PTR_ERR(asd);
-			if (ret != -EEXIST) {
-#if KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE
-				v4l2_async_nf_cleanup(&visp_mdev->notifier);
-#else
-				v4l2_async_notifier_cleanup(
-				    &visp_mdev->notifier);
-#endif
-
-				return ret;
-			}
+	/*
+	 * BFS expansion: only expand nodes that are NOT ISP subdevs.
+	 * ISP nodes are the upstream boundary for visp_video — traversing
+	 * beyond them would cross the shared broadcaster and pull in peer
+	 * ISP instances, corrupting the notifier and causing -EEXIST.
+	 *
+	 * In the current DT topology each visp_video connects directly to
+	 * one ISP only, so the waiting_list after seeding contains only ISP
+	 * nodes and no expansion is needed.  The guard is kept for safety.
+	 */
+	list_for_each_entry(asc, &visp_mdev->notifier.waiting_list, asc_entry) {
+		if (is_of_node(asc->match.fwnode) &&
+		    of_device_is_compatible(to_of_node(asc->match.fwnode),
+					    "xlnx,visp-ss-limo-1.0")) {
+			dev_dbg(visp_mdev->dev,
+				"BFS: stopping at ISP boundary '%pOF'\n",
+				to_of_node(asc->match.fwnode));
+			continue; /* do not expand further upstream */
 		}
-		port_id++;
+
+		ret = visp_video_graph_parse_one(visp_mdev, asc->match.fwnode);
+		if (ret < 0)
+			goto cleanup;
 	}
 
 #if KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE
@@ -349,17 +549,38 @@ static int visp_video_async_register_subdev(struct visp_media_dev *visp_mdev)
 					   &visp_mdev->notifier);
 #endif
 	if (ret) {
-#if KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE
-		v4l2_async_nf_cleanup(&visp_mdev->notifier);
-#else
-		v4l2_async_notifier_cleanup(&visp_mdev->notifier);
-#endif
-		dev_err(visp_mdev->dev,
-			"v4l2 async notifier register error %d\n", ret);
-		return ret;
+		/*
+		 * -EEXIST (-17): the ISP subdev is already claimed by another
+		 * visp_video notifier (SP1 self-path sharing the same ISP as
+		 * the MP main-path).  Clean up and return success.
+		 */
+		if (ret == -EEXIST) {
+			dev_dbg(visp_mdev->dev,
+				 "Async notifier: ISP subdev already registered by peer visp_video - skipping\n");
+			goto cleanup_ok;
+		}
+		dev_err(visp_mdev->dev, "v4l2 async notifier register error %d\n",
+			ret);
+		goto cleanup;
 	}
 
 	return 0;
+
+cleanup_ok:
+#if KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE
+	v4l2_async_nf_cleanup(&visp_mdev->notifier);
+#else
+	v4l2_async_notifier_cleanup(&visp_mdev->notifier);
+#endif
+	return 0;
+
+cleanup:
+#if KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE
+	v4l2_async_nf_cleanup(&visp_mdev->notifier);
+#else
+	v4l2_async_notifier_cleanup(&visp_mdev->notifier);
+#endif
+	return ret;
 }
 
 static int
@@ -485,12 +706,6 @@ static int visp_video_probe(struct platform_device *pdev)
 		dev_err(dev, "register media device error\n");
 		goto err_unregister_subdev;
 	}
-
-	/* Discover and list pipeline subdevices generically */
-	mutex_lock(&visp_mdev->mdev.graph_mutex);
-	visp_video_discover_pipeline_subdevs(visp_mdev);
-	visp_video_list_pipeline_connections(visp_mdev);
-	mutex_unlock(&visp_mdev->mdev.graph_mutex);
 
 	dev_info(&pdev->dev, "visp video driver probe success\n");
 	return 0;

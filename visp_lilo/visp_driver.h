@@ -368,6 +368,12 @@ struct visp_dev {
 	unsigned int cap_fmt;
 	unsigned int isp_dq_out_index;
 	void *extended_struct;
+
+	/* Entry in the module-wide visp_dev_global_list (for cross-ISP subdev lookup).
+	 * Placed last so it does not affect offsets of fields used by other modules.
+	 */
+	struct list_head global_entry;
+
 };
 
 #define ISP_DEV_EXTENDED(isp_dev) \
