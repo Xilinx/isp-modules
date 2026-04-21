@@ -252,9 +252,11 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					    0,
 					    sizeof(isp_dev->isp_ports[port]
 						       .sensor_info.auto_json));
-					strncpy(isp_dev->isp_ports[port]
+					strscpy(isp_dev->isp_ports[port]
 						    .sensor_info.auto_json,
-						val, strlen(val));
+						val,
+						sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.auto_json));
 				}
 			} else if (strcmp(val, "one_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -265,9 +267,11 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 					    0,
 					    sizeof(isp_dev->isp_ports[port]
 						       .sensor_info.one_json));
-					strncpy(isp_dev->isp_ports[port]
+					strscpy(isp_dev->isp_ports[port]
 						    .sensor_info.one_json,
-						val, strlen(val));
+						val,
+						sizeof(isp_dev->isp_ports[port]
+						       .sensor_info.one_json));
 				}
 			} else if (strcmp(val, "output_type") == 0) {
 				val = strsep(&kv_cur, kv_delim);

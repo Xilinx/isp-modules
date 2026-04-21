@@ -684,10 +684,8 @@ static int visp_querycap(struct v4l2_subdev *sd, void *arg)
 {
 	struct v4l2_capability *cap = (struct v4l2_capability *)arg;
 
-	strncpy(cap->driver, sd->name, sizeof(cap->driver));
-	strncpy(cap->card, sd->name, sizeof(cap->card));
-	cap->driver[sizeof(cap->driver) - 1] = '\0';
-	cap->card[sizeof(cap->card) - 1] = '\0';
+	strscpy(cap->driver, sd->name, sizeof(cap->driver));
+	strscpy(cap->card, sd->name, sizeof(cap->card));
 
 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s", sd->name);
 
@@ -2090,25 +2088,26 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	struct device_node *node = pdev->dev.of_node;
 
 	for (port = 0; port < VISP_PORT_NR; port++) {
-		strncpy(isp_dev->isp_ports[port].sensor_info.name,
-			VISP_DEFAULT_SENSOR, strlen(VISP_DEFAULT_SENSOR) + 1);
+		strscpy(isp_dev->isp_ports[port].sensor_info.name,
+			VISP_DEFAULT_SENSOR,
+			sizeof(isp_dev->isp_ports[port].sensor_info.name));
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.calib,
+		strscpy(isp_dev->isp_ports[port].sensor_info.calib,
 			VISP_DEFAULT_SENSOR_XML,
-			strlen(VISP_DEFAULT_SENSOR_XML) + 1);
+			sizeof(isp_dev->isp_ports[port].sensor_info.calib));
 
 		isp_dev->isp_ports[port].sensor_info.mode =
 			VISP_DEFAULT_SENSOR_MODE;
 		isp_dev->isp_ports[port].sensor_info.sensor_id =
 			sensor_dev_id[port];
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.manu_json,
+		strscpy(isp_dev->isp_ports[port].sensor_info.manu_json,
 			VISP_DEFAULT_SENSOR_MANU_JSON,
-			strlen(VISP_DEFAULT_SENSOR_MANU_JSON) + 1);
+			sizeof(isp_dev->isp_ports[port].sensor_info.manu_json));
 
-		strncpy(isp_dev->isp_ports[port].sensor_info.auto_json,
+		strscpy(isp_dev->isp_ports[port].sensor_info.auto_json,
 			VISP_DEFAULT_SENSOR_AUTO_JSON,
-			strlen(VISP_DEFAULT_SENSOR_AUTO_JSON) + 1);
+			sizeof(isp_dev->isp_ports[port].sensor_info.auto_json));
 	}
 
 	fwnode_property_read_u32(of_fwnode_handle(node), "id", &isp_dev->id);

@@ -1399,8 +1399,8 @@ int media_isp_calib_get_sensor_name(struct visp_dev *isp_dev, uint8_t port,
 	isp_port = &isp_dev->isp_ports[port];
 
 	if (strlen(isp_port->sensor_info.name)) {
-		strncpy(sensor_name, isp_port->sensor_info.name,
-			strlen(isp_port->sensor_info.name) + 1);
+		strscpy(sensor_name, isp_port->sensor_info.name,
+			sizeof(sensor_name));
 	} else {
 		dev_err(isp_dev->dev, "%s: get null string of sensor name",
 			__func__);
@@ -2078,7 +2078,8 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 
 	/*****Map the sensor*****/
 	memset(&module_info, 0, sizeof(module_info));
-	strncpy(module_info.module_name, sensor_name, SENSOR_MODULE_NAME - 1);
+	strscpy(module_info.module_name, sensor_name,
+		sizeof(module_info.module_name));
 	module_info.sensor_dev_id = isp_port->sensor_info.sensor_id;
 	ret_val =
 		vsi_cam_device_sensor_mapping(isp_dev, isp_port->cam_device_handle,

@@ -686,10 +686,8 @@ static int visp_querycap(struct v4l2_subdev *sd, void *arg)
 {
 	struct v4l2_capability *cap = (struct v4l2_capability *)arg;
 
-	strncpy(cap->driver, sd->name, sizeof(cap->driver));
-	cap->driver[sizeof(cap->driver) - 1] = '\0';
-	strncpy(cap->card, sd->name, sizeof(cap->card));
-	cap->card[sizeof(cap->card) - 1] = '\0';
+	strscpy(cap->driver, sd->name, sizeof(cap->driver));
+	strscpy(cap->card, sd->name, sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s", sd->name);
 
 	return 0;

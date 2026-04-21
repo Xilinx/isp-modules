@@ -2037,10 +2037,8 @@ static int visp_videoc_querycap(struct file *file, void *priv,
 {
 	struct visp_video_dev *visp_vdev = video_drvdata(file);
 
-	strncpy(cap->driver, visp_vdev->video->name, sizeof(cap->driver));
-	cap->driver[sizeof(cap->driver) - 1] = '\0';
-	strncpy(cap->card, visp_vdev->video->name, sizeof(cap->card));
-	cap->card[sizeof(cap->card) - 1] = '\0';
+	strscpy(cap->driver, visp_vdev->video->name, sizeof(cap->driver));
+	strscpy(cap->card, visp_vdev->video->name, sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s",
 		 visp_vdev->video->name);
 
