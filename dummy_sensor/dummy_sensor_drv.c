@@ -210,27 +210,57 @@ static int dummy_sensor_s_stream(struct v4l2_subdev *sd, int enable)
 	struct dummy_sensor_dev *sensor = container_of(sd, struct dummy_sensor_dev, sd);
 	int ret = 0;
 
-	dev_info(sensor->dev, "s_stream: %s (powered: %s)\n",
-		 enable ? "ON" : "OFF", sensor->powered ? "yes" : "no");
-
+	/* Prominent entry log so stream-on/off is always visible in dmesg */
+	dev_info(sensor->dev,
+		 ">>> dummy_sensor s_stream(%d/%s) called: subdev='%s' powered=%s streaming=%s\n",
+		 enable, enable ? "ON" : "OFF",
+		 sd->name,
+		 sensor->powered ? "yes" : "no",
+		 sensor->streaming ? "yes" : "no");
+	/* Idempotency: skip if already in the requested state */
+	if (enable && sensor->streaming) {
+		dev_info(sensor->dev,
+			 "dummy_sensor s_stream(ON): already streaming, skipping (idempotent)\n");
+		return 0;
+	}
+	if (!enable && !sensor->streaming) {
+		dev_info(sensor->dev,
+			 "dummy_sensor s_stream(OFF): not streaming, skipping (idempotent)\n");
+		return 0;
+	}
 	if (enable) {
+		if (sensor->streaming) {
+			dev_dbg(sensor->dev, "dummy_sensor already streaming, skipping s_stream(ON)\n");
+			return 0;
+		}
 		if (!sensor->powered) {
 			ret = dummy_sensor_power_on(sensor);
-			if (ret)
+			if (ret) {
+				dev_err(sensor->dev,
+					"dummy_sensor s_stream(ON) FAILED: power_on returned %d\n",
+					ret);
 				return ret;
+			}
 		}
 
 		/* Simulate sensor initialization */
-		dev_info(sensor->dev, "Starting stream: %s (%ux%u@%dfps)\n",
+		dev_info(sensor->dev,
+			 "dummy_sensor starting stream: mode='%s' %ux%u@%dfps\n",
 			 sensor->current_mode->name,
 			 sensor->current_mode->width,
 			 sensor->current_mode->height,
 			 sensor->current_mode->fps);
 
 		sensor->streaming = true;
+		dev_info(sensor->dev, "<<< dummy_sensor s_stream(ON) SUCCESS\n");
 	} else {
-		dev_info(sensor->dev, "Stopping stream\n");
+		if (!sensor->streaming) {
+			dev_dbg(sensor->dev, "dummy_sensor not streaming, skipping s_stream(OFF)\n");
+			return 0;
+		}
+		dev_info(sensor->dev, "dummy_sensor stopping stream\n");
 		sensor->streaming = false;
+		dev_info(sensor->dev, "<<< dummy_sensor s_stream(OFF) done\n");
 	}
 
 	return 0;
@@ -444,6 +474,7 @@ static const struct v4l2_subdev_pad_ops dummy_sensor_pad_ops = {
 	.set_fmt = dummy_sensor_set_fmt,
 	.get_frame_interval = dummy_sensor_get_frame_interval,
 	.set_frame_interval = dummy_sensor_set_frame_interval,
+	.link_validate = v4l2_subdev_link_validate_default,
 };
 
 static const struct v4l2_subdev_ops dummy_sensor_ops = {
@@ -511,14 +542,21 @@ static int dummy_sensor_parse_dt(struct dummy_sensor_dev *sensor)
 		fwnode_handle_put(ep);
 
 		if (ret < 0) {
-			dev_err(dev, "Failed to parse endpoint: %d\n", ret);
-			return ret;
+			/*
+			 * Endpoint parse failure is non-fatal for the dummy sensor.
+			 * The DT endpoint may use Xilinx-specific properties that
+			 * the generic parser doesn't understand.  Continue without
+			 * endpoint metadata.
+			 */
+			dev_warn(dev, "Endpoint parse returned %d, continuing without endpoint info\n",
+				 ret);
+			sensor->has_endpoint = false;
+		} else {
+			sensor->has_endpoint = true;
+			dev_info(dev, "Parsed endpoint: bus_type=%d, lanes=%d\n",
+				 sensor->endpoint.bus_type,
+				 sensor->endpoint.bus.mipi_csi2.num_data_lanes);
 		}
-
-		sensor->has_endpoint = true;
-		dev_info(dev, "Parsed endpoint: bus_type=%d, lanes=%d\n",
-			 sensor->endpoint.bus_type,
-			 sensor->endpoint.bus.mipi_csi2.num_data_lanes);
 	} else {
 		dev_info(dev, "No endpoint found in device tree\n");
 		sensor->has_endpoint = false;
@@ -650,14 +688,6 @@ static int dummy_sensor_probe(struct platform_device *pdev)
 
 	dev_info(&pdev->dev, "Dummy sensor registered: entity_id=%u, name='%s', mode='%s'\n",
 		 sensor->sd.entity.graph_obj.id, sensor->sd.name, sensor->current_mode->name);
-
-	/* Also try to register with media device if available */
-	if (sensor->sd.entity.graph_obj.mdev) {
-		dev_info(&pdev->dev, "Dummy sensor associated with media device: %s\n",
-			 sensor->sd.entity.graph_obj.mdev->model);
-	} else {
-		dev_info(&pdev->dev, "Dummy sensor not yet associated with media device (will be bound via async notifier)\n");
-	}
 
 	dev_info(&pdev->dev, "Dummy sensor initialization completed successfully\n");
 
