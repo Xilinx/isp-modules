@@ -1858,9 +1858,17 @@ int visp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 	struct visp_mimo_ctx *ctx = (struct visp_mimo_ctx *)fh;
 #endif
 	const int port = 0;
+	const int chn = 0;
+	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 
 	if (ctx->device->isp_dev->streamon[port]) {
-		media_isp_stream_off(ctx->device->isp_dev, 0, 0);
+		media_isp_device_stream_off(ctx->device->isp_dev, port, chn);
+
+		if (strlen(ctx->device->isp_dev->isp_ports[port].fusa_json))
+			visp_stop_fusa_event(ctx->device->isp_dev, pad_index);
+
+		isp_destroy_pipeline(ctx->device->isp_dev , port, chn);
+
 		ctx->device->isp_dev->streamon[port] = 0;
 	}
 	return v4l2_m2m_streamoff(file, ctx->fh.m2m_ctx, type);
