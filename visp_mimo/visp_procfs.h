@@ -55,7 +55,7 @@
 #ifndef __VISP_PROCFS_H__
 #define __VISP_PROCFS_H__
 
-int visp_procfs_register(struct visp_dev *isp_dev, unsigned long *pde);
-void visp_procfs_unregister(unsigned long pde);
+int visp_mimo_procfs_register(struct visp_dev *isp_dev, unsigned long *pde);
+void visp_mimo_procfs_unregister(unsigned long pde);
 
 #endif

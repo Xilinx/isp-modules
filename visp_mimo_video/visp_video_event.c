@@ -66,6 +66,13 @@ struct visp_subdev_dma_buf {
 	int size;
 };
 
+typedef struct cam_device_context_s {
+	uint32_t isp_hw_id;
+	uint32_t isp_vt_id;
+	uint32_t instance_id;
+	uint32_t cookie;
+} cam_device_context_t;
+
 static bool visp_subdev_event_subscribed(struct visp_mimo_device *visp_vdev,
 							uint32_t type, uint32_t id)
 {
@@ -149,7 +156,9 @@ int visp_l_calib_event(struct visp_mimo_device *device, int pad, int event)
 	/* Bounds check: verify total payload fits in event shm buffer */
 	size_t required_size = offsetof(struct visp_event_pkg, data) +
 			       sizeof(uint32_t) +
-			       sizeof(struct visp_subdev_dma_buf);
+			       sizeof(struct visp_subdev_dma_buf) +
+			       sizeof(cam_device_context_t) +
+			       sizeof(media_isp_sensor_info);
 	if (required_size > device->event_shm.size) {
 		dev_err(&device->video_dev.dev,
 			"%s: required %zu exceeds shm buffer %u\n",
@@ -158,6 +167,8 @@ int visp_l_calib_event(struct visp_mimo_device *device, int pad, int event)
 	}
 
 	mutex_lock(&device->event_shm.event_lock);
+	event_pkg->head.pad = pad;
+	event_pkg->head.dev = device->isp_dev->id;
 	event_pkg->head.eid = event;
 	event_pkg->head.shm_fd = -1;
 	event_pkg->head.shm_size = device->event_shm.size;
@@ -168,15 +179,32 @@ int visp_l_calib_event(struct visp_mimo_device *device, int pad, int event)
 	memcpy(pdata, &port, sizeof(uint32_t));
 	pdata += sizeof(uint32_t);
 	event_pkg->head.data_size += sizeof(uint32_t);
+	if (event == VISP_EVENT_LOAD_CALIB) {
+		struct visp_subdev_dma_buf dma_buf;
 
-	struct visp_subdev_dma_buf dma_buf;
+		dma_buf.pa = device->reserve_mem.pa;
+		dma_buf.size = device->reserve_mem.size;
+		memcpy(pdata, &dma_buf, sizeof(struct visp_subdev_dma_buf));
+		pdata += sizeof(struct visp_subdev_dma_buf);
+		event_pkg->head.data_size += sizeof(struct visp_subdev_dma_buf);
 
-	dma_buf.pa = device->reserve_mem.pa;
-	dma_buf.size = device->reserve_mem.size;
-	memcpy(pdata, &dma_buf, sizeof(struct visp_subdev_dma_buf));
-	pdata += sizeof(struct visp_subdev_dma_buf);
+		if (!device->isp_dev->isp_ports[port].cam_device_handle) {
+			mutex_unlock(&device->event_shm.event_lock);
+			dev_err(&device->video_dev.dev,
+				"%s: cam_device_handle is NULL for port %d\n",
+				__func__, port);
+			return -EINVAL;
+		}
+		memcpy(pdata, device->isp_dev->isp_ports[port].cam_device_handle,
+	       sizeof(cam_device_context_t));
+		pdata += sizeof(cam_device_context_t);
+		event_pkg->head.data_size += sizeof(cam_device_context_t);
 
-	event_pkg->head.data_size += sizeof(struct visp_subdev_dma_buf);
+		memcpy(pdata, &(device->isp_dev->isp_ports[port].sensor_info),
+			sizeof(media_isp_sensor_info));
+		pdata += sizeof(media_isp_sensor_info);
+		event_pkg->head.data_size += sizeof(media_isp_sensor_info);
+	}
 
 	ret = visp_subdev_post_event(device, event_pkg);
 	if (ret != 0)

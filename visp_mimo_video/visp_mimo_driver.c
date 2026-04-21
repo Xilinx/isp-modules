@@ -57,6 +57,7 @@
 #include "visp_event.h"
 #include "cam_device.h"
 #include "visp_ctrl.h"
+#include "visp_procfs.h"
 
 #define DEBUG_ENABLE
 /* version 1.0 */
@@ -443,7 +444,8 @@ void visp_mimo_device_run(void *priv)
 			goto destroy_instance;
 		}
 
-		ret = visp_l_calib_event(device, 0, VISP_EVENT_LOAD_CALIB);
+		/* pad 1 is port 0 mp */
+		ret = visp_l_calib_event(device, 1, VISP_EVENT_LOAD_CALIB);
 		if (ret != 0) {
 			dev_err(device->isp_dev->dev, "LOAD_CALIB event failed: %d\n", ret);
 			goto destroy_instance;
@@ -455,7 +457,7 @@ void visp_mimo_device_run(void *priv)
 			goto destroy_instance;
 		}
 
-		ret = visp_l_calib_event(device, 0, VISP_EVENT_LOAD_JSON);
+		ret = visp_l_calib_event(device, 1, VISP_EVENT_LOAD_JSON);
 		if (ret != 0) {
 			dev_err(device->isp_dev->dev, "LOAD_JSON event failed: %d\n", ret);
 			goto clean_input_buffer_pool;
@@ -512,6 +514,7 @@ void visp_mimo_device_run(void *priv)
 	}*/
 
 	/* Free allocated buffer after successful processing*/
+	kfree(p_media_buffer->p_meta_data);
 	kfree(p_media_buffer);
 
 	// return the src and dst buffers back to V4L2 M2M layer to return to
@@ -2718,6 +2721,7 @@ int visp_mimo_probe(struct platform_device *pdev)
 	/* Initialize isp_dq_out_index to a safe default value */
 	device->isp_dev->isp_dq_out_index = 0;
 
+	device->isp_dev->num_pads = 1;
 	mutex_init(&device->isp_dev->mlock);
 	mutex_init(&device->isp_dev->ctrl_lock);
 	device->isp_dev->dev = &pdev->dev;
@@ -2832,6 +2836,12 @@ int visp_mimo_probe(struct platform_device *pdev)
 		goto err_ioremap;
 	}
 
+	ret = visp_mimo_procfs_register(device->isp_dev, &device->isp_dev->pde);
+	if (ret) {
+		ret = -EINVAL;
+		goto err_ioremap;
+	}
+
 	probe_cnt += 1;
 
 	return 0;
@@ -2912,6 +2922,7 @@ void visp_mimo_remove(struct platform_device *pdev)
 	if (device->isp_dev) {
 		mutex_destroy(&device->isp_dev->ctrl_lock);
 		mutex_destroy(&device->isp_dev->mlock);
+		visp_mimo_procfs_unregister(device->isp_dev->pde);
 	}
 	mutex_destroy(&device->lock);
 

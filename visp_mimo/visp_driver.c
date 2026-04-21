@@ -2321,7 +2321,7 @@ static int visp_probe(struct platform_device *pdev)
 	}
 	// Assign the XML path to sensor_info[0].xml
 	//
-	ret = visp_procfs_register(isp_dev, &isp_dev->pde);
+	ret = visp_mimo_procfs_register(isp_dev, &isp_dev->pde);
 	if (ret) {
 		dev_err(dev, "register procfs failed.\n");
 		goto err_register_procfs;
@@ -2370,7 +2370,7 @@ static void visp_remove(struct platform_device *pdev)
 
 	isp_dev = platform_get_drvdata(pdev);
 
-	visp_procfs_unregister(isp_dev->pde);
+	visp_mimo_procfs_unregister(isp_dev->pde);
 	v4l2_async_unregister_subdev(&isp_dev->sd);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 	v4l2_async_nf_unregister(&isp_dev->notifier);

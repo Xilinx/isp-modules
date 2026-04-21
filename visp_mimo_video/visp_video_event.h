@@ -76,6 +76,8 @@ enum visp_video_event_id {
 };
 
 struct visp_video_event_pkg_head {
+	uint32_t pad;
+	uint8_t dev;
 	uint32_t eid;
 	int32_t shm_fd;
 	uint32_t shm_size;

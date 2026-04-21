@@ -102,22 +102,23 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 #else
 		pad = media_entity_remote_pad(&isp_dev->pads[pad_idx]);
 #endif
-
-		if (pad && (port != (pad_idx / VISP_PORT_PAD_NR))) {
+		if (port != (pad_idx / VISP_PORT_PAD_NR)) {
 			port = pad_idx / VISP_PORT_PAD_NR;
 			seq_printf(sfile, "isp%d port%d:\n", isp_dev->id, port);
-			seq_printf(sfile, "output_type: %s %s %s %s\n",
+			if (isp_dev->isp_mem != 1) {
+				seq_printf(sfile, "output_type: %s %s %s %s\n",
 				   type2str(isp_dev->output_type[port][0]),
 				   type2str(isp_dev->output_type[port][1]),
 				   type2str(isp_dev->output_type[port][2]),
 				   type2str(isp_dev->output_type[port][3]));
-			seq_printf(sfile, "sensor	  : %s\n",
+				seq_printf(sfile, "sensor	  : %s\n",
 				   isp_dev->isp_ports[port].sensor_info.name);
-			seq_printf(sfile, "mode		: %u\n",
-				   isp_dev->isp_ports[port].sensor_info.mode);
-			seq_printf(
-				sfile, "xml		 : %s\n",
-				isp_dev->isp_ports[port].sensor_info.calib);
+				seq_printf(sfile, "mode		: %u\n",
+					isp_dev->isp_ports[port].sensor_info.mode);
+				seq_printf(
+					sfile, "calib		 : %s\n",
+					isp_dev->isp_ports[port].sensor_info.calib);
+			}
 			seq_printf(
 				sfile, "manu_json   : %s\n",
 				isp_dev->isp_ports[port].sensor_info.manu_json);
@@ -548,7 +549,7 @@ static int find_proc_dir_by_name(const char *root, const char *name,
 	return ret;
 }
 
-int visp_procfs_register(struct visp_dev *isp_dev, unsigned long *pde)
+int visp_mimo_procfs_register(struct visp_dev *isp_dev, unsigned long *pde)
 {
 	struct visp_procfs *isp_proc;
 	char isp_proc_name[32];
@@ -583,8 +584,9 @@ int visp_procfs_register(struct visp_dev *isp_dev, unsigned long *pde)
 	mutex_init(&(isp_proc->lock));
 	return 0;
 }
+EXPORT_SYMBOL(visp_mimo_procfs_register);
 
-void visp_procfs_unregister(unsigned long pde)
+void visp_mimo_procfs_unregister(unsigned long pde)
 {
 	int ret = 0;
 	bool found = false;
@@ -603,3 +605,4 @@ void visp_procfs_unregister(unsigned long pde)
 		}
 	}
 }
+EXPORT_SYMBOL(visp_mimo_procfs_unregister);
