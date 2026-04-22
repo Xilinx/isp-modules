@@ -96,6 +96,9 @@ static void visp_mbox_event_notified(struct work_struct *work)
 	int ret;
 	int msg_count = 0;
 
+	if (READ_ONCE(rpu->removing))
+		return;
+
 	while (!vpi_mbox_is_empty(rpu->apu_rx_ctrl, rpu->core_id, MBOX_CORE_APU) &&
 	       msg_count < MAX_MESSAGES_PER_WORK) {
 		ret = visp_mbox_apu_read(rpu);
@@ -129,6 +132,7 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 {
 	struct mbox_client *mclient;
 	char wq_name[32];
+	int attempt;
 
 	if (!rpu || !rpu->dev) {
 		dev_err(rpu->dev,
@@ -164,20 +168,30 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 
 	dev_dbg(rpu->dev, "Per-RPU workqueue '%s' created.\n", wq_name);
 
-	/* Request TX channel */
-	rpu->tx_chan = mbox_request_channel_byname(&rpu->tx_mc, "tx");
-	if (IS_ERR(rpu->tx_chan)) {
-		dev_err(rpu->dev, "Failed to request TX mailbox channel.\n");
+	/* Request TX channel with retry to handle reload timing */
+	for (attempt = 0; attempt < 5; attempt++) {
+		rpu->tx_chan = mbox_request_channel_byname(&rpu->tx_mc, "tx");
+		if (!IS_ERR(rpu->tx_chan))
+			break;
 		rpu->tx_chan = NULL;
-		return -ENODEV;
+		msleep(100);
+	}
+	if (!rpu->tx_chan) {
+		dev_err(rpu->dev, "Failed to request TX mailbox channel.\n");
+		return -EPROBE_DEFER;
 	}
 
-	/* Request RX channel */
-	rpu->rx_chan = mbox_request_channel_byname(&rpu->rx_mc, "rx");
-	if (IS_ERR(rpu->rx_chan)) {
-		dev_err(rpu->dev, "Failed to request RX mailbox channel.\n");
+	/* Request RX channel with retry to handle reload timing */
+	for (attempt = 0; attempt < 5; attempt++) {
+		rpu->rx_chan = mbox_request_channel_byname(&rpu->rx_mc, "rx");
+		if (!IS_ERR(rpu->rx_chan))
+			break;
 		rpu->rx_chan = NULL;
-		return -ENODEV;
+		msleep(100);
+	}
+	if (!rpu->rx_chan) {
+		dev_err(rpu->dev, "Failed to request RX mailbox channel.\n");
+		return -EPROBE_DEFER;
 	}
 
 	INIT_KFIFO(rpu->data_fifo);
@@ -189,6 +203,9 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 
 	/* Initialize TX mailbox client SKB queue */
 	skb_queue_head_init(&rpu->tx_mc_skbs);
+
+	init_completion(&rpu->init_fw_done);
+	rpu->init_fw_status = 0;
 
 	return 0;
 }
@@ -828,6 +845,14 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 		goto ERROR;
 	}
 
+	if (port >= isp_dev->num_streams) {
+		dev_err(isp_dev->dev,
+			"%s: instance_id %u maps to inactive port %u (num_streams=%u)\n",
+			__func__, instance_id, port, isp_dev->num_streams);
+		ret = -EINVAL;
+		goto ERROR;
+	}
+
 	rpu = isp_dev->rpu;
 	if (!rpu) {
 		dev_err(isp_dev->dev, "RPU device is NULL in %s.\n", __func__);
@@ -952,6 +977,69 @@ static int find_rproc_child(struct device *dev, void *data)
 	return 0; /* Continue searching */
 }
 
+static int visp_mbox_send_init_firmware(struct rpu_dev *rpu)
+{
+	payload_packet *pkt = NULL;
+	int ret;
+
+	if (!rpu || !rpu->tx_chan)
+		return -EINVAL;
+
+	if (!rpu->rproc || rpu->rproc->state != RPROC_RUNNING)
+		return 0;
+
+	pkt = kzalloc(sizeof(*pkt), GFP_KERNEL);
+	if (!pkt)
+		return -ENOMEM;
+
+	pkt->type = CMD;
+	pkt->cookie = 0;
+	uint32_t instance_id = 0;
+
+	memcpy(pkt->payload, &instance_id, sizeof(instance_id));
+	pkt->payload_size = sizeof(instance_id);
+
+	for (int attempt = 0; attempt < 5; attempt++) {
+		reinit_completion(&rpu->init_fw_done);
+		rpu->init_fw_status = 0;
+
+		ret = visp_mbox_send_command(
+			APU_2_RPU_MB_CMB_INIT_FIRMWARE, pkt,
+			payload_extra_size, 0,
+			rpu->core_id, MBOX_CORE_APU);
+		if (ret < 0) {
+			dev_err(rpu->dev,
+				"Failed to send INIT_FIRMWARE cmd: %d\n", ret);
+			kfree(pkt);
+			return ret;
+		}
+
+		ret = mbox_send_message(rpu->tx_chan, NULL);
+		if (ret < 0) {
+			dev_err(rpu->dev,
+				"Failed to trigger IPI. Error: %d\n", ret);
+			kfree(pkt);
+			return ret;
+		}
+
+		if (wait_for_completion_timeout(
+				&rpu->init_fw_done,
+				msecs_to_jiffies(200))) {
+			if (rpu->init_fw_status != 0) {
+				kfree(pkt);
+				return -EIO;
+			}
+			kfree(pkt);
+			return 0;
+		}
+		dev_warn_ratelimited(rpu->dev,
+			"INIT_FIRMWARE ack timeout, retrying\n");
+	}
+
+	kfree(pkt);
+	return -ETIMEDOUT;
+}
+
 /**
  * visp_mbox_firmware_load - Load and boot firmware via remoteproc
  * @rpu: pointer to the RPU device structure
@@ -981,7 +1069,7 @@ static int visp_mbox_firmware_load(struct rpu_dev *rpu)
 		dev_warn(dev,
 			 "No rproc phandle for RPU %d, skipping remoteproc\n",
 			 rpu_id);
-		return 0;
+		return -ENODEV;
 	}
 
 	dev_info(dev, "Found remoteproc node: %s\n", rproc_node->full_name);
@@ -994,7 +1082,7 @@ static int visp_mbox_firmware_load(struct rpu_dev *rpu)
 		dev_err(dev,
 			"Remoteproc platform device not found for RPU %d\n",
 			rpu_id);
-		return 0;
+		return -ENODEV;
 	}
 
 	/* Search for the remoteproc device by looking
@@ -1008,7 +1096,7 @@ static int visp_mbox_firmware_load(struct rpu_dev *rpu)
 		dev_err(dev, "Remoteproc not initialized yet for RPU %d\n",
 			rpu_id);
 		put_device(&rpu->rproc_pdev->dev);
-		return 0;
+		return -ENODEV;
 	}
 
 	dev_info(dev, "Found remoteproc instance for RPU %d\n", rpu_id);
@@ -1031,7 +1119,7 @@ static int visp_mbox_firmware_load(struct rpu_dev *rpu)
 		dev_err(dev, "Failed to set firmware name: %d\n", ret);
 		rpu->rproc = NULL;
 		put_device(&rpu->rproc_pdev->dev);
-		return 0;
+		return ret;
 	}
 
 	/* Automatically boot the remoteproc (firmware loading) */
@@ -1047,30 +1135,15 @@ static int visp_mbox_firmware_load(struct rpu_dev *rpu)
 		 */
 		rpu->rproc = NULL;
 		put_device(&rpu->rproc_pdev->dev);
-		return 0;
+		return ret;
 	}
 
 	dev_info(dev, "Successfully booted remoteproc for RPU %d\n", rpu_id);
 
-	/* TODO: Add a dummy command to receive ack from the RPU for removing
-	 * 250ms delay. Currenlty we are adding 5x delay required for isp
-	 * firmware loading.
-	 */
-	msleep(250);
-
-	/* Trigger an inter-processor interrupt (IPI) after firmware boot */
-	if (rpu->rproc->state == RPROC_RUNNING) {
-		ret = mbox_send_message(rpu->tx_chan, NULL);
-		if (ret < 0) {
-			dev_err(rpu->dev,
-				"Failed to trigger IPI. Error: %d\n", ret);
-			return ret;
-		}
-		dev_info(dev, "Sent IPI triggered for RPU_id %d\n", rpu_id);
-	}
-
 	return 0;
 }
+
+static int visp_mbox_rpu_remove(struct rpu_dev *rpu);
 
 static int visp_mbox_mailbox_initialization(struct rpu_dev *rpu)
 {
@@ -1127,6 +1200,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	int ret;
 	bool devno_allocated = false;
 	bool cdev_added = false;
+	bool drvdata_set = false;
 
 	node = pdev->dev.of_node;
 	mutex_lock(&rpu_list_lock);
@@ -1224,6 +1298,7 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 
 	/* Store the RPU pointer in the platform device's driver data */
 	platform_set_drvdata(pdev, rpu);
+	drvdata_set = true;
 
 	/* Initialize the mailbox */
 	ret = visp_mbox_mailbox_initialization(rpu);
@@ -1259,6 +1334,8 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 
 cleanup:
 	if (rpu) {
+		if (drvdata_set)
+			platform_set_drvdata(pdev, NULL);
 		if (rpu->tx_chan)
 			mbox_free_channel(rpu->tx_chan);
 		if (rpu->rx_chan)
@@ -1320,6 +1397,18 @@ static int visp_mbox_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
+	ret = visp_mbox_send_init_firmware(rpu);
+	if (ret) {
+		dev_err(dev, "INIT_FIRMWARE sync failed for RPU id: %d\n",
+			rpu_id);
+		platform_set_drvdata(pdev, NULL);
+		if (atomic_read(&rpu->refcount.refcount.refs) > 1)
+			kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
+		else
+			visp_mbox_rpu_remove(rpu);
+		return ret;
+	}
+
 	dev_info(dev, "Mailbox successfully initialized for RPU id: %d\n",
 		 rpu->rpu_id);
 	return 0;
@@ -1335,29 +1424,6 @@ static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 		return -ENODEV;
 	}
 
-	if (rpu->rpu_wq) {
-		cancel_work_sync(&rpu->mbox_work);
-		destroy_workqueue(rpu->rpu_wq);
-		rpu->rpu_wq = NULL;
-	}
-
-	/* Shutdown and release remoteproc if it was booted and running */
-	if (rpu->rproc) {
-		if (rpu->rproc->state == RPROC_RUNNING) {
-			dev_info(rpu->dev,
-				 "Shutting down remoteproc for RPU %d\n",
-				 rpu->rpu_id);
-			rproc_shutdown(rpu->rproc);
-		}
-		rpu->rproc = NULL;
-	}
-
-	/* Release platform device reference */
-	if (rpu->rproc_pdev) {
-		put_device(&rpu->rproc_pdev->dev);
-		rpu->rproc_pdev = NULL;
-	}
-
 	/* Debug log the current RPU's reference count */
 	ref_count = atomic_read(&rpu->refcount.refcount.refs);
 
@@ -1365,6 +1431,46 @@ static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 
 	/* Check if the device is safe to remove */
 	if (ref_count == 1) {
+		WRITE_ONCE(rpu->removing, true);
+
+		if (rpu->rpu_wq) {
+			cancel_work_sync(&rpu->mbox_work);
+			destroy_workqueue(rpu->rpu_wq);
+			rpu->rpu_wq = NULL;
+		}
+
+		rpu->rx_mc.rx_callback = NULL;
+
+		if (rpu->tx_chan) {
+			dev_info(rpu->dev, "Freeing mailbox TX channel (tx=%p).\n",
+				rpu->tx_chan);
+			mbox_free_channel(rpu->tx_chan);
+			rpu->tx_chan = NULL;
+		}
+		if (rpu->rx_chan) {
+			dev_info(rpu->dev, "Freeing mailbox RX channel (rx=%p).\n",
+				rpu->rx_chan);
+			mbox_free_channel(rpu->rx_chan);
+			rpu->rx_chan = NULL;
+		}
+
+		/* Shutdown and release remoteproc if it was booted and running */
+		if (rpu->rproc) {
+			if (rpu->rproc->state == RPROC_RUNNING) {
+				dev_info(rpu->dev,
+					 "Shutting down remoteproc for RPU %d\n",
+					 rpu->rpu_id);
+				rproc_shutdown(rpu->rproc);
+			}
+			rpu->rproc = NULL;
+		}
+
+		/* Release platform device reference */
+		if (rpu->rproc_pdev) {
+			put_device(&rpu->rproc_pdev->dev);
+			rpu->rproc_pdev = NULL;
+		}
+
 		/* Perform cleanup and removal */
 		/* Buffer pools are embedded in rpu_dev - freed with structure */
 
@@ -1372,11 +1478,13 @@ static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 		cdev_del(&rpu->cdev);
 		unregister_chrdev_region(rpu->devno, 1);
 
+		/* Remove the RPU from the list */
+		mutex_lock(&rpu_list_lock);
+		list_del(&rpu->node);
+		mutex_unlock(&rpu_list_lock);
+
 		/* Free resources using the kref_put mechanism */
 		kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
-
-		/* Remove the RPU from the list */
-		list_del(&rpu->node);
 		/* Log successful removal */
 		dev_info(rpu->dev,
 			 "RPU with id %d removed successfully.\n", rpu->rpu_id);
@@ -1405,20 +1513,6 @@ static void visp_mbox_shutdown(struct platform_device *pdev)
 		return;
 	}
 
-	if (rpu->tx_chan) {
-		mbox_free_channel(rpu->tx_chan);
-		rpu->tx_chan = NULL;
-	}
-
-	if (rpu->rx_chan) {
-		mbox_free_channel(rpu->rx_chan);
-		rpu->rx_chan = NULL;
-	}
-
-	/* Clean up reserved memory structure */
-	visp_mbox_reserved_memory_exit();
-	dev_dbg(&pdev->dev, "Reserved memory cleaned up.\n");
-
 	/* Call rpu_remove to handle RPU-specific cleanup */
 	ret = visp_mbox_rpu_remove(rpu);
 	if (ret != 0)
@@ -1436,18 +1530,6 @@ static void visp_mbox_remove(struct platform_device *pdev)
 		dev_err(&pdev->dev,
 			"Failed to retrieve RPU device during remove.\n");
 		return;
-	}
-
-	/* Free mailbox channels regardless of device tree properties. */
-	if (rpu->tx_chan) {
-		dev_info(rpu->dev, "Freeing mailbox TX channel.\n");
-		mbox_free_channel(rpu->tx_chan);
-		rpu->tx_chan = NULL;
-	}
-	if (rpu->rx_chan) {
-		dev_info(rpu->dev, "Freeing mailbox RX channel.\n");
-		mbox_free_channel(rpu->rx_chan);
-		rpu->rx_chan = NULL;
 	}
 
 	/* Call rpu_remove to handle RPU-specific cleanup */
@@ -1523,13 +1605,13 @@ static void __exit visp_mbox_exit_module(void)
 {
 	pr_info("Exiting AMD MBox driver.\n");
 
-	/* Clean up reserved memory structure */
-	visp_mbox_reserved_memory_exit();
-	pr_info("Reserved memory cleaned up.\n");
-
 	/* Unregister the platform driver */
 	platform_driver_unregister(&visp_mbox_driver);
 	pr_info("AMD MBox driver unregistered successfully.\n");
+
+	/* Clean up reserved memory structure */
+	visp_mbox_reserved_memory_exit();
+	pr_info("Reserved memory cleaned up.\n");
 
 	/* Destroy the mailbox class */
 	if (mailbox_class) {

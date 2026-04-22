@@ -55,6 +55,7 @@
 #ifndef __VISP_MBOX_DRIVER_H__
 #define __VISP_MBOX_DRIVER_H__
 
+#include <linux/completion.h>
 #include <linux/kfifo.h>
 #include <linux/workqueue.h>
 #include "mailbox/mbox_fifo.h"
@@ -176,6 +177,7 @@ struct rpu_dev {
 	struct mbox_client rx_mc;
 	struct mbox_chan *tx_chan;
 	struct mbox_chan *rx_chan;
+	bool removing;
 	struct work_struct mbox_work;
 	struct workqueue_struct *rpu_wq;
 	struct sk_buff_head tx_mc_skbs;
@@ -186,6 +188,8 @@ struct rpu_dev {
 	/* Remoteproc for automatic firmware loading */
 	struct rproc *rproc;
 	struct platform_device *rproc_pdev;
+	struct completion init_fw_done;
+	int init_fw_status;
 };
 
 /*

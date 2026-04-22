@@ -182,7 +182,22 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 
 	/* Extract fields from the copy */
 	cmd = msg_copy->msg_id;
-	uint8_t *payload_ptr = ((payload_packet *)msg_copy->payload)->payload;
+	payload_packet *pkt = (payload_packet *)msg_copy->payload;
+	uint8_t *payload_ptr = pkt->payload;
+	mb_cmd_id_e resp_cmd = pkt->resp_field.processed_cmdid;
+
+	/* INIT_FIRMWARE response has no ISP context; handle it here */
+	if (cmd == MB_CMD_RES_SUCCESS &&
+	    resp_cmd == APU_2_RPU_MB_CMB_INIT_FIRMWARE) {
+		rpu->init_fw_status = pkt->resp_field.error_subcode_t;
+		dev_info_ratelimited(rpu->dev,
+			"INIT_FIRMWARE resp: cmd=%u status=%u\n",
+			resp_cmd, rpu->init_fw_status);
+		if (rpu->init_fw_status == 0)
+			complete(&rpu->init_fw_done);
+		visp_free_rx_buffer(rpu, msg_copy);
+		return 0;
+	}
 
 	memcpy(&instance_id, payload_ptr, sizeof(uint32_t));
 	payload_ptr += sizeof(uint32_t);
@@ -240,6 +255,15 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		return -ENODEV;
 	}
 
+	/* Guard against ports beyond active streams for this ISP */
+	if (port >= isp_dev->num_streams) {
+		dev_err(rpu->dev,
+			"ACK for inactive port %u (instance_id=%u, num_streams=%u)\n",
+			port, instance_id, isp_dev->num_streams);
+		visp_free_rx_buffer(rpu, msg_copy);
+		return -EINVAL;
+	}
+
 	if (msg_copy->media_server_flags == 1) {
 		if (kfifo_is_full(&rpu->app_fifo)) {
 			dev_err(rpu->dev,
@@ -277,9 +301,6 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				return -EINVAL;
 			}
 			/* Extract command type for routing decisions */
-			payload_packet *pkt = (payload_packet *)
-					msg_copy->payload;
-			mb_cmd_id_e resp_cmd = pkt->resp_field.processed_cmdid;
 			/* Debug logging and validation for ENQUE_BUFFER commands */
 			if (resp_cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
 				uint32_t buffer_index = 0;
