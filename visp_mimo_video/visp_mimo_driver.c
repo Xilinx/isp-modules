@@ -530,14 +530,13 @@ void visp_mimo_device_run(void *priv)
 	/* Dequeue buffer from the ISP device*/
 	ret = media_isp_device_dq_buf_out(device->isp_dev, &info, (void *)msg->payload,
 					 p_media_buffer);
-	/* Issue in DQ , This below check to be reenabled*/
-	/*if (ret != VSI_SUCCESS) {
+	if (ret != VSI_SUCCESS) {
 		dev_err(device->isp_dev->dev,
 			"MediaIspDeviceDqbuf failed with error %d\n",
 			ret);
 		kfree(p_media_buffer);
 		goto stream_off;
-	}*/
+	}
 
 	/* Free allocated buffer after successful processing*/
 	kfree(p_media_buffer->p_meta_data);
