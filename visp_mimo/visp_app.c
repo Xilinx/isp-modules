@@ -406,17 +406,6 @@ int media_isp_device_create_buf_pool(struct visp_dev *isp_dev, uint8_t port,
 		// uint32_t phy_addr = 0;
 		uint32_t *pIpl_addr = VSI_NULL;
 
-		ret_val = vsi_cam_device_get_buffer_size(
-			isp_dev, isp_port->cam_device_handle, chn, &buf_size);
-		if (ret_val != VSI_SUCCESS) {
-			dev_err(isp_dev->dev,
-				"%s: CamDevice get chain %d buf size failed, "
-				"ret is %d",
-				__func__, chn, ret_val);
-			ret_val = VSI_ERR_ILLEGAL_PARAM;
-			goto ERR_TO_DEINIT_CHAIN;
-		}
-		BufPoolCfg.buf_size = buf_size;
 		BufPoolCfg.buf_size = isp_dev->out_sizeimage; //
 		isp_port->mcm_attr.input_select =
 			MEDIA_ISP_MCM_INPUT_SELECT_APU;
