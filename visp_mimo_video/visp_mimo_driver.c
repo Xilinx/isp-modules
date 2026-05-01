@@ -340,14 +340,15 @@ struct visp_format visp_raw_fmts[] = {
 
 };
 
-void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s,
-			    dma_addr_t *d);
-void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s,
-			    dma_addr_t *d)
+void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, media_buf *s,
+			    media_buf *d, unsigned int *src_count,
+			    unsigned int *dst_count);
+void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, media_buf *s,
+			    media_buf *d, unsigned int *src_count,
+			    unsigned int *dst_count)
 {
 	struct vb2_queue *vb2_q;
 	struct vb2_buffer *vb;
-	dma_addr_t dma_addr;
 	unsigned int i;
 
 	vb2_q = v4l2_m2m_get_src_vq(m2m_ctx);
@@ -355,18 +356,18 @@ void inspect_source_buffers(struct v4l2_m2m_ctx *m2m_ctx, dma_addr_t *s,
 		vb = vb2_q->bufs[i];
 		if (!vb)
 			break;
-		dma_addr = vb2_dma_contig_plane_dma_addr(vb, 0);
-		s[i] = dma_addr;
+		s[i].planes[0].dma_addr = vb2_dma_contig_plane_dma_addr(vb, 0);
 	}
+	*src_count = i;
 
 	vb2_q = v4l2_m2m_get_dst_vq(m2m_ctx);
 	for (i = 0; i < vb2_q->max_num_buffers; i++) {
 		vb = vb2_q->bufs[i];
 		if (!vb)
 			break;
-		dma_addr = vb2_dma_contig_plane_dma_addr(vb, 0);
-		d[i] = dma_addr;
+		d[i].planes[0].dma_addr = vb2_dma_contig_plane_dma_addr(vb, 0);
 	}
+	*dst_count = i;
 }
 
 
@@ -419,23 +420,23 @@ void visp_mimo_device_run(void *priv)
 	struct visp_mimo_ctx *ctx = priv;
 	struct visp_mimo_device *device = ctx->device;
 	struct vb2_v4l2_buffer *src_vb, *dst_vb;
-	dma_addr_t input_addr[2], output_addr[4];
 	struct visp_mimo_ctx *curr_ctx = ctx;
 	media_buffer_t *p_media_buffer = NULL;
 	mbox_post_msg *msg = NULL;
 	unsigned long flags;
 	const int port = 0;
 	struct Chn_info info;
+	media_isp_port_attr *isp_port = &device->isp_dev->isp_ports[port];
+	unsigned int src_count = 0, dst_count = 0;
 	int ret;
 
-	inspect_source_buffers(ctx->fh.m2m_ctx, input_addr, output_addr);
+	inspect_source_buffers(ctx->fh.m2m_ctx,
+			       isp_port->mcm_attr.bufs,
+			       isp_port->isp_chns[CAMDEV_BUFCHAIN_MP].bufs,
+			       &src_count, &dst_count);
 
-	device->isp_dev->ip_a[0] = input_addr[0];
-	device->isp_dev->ip_a[1] = input_addr[1];
-	device->isp_dev->op_a[0] = output_addr[0];
-	device->isp_dev->op_a[1] = output_addr[1];
-	device->isp_dev->op_a[2] = output_addr[2];
-	device->isp_dev->op_a[3] = output_addr[3];
+	isp_port->mcm_attr.num_bufs = src_count;
+	isp_port->isp_chns[CAMDEV_BUFCHAIN_MP].num_bufs = dst_count;
 	if (!device->isp_dev->streamon[port]) {
 		ret = visp_set_compatability_flag(device->isp_dev,
 			device->isp_dev->isp_ports[port].cam_device_handle, 1);
