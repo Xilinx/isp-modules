@@ -190,6 +190,7 @@ struct rpu_dev {
 	struct platform_device *rproc_pdev;
 	struct completion init_fw_done;
 	int init_fw_status;
+	bool init_fw_synced;
 };
 
 /*

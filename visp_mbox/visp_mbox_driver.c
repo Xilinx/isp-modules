@@ -84,6 +84,69 @@
 struct class *mailbox_class;
 static DEFINE_MUTEX(rpu_list_lock);
 static LIST_HEAD(rpu_devices);
+static atomic_t ipi5_pair_flag = ATOMIC_INIT(0);
+static atomic_t ipi6_pair_flag = ATOMIC_INIT(0);
+
+static atomic_t *visp_mbox_get_pair_flag(int rpu_id)
+{
+	switch (rpu_id) {
+	case VISP_MBOX_RPU6:
+	case VISP_MBOX_RPU7:
+		return &ipi5_pair_flag;
+	case VISP_MBOX_RPU8:
+	case VISP_MBOX_RPU9:
+		return &ipi6_pair_flag;
+	default:
+		return NULL;
+	}
+}
+
+static void visp_mbox_mark_init_firmware_success(struct rpu_dev *rpu)
+{
+	atomic_t *pair_flag;
+
+	if (!rpu || rpu->init_fw_synced)
+		return;
+
+	pair_flag = visp_mbox_get_pair_flag(rpu->rpu_id);
+	if (pair_flag)
+		atomic_inc(pair_flag);
+
+	rpu->init_fw_synced = true;
+}
+
+static void visp_mbox_clear_init_firmware_success(struct rpu_dev *rpu)
+{
+	atomic_t *pair_flag;
+
+	if (!rpu || !rpu->init_fw_synced)
+		return;
+
+	pair_flag = visp_mbox_get_pair_flag(rpu->rpu_id);
+	if (pair_flag)
+		atomic_dec(pair_flag);
+
+	rpu->init_fw_synced = false;
+}
+
+static bool visp_mbox_pair_peer_active(struct rpu_dev *rpu)
+{
+	atomic_t *pair_flag;
+	int active_count;
+
+	if (!rpu)
+		return false;
+
+	pair_flag = visp_mbox_get_pair_flag(rpu->rpu_id);
+	if (!pair_flag)
+		return false;
+
+	active_count = atomic_read(pair_flag);
+	if (rpu->init_fw_synced)
+		active_count--;
+
+	return active_count > 0;
+}
 
 /*
  * Per-RPU workqueues are now created in visp_mbox_setup() to eliminate
@@ -620,7 +683,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		goto unlock_and_exit;
 	}
 
-	result = mbox_send_message(isp_dev->tx_chan, NULL);
+	result = mbox_send_message(rpu->tx_chan, NULL);
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
 			__func__, __LINE__);
@@ -1029,6 +1092,7 @@ static int visp_mbox_send_init_firmware(struct rpu_dev *rpu)
 				kfree(pkt);
 				return -EIO;
 			}
+			visp_mbox_mark_init_firmware_success(rpu);
 			kfree(pkt);
 			return 0;
 		}
@@ -1442,25 +1506,46 @@ static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 		rpu->rx_mc.rx_callback = NULL;
 
 		if (rpu->tx_chan) {
-			dev_info(rpu->dev, "Freeing mailbox TX channel (tx=%p).\n",
-				rpu->tx_chan);
-			mbox_free_channel(rpu->tx_chan);
+			if (visp_mbox_pair_peer_active(rpu)) {
+				dev_info(rpu->dev,
+					 "Skipping mailbox TX channel free for paired active peer (tx=%p, rpu_id=%d).\n",
+					 rpu->tx_chan, rpu->rpu_id);
+			} else {
+				dev_info(rpu->dev,
+					 "Freeing mailbox TX channel (tx=%p).\n",
+					 rpu->tx_chan);
+				mbox_free_channel(rpu->tx_chan);
+			}
 			rpu->tx_chan = NULL;
 		}
+
 		if (rpu->rx_chan) {
-			dev_info(rpu->dev, "Freeing mailbox RX channel (rx=%p).\n",
-				rpu->rx_chan);
-			mbox_free_channel(rpu->rx_chan);
+			if (visp_mbox_pair_peer_active(rpu)) {
+				dev_info(rpu->dev,
+					 "Skipping mailbox RX channel free for paired active peer (rx=%p, rpu_id=%d).\n",
+					 rpu->rx_chan, rpu->rpu_id);
+			} else {
+				dev_info(rpu->dev,
+					 "Freeing mailbox RX channel (rx=%p).\n",
+					 rpu->rx_chan);
+				mbox_free_channel(rpu->rx_chan);
+			}
 			rpu->rx_chan = NULL;
 		}
 
+		visp_mbox_clear_init_firmware_success(rpu);
+
 		/* Shutdown and release remoteproc if it was booted and running */
 		if (rpu->rproc) {
-			if (rpu->rproc->state == RPROC_RUNNING) {
+			if (rpu->init_fw_synced && rpu->rproc->state == RPROC_RUNNING) {
 				dev_info(rpu->dev,
 					 "Shutting down remoteproc for RPU %d\n",
 					 rpu->rpu_id);
 				rproc_shutdown(rpu->rproc);
+			} else if (rpu->rproc->state == RPROC_RUNNING) {
+				dev_info(rpu->dev,
+					 "Skipping remoteproc shutdown for unsynchronized RPU %d remove\n",
+					 rpu->rpu_id);
 			}
 			rpu->rproc = NULL;
 		}
