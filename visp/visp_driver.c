@@ -871,6 +871,11 @@ static int handle_frameout_buffer(struct visp_dev *isp_dev, int port, mbox_post_
 	uint32_t p_owner_val;
 	ret_val = read_dq_buf_info(msg->payload, isp_dev, &info, &buf_index, &p_owner_val);
 	if (ret_val) {
+		if (ret_val == -ESHUTDOWN) {
+			/* Stream already stopped: silently drop stale frameout buffer. */
+			ret_val = 0;
+			goto error_free_buf;
+		}
 		dev_err(isp_dev->dev,
 			"%s: Invalid buffer info from RPU\n", __func__);
 		goto error_free_buf;
@@ -1687,6 +1692,23 @@ static int visp_stream_pipeline_subdevs(struct visp_dev *isp_dev, int port, int 
 	return 0;
 }
 
+static bool visp_port_has_active_stream(struct visp_dev *isp_dev, int port)
+{
+	int chn;
+
+	if (!isp_dev || port < 0 || port >= VISP_PORT_NR)
+		return false;
+
+	for (chn = 0; chn < MEDIA_ISP_CHN_MAX; chn++) {
+		int pad = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
+
+		if (isp_dev->streamon[pad] != 0)
+			return true;
+	}
+
+	return false;
+}
+
 static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 {
 	struct visp_pad_stream_status *pad_stream =
@@ -1782,7 +1804,8 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			 * if == 0 implies that the last avaialble pipeline has arrived for
 			 * stream off and proceeds to perform complete cleanup of input pipeline.
 			 */
-			if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
+			if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0 &&
+			    !visp_port_has_active_stream(isp_dev, port)) {
 				/* clean sink pad sink_detect */
 				isp_dev->pad_data[port * VISP_PORT_PAD_NR].sink_detected = 0;
 				memset(&isp_dev->pad_data[port * VISP_PORT_PAD_NR].format, 0,

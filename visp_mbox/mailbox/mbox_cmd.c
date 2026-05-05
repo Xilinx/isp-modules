@@ -340,10 +340,28 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				}
 				/* Extract error code from ACK and store before signaling */
 				int error_code = pkt->resp_field.error_subcode_t;
-				isp_dev->enq_ack_error[port][path][buffer_index] = error_code;
-				/* Signal 3D completion */
-				complete(&isp_dev->apu_wait_for_enq_ack
-					[port][path][buffer_index]);
+				/*
+				 * If stream-off already set -ESHUTDOWN and fired
+				 * complete_all(), this is a late ACK from the
+				 * previous session.  Do not overwrite the shutdown
+				 * marker and do not call complete() again — it
+				 * would spuriously unblock the next session's ENQ
+				 * wait for the same buffer slot.
+				 */
+				if (isp_dev->enq_ack_error[port][path][buffer_index]
+				    != -ESHUTDOWN) {
+					/* Active path: store error and signal completion */
+					isp_dev->enq_ack_error[port][path]
+						[buffer_index] = error_code;
+					complete(&isp_dev->apu_wait_for_enq_ack
+						[port][path][buffer_index]);
+				} else {
+					/* Stream closed: late ACK dropped silently */
+					dev_dbg(rpu->dev,
+						"Late ENQ ACK dropped (stream closed): "
+						"instance_id=%u port=%u path=%u buf=%u\n",
+						instance_id, port, path, buffer_index);
+				}
 				/* Free message immediately - no FIFO needed */
 				visp_free_rx_buffer(rpu, msg_copy);
 			} else {

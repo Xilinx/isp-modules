@@ -1709,6 +1709,7 @@ module_init(visp_mbox_init_module);
 module_exit(visp_mbox_exit_module);
 
 MODULE_DESCRIPTION("AMD MBOX driver");
+MODULE_AUTHOR("Thippeswamy Havalige thippeswamy.havalige@amd.com");
 MODULE_AUTHOR("Ajay Kumar Nandam anandam@amd.com");
 MODULE_AUTHOR("Anil Mamidala amamidal@amd.com");
 MODULE_LICENSE("GPL");

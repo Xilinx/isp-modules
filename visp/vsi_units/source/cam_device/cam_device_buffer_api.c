@@ -64,10 +64,15 @@
 extern uint32_t cookie;
 
 #include <linux/kernel.h>
+#include <linux/delay.h>
+#include <linux/jiffies.h>
 #include <linux/ktime.h>
 #include <linux/time.h>
 #include <linux/timekeeping.h>
 #include <linux/workqueue.h>
+
+#define ENQ_TIMEOUT_RETRY_MAX 2
+#define ENQ_TIMEOUT_RETRY_DELAY_US 2000
 
 RESULT vsi_cam_device_init_buf_chain(struct visp_dev *isp_dev,
 				     cam_device_handle_t h_cam_device,
@@ -445,6 +450,26 @@ static struct workqueue_struct *visp_get_enq_wq(struct visp_dev *isp_dev,
 	return wq;
 }
 
+static bool visp_enq_stream_on(struct visp_dev *isp_dev, int port,
+			      cam_device_buf_chain_id_t buf_id)
+{
+	int path_idx;
+	int pad_index;
+
+	if (!isp_dev || port < 0 || port >= MAX_PORTS)
+		return false;
+
+	path_idx = buf_id;
+	if (path_idx < 0 || path_idx >= MEDIA_ISP_CHN_MAX)
+		return true;
+
+	pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + path_idx + 1;
+	if (pad_index < 0 || pad_index >= (VISP_PORT_PAD_NR * MAX_PORTS))
+		return false;
+
+	return isp_dev->streamon[pad_index] != 0;
+}
+
 static int visp_send_enq_cmd(struct visp_dev *isp_dev,
 			      cam_device_context_t *p_cam_dev_ctx,
 			      cam_device_buf_chain_id_t buf_id,
@@ -452,6 +477,7 @@ static int visp_send_enq_cmd(struct visp_dev *isp_dev,
 {
 	RESULT result = RET_SUCCESS;
 	uint8_t *p_data = NULL;
+	int retry;
 	int port;
 	payload_packet_enq packet = {0};
 	media_isp_chn_attr *isp_chns;
@@ -467,6 +493,10 @@ static int visp_send_enq_cmd(struct visp_dev *isp_dev,
 			 p_cam_dev_ctx->isp_vt_id, MAX_PORTS);
 		port = 0;
 	}
+
+	/* Stream is already stopped: drop stale late ENQ requests quietly. */
+	if (!visp_enq_stream_on(isp_dev, port, buf_id))
+		return RET_SUCCESS;
 
 	drv_enq_cnt++;
 	p_cam_dev_ctx->cookie++;
@@ -497,10 +527,29 @@ static int visp_send_enq_cmd(struct visp_dev *isp_dev,
 	if (packet.payload_size > MAX_ITEM)
 		result = RET_OUTOFRANGE;
 
-	result = xlnx_send_mbox_acked_cmd(
-	    isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
-	    packet.payload_size + payload_extra_size, isp_dev->isp_rpu,
-	    MBOX_CORE_APU);
+	for (retry = 0; retry <= ENQ_TIMEOUT_RETRY_MAX; retry++) {
+		result = xlnx_send_mbox_acked_cmd(isp_dev,
+		    APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
+		    packet.payload_size + payload_extra_size, isp_dev->isp_rpu,
+		    MBOX_CORE_APU);
+
+		if (result == RET_SUCCESS)
+			break;
+
+		if (result == -ESHUTDOWN)
+			return RET_SUCCESS;
+
+		/* Retry only on ACK timeout; keep other failures unchanged. */
+		if (result != -ETIMEDOUT || retry == ENQ_TIMEOUT_RETRY_MAX)
+			break;
+
+		/* Stream can turn off between retries; stop retrying stale ENQ. */
+		if (!visp_enq_stream_on(isp_dev, port, buf_id))
+			return RET_SUCCESS;
+
+		udelay(ENQ_TIMEOUT_RETRY_DELAY_US);
+	}
+
 	if (result != RET_SUCCESS)
 		result = RET_FAILURE;
 
@@ -511,15 +560,23 @@ static void visp_enq_work_handler(struct work_struct *work)
 {
 	struct visp_enq_work_ctx *ctx =
 	    container_of(work, struct visp_enq_work_ctx, work);
+	int port;
 	int ret;
+
+	if (ctx->isp_dev && ctx->cam_ctx) {
+		port = ctx->cam_ctx->isp_vt_id;
+		if (port < 0 || port >= MAX_PORTS)
+			port = 0;
+
+		if (!visp_enq_stream_on(ctx->isp_dev, port, ctx->buf_id)) {
+			/* Stream already off: silently drop late queued ENQ work. */
+			kfree(ctx);
+			return;
+		}
+	}
 
 	ret = visp_send_enq_cmd(ctx->isp_dev, ctx->cam_ctx,
 			       ctx->buf_id, ctx->p_media_buf);
-	if (ret != RET_SUCCESS && ctx->isp_dev)
-		dev_err(ctx->isp_dev->dev,
-			"Async ENQUE_BUFFER failed (port=%d, idx=%u, ret=%d)\n",
-			ctx->cam_ctx ? ctx->cam_ctx->instance_id % MAX_PORTS : -1,
-			ctx->p_media_buf ? ctx->p_media_buf->index : 0, ret);
 
 	kfree(ctx);
 }
@@ -653,6 +710,7 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
 	int port;
+	int path_idx;
 	struct visp_enq_work_ctx *ctx;
 
 	if (p_cam_dev_ctx == NULL) {
@@ -672,6 +730,27 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 			 p_cam_dev_ctx->isp_vt_id, MAX_PORTS);
 		port = 0;
 	}
+
+	if (!visp_enq_stream_on(isp_dev, port, buf_id)) {
+		int path_idx_check = buf_id;
+		int pad_index_check;
+
+		/* Normal stream-off drops are expected; log only inconsistent gate decisions. */
+		pad_index_check = (port * MEDIA_ISP_PORT_PAD_COUNT) + path_idx_check + 1;
+		if (path_idx_check >= 0 && path_idx_check < MEDIA_ISP_CHN_MAX &&
+		    pad_index_check >= 0 &&
+		    pad_index_check < (VISP_PORT_PAD_NR * MAX_PORTS) &&
+		    isp_dev->streamon[pad_index_check] != 0) {
+			dev_err_ratelimited(isp_dev->dev,
+				"ENQ gate inconsistency (isp=%d port=%d path=%d"
+				" idx=%u vt_id=%d streamon=1)\n",
+				isp_dev->id, port, (int)buf_id, p_media_buf->index,
+				p_cam_dev_ctx->isp_vt_id);
+		}
+		return RET_SUCCESS;
+	}
+
+	path_idx = buf_id;
 
 	/* Pick per-chain queue if available; else fall back */
 	{

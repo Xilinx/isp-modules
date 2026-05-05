@@ -226,6 +226,9 @@ RESULT vsi_cam_device_awb_disable(struct visp_dev *isp_dev,
 RESULT vsi_cam_device_un_register_awb_lib(struct visp_dev *isp_dev,
 					  cam_device_handle_t h_cam_device);
 
+static void media_isp_reset_enq_state(struct visp_dev *isp_dev,
+				      uint8_t port, uint8_t chn);
+
 static int media_isp_device_un_register3a_lib(struct visp_dev *isp_dev,
 					      uint8_t port, uint8_t chn)
 {
@@ -249,8 +252,8 @@ static int media_isp_device_sensor_close(struct visp_dev *isp_dev,
 	int ret_val = VSI_SUCCESS;
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 
-	ret_val =
-	    vsi_cam_device_sensor_close(isp_dev, isp_port->cam_device_handle);
+	ret_val = vsi_cam_device_sensor_close(isp_dev,
+					      isp_port->cam_device_handle);
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev,
 			"CamDevice close sensor failed, ret is %d", ret_val);
@@ -720,6 +723,8 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 	}
 
 	/*Set streaming state*/
+	/* New stream session: clear stale ENQ wait/error state first. */
+	media_isp_reset_enq_state(isp_dev, port, chn);
 	ret_val = vsi_cam_device_set_path_streaming(
 	    isp_dev, isp_port->cam_device_handle, &PathStatus);
 	if (ret_val != VSI_SUCCESS) {
@@ -801,20 +806,97 @@ int isp_destroy_pipeline(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 	return VSI_SUCCESS;
 }
 
+static void media_isp_complete_pending_enq(struct visp_dev *isp_dev,
+					   uint8_t port, uint8_t chn)
+{
+	int path_idx = chn;
+	int buf;
+	int buf_count;
+
+	if (!isp_dev || port >= MAX_PORTS)
+		return;
+
+	if (path_idx >= MEDIA_ISP_CHN_MAX)
+		return;
+
+	buf_count = isp_dev->isp_ports[port].isp_chns[path_idx].num_bufs;
+	if (buf_count <= 0)
+		buf_count = 32;
+	else if (buf_count > 32)
+		buf_count = 32;
+
+	for (buf = 0; buf < buf_count; buf++) {
+		/* Reset first so teardown always publishes a fresh shutdown completion. */
+		reinit_completion(&isp_dev->apu_wait_for_enq_ack[port][path_idx][buf]);
+		isp_dev->enq_ack_error[port][path_idx][buf] = -ESHUTDOWN;
+		complete_all(&isp_dev->apu_wait_for_enq_ack[port][path_idx][buf]);
+	}
+}
+
+static void media_isp_reset_enq_state(struct visp_dev *isp_dev,
+				      uint8_t port, uint8_t chn)
+{
+	int path_idx = chn;
+	int buf;
+	int buf_count;
+
+	if (!isp_dev || port >= MAX_PORTS)
+		return;
+
+	if (path_idx < 0 || path_idx >= MEDIA_ISP_CHN_MAX)
+		return;
+
+	buf_count = isp_dev->isp_ports[port].isp_chns[path_idx].num_bufs;
+	if (buf_count <= 0)
+		buf_count = 32;
+	else if (buf_count > 32)
+		buf_count = 32;
+
+	for (buf = 0; buf < buf_count; buf++) {
+		reinit_completion(&isp_dev->apu_wait_for_enq_ack[port][path_idx][buf]);
+		isp_dev->enq_ack_error[port][path_idx][buf] = 0;
+	}
+}
+
+static bool media_isp_port_has_active_stream(struct visp_dev *isp_dev,
+					     uint8_t port)
+{
+	int chn;
+
+	if (!isp_dev || port >= MAX_PORTS)
+		return false;
+
+	for (chn = 0; chn < MEDIA_ISP_CHN_MAX; chn++) {
+		int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
+
+		if (isp_dev->streamon[pad_index] != 0)
+			return true;
+	}
+
+	return false;
+}
+
 int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 {
 	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 	/* if stream on status would be 0, if not streamed on or closed during streamon*/
 	if (isp_dev->streamon[pad_index] != 0) {
-		media_isp_device_stream_off(isp_dev, port, chn);
+		/*
+		 * Mark stream off first to gate new QBUF/ENQ while teardown commands
+		 * are in progress.
+		 */
 		isp_dev->streamon[pad_index] = 0;
+		/* Unblock in-flight ENQ waits for the closing path. */
+		media_isp_complete_pending_enq(isp_dev, port, chn);
+		media_isp_device_stream_off(isp_dev, port, chn);
 	}
 	/* subdev_streamon_count
 	 * if > 0 implies there are other pipelines still processing streams from this port
 	 * if == 0 implies that the last avaialble pipeline has arrived for stream off and
 	 * proceeds to perform complete cleanup of input pipeline.
 	 */
-	if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
+	if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0 &&
+	    !media_isp_port_has_active_stream(isp_dev, port)) {
 		if (strlen(isp_dev->isp_ports[port].fusa_json))
 			visp_stop_fusa_event(isp_dev, pad_index);
 
@@ -2178,6 +2260,7 @@ int read_dq_buf_info(void *data, struct visp_dev *isp_dev, struct Chn_info *info
 	uint8_t *p_data = NULL;
 	uint32_t hw_id_t = 100;
 	uint8_t idx;
+	int pad;
 
 	payload_packet *packet = data;
 
@@ -2194,6 +2277,25 @@ int read_dq_buf_info(void *data, struct visp_dev *isp_dev, struct Chn_info *info
 
 	memcpy(info, p_data, sizeof(struct Chn_info));
 	p_data += sizeof(struct Chn_info);
+
+	if (info->vt_id >= isp_dev->num_streams ||
+	    info->path >= MEDIA_ISP_CHN_MAX) {
+		dev_err(isp_dev->dev,
+			"%s: Invalid channel info vt_id=%u path=%u\n",
+			__func__, info->vt_id, info->path);
+		return -EINVAL;
+	}
+
+	pad = (info->vt_id * MEDIA_ISP_PORT_PAD_COUNT) + (info->path + 1);
+	if (pad <= 0 || pad >= VISP_PAD_NR)
+		return -EINVAL;
+
+	/*
+	 * If stream is already stopped, this is a stale late frameout from FW.
+	 * Drop it quietly before buffer-index validation to avoid false errors.
+	 */
+	if (isp_dev->streamon[pad] == 0)
+		return -ESHUTDOWN;
 
 	p_data += sizeof(uint32_t);
 

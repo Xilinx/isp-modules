@@ -98,7 +98,7 @@
 #define MAX_NO_ISP 6
 #define VISP_MAX_UPSTREAM_NODES 16
 /* Allow MP+SP on the same port to enqueue in parallel */
-#define ENQ_WQ_MAX_ACTIVE 1
+#define ENQ_WQ_MAX_ACTIVE 3
 /* Per-port per-chain enqueue workqueues (MP/SP1 only) */
 #define ENQ_WQ_CHAIN_MAX 2
 
