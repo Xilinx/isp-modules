@@ -155,32 +155,6 @@ int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 	vsi_cam_device_destroy_buf_pool(isp_dev, isp_port->cam_device_handle,
 					chn);
 
-	if (chn == CAMDEV_BUFCHAIN_RDMA) {
-		if (isp_port->mcm_attr.input_select ==
-			MEDIA_ISP_MCM_INPUT_SELECT_RPU) {
-			int i = 0;
-
-			for (i = 0; i < isp_port->mcm_attr.num_bufs; i++) {
-				vsi_cam_device_free_res_memory(
-					isp_dev, isp_port->cam_device_handle,
-					isp_port->mcm_attr.bufs[i]
-					.planes[0]
-					.dma_addr);
-				isp_port->mcm_attr.bufs[i].planes[0].dma_addr =
-					0;
-			}
-		} else if (isp_port->mcm_attr.input_select ==
-			   MEDIA_ISP_MCM_INPUT_SELECT_APU) {
-			int i = 0;
-
-			for (i = 0; i < isp_port->mcm_attr.num_bufs; i++) {
-				media_buf *BufInfo =
-					&isp_port->mcm_attr.bufs[i];
-				media_isp_hal_free_buf(isp_dev, port, BufInfo);
-				BufInfo->planes[0].dma_addr = 0;
-			}
-		}
-	}
 	vsi_cam_device_de_init_buf_chain(isp_dev, isp_port->cam_device_handle,
 					 chn);
 
@@ -339,7 +313,6 @@ int media_isp_device_create_buf_pool(struct visp_dev *isp_dev, uint8_t port,
 	int i = 0;
 	uint32_t num_bufs = 0;
 	cam_device_buf_pool_config_t BufPoolCfg;
-	uint32_t buf_size = 0;
 
 	cam_device_buf_chain_config_t BufferChain;
 
@@ -416,7 +389,7 @@ int media_isp_device_create_buf_pool(struct visp_dev *isp_dev, uint8_t port,
 			for (i = 0; i < num_bufs; i++) {
 				media_buf *BufInfo =
 					&isp_port->mcm_attr.bufs[i];
-				BufInfo->planes[0].dma_size = buf_size;
+				BufInfo->planes[0].dma_size = BufPoolCfg.buf_size;
 
 				BufPoolCfg.p_base_addr_list[i] =
 					BufInfo->planes[0].dma_addr;

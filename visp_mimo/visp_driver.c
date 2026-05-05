@@ -88,8 +88,8 @@
 #define VISP_DEFAULT_SENSOR "ox03f10"
 #define VISP_DEFAULT_SENSOR_MODE 0
 #define VISP_DEFAULT_SENSOR_XML "/run/media/mmcblk0p1/OX03f10.xml"
-#define VISP_DEFAULT_SENSOR_MANU_JSON "/run/media/mmcblk0p1/manual_ext.json"
-#define VISP_DEFAULT_SENSOR_AUTO_JSON "/run/media/mmcblk0p1/auto.json"
+#define VISP_DEFAULT_SENSOR_MANU_JSON "/usr/share/Tuning_files/MIMO/manual_OX03F10_ewd_2026_M17.json"
+#define VISP_DEFAULT_SENSOR_AUTO_JSON "/usr/share/Tuning_files/MIMO/auto_OX03F10_ewd_2026_M17.json"
 
 static uint32_t sensor_dev_id[VISP_PORT_NR] = {9, 2, 5, 10};
 int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
@@ -1017,6 +1017,10 @@ static int visp_buffer_free(struct v4l2_subdev *sd, void *arg)
 {
 	int ret = 0;
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+	if (!isp_dev) {
+		pr_err("%s: isp_dev is NULL (subdevdata not set)\n", __func__);
+		return -ENODEV;
+	}
 	struct visp_ext_dma_buf *pos, *next;
 	struct visp_ext_dma_buf *ext_dma_buf = NULL;
 	struct visp_ext_buf_info *ext_buf_info =
@@ -1052,7 +1056,6 @@ static int visp_buffer_free(struct v4l2_subdev *sd, void *arg)
 int visp_buffer_free_public_wrapper(struct visp_dev *isp_dev, void *arg);
 int visp_buffer_free_public_wrapper(struct visp_dev *isp_dev, void *arg)
 {
-
 	int ret = visp_buffer_free(&isp_dev->sd, arg);
 	return ret;
 }

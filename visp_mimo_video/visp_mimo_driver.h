@@ -108,6 +108,8 @@ struct visp_mimo_device {
 	struct media_pad pads[2];
 	struct visp_video_reserve_mem reserve_mem;
 	struct visp_video_event_shm event_shm;
+	int device_open_count;
+	char dev_open;
 };
 
 struct visp_mimo_ctx {

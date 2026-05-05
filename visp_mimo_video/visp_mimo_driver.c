@@ -72,6 +72,9 @@
 #endif
 #define visp_v4l2_dbg(fmt, ...) ;
 
+#define VISP_DEFAULT_SENSOR_MANU_JSON "/usr/share/Tuning_files/MIMO/manual_OX03F10_ewd_2026_M17.json"
+#define VISP_DEFAULT_SENSOR_AUTO_JSON "/usr/share/Tuning_files/MIMO/auto_OX03F10_ewd_2026_M17.json"
+
 static int debug;
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "debug level (0-3)");
@@ -2430,10 +2433,8 @@ int visp_mimo_queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue 
 
 	return vb2_queue_init(dst_vq);
 }
-static char dev_open;
 int visp_mimo_open(struct file *file)
 {
-	static int device_open_count;
 	struct visp_mimo_ctx *ctx = NULL;
 	struct visp_mimo_device *device = video_drvdata(file);
 	int rc = 0;
@@ -2441,18 +2442,18 @@ int visp_mimo_open(struct file *file)
 	if (mutex_lock_interruptible(&device->lock))
 		return -ERESTARTSYS;
 
-	++device_open_count;
+	++device->device_open_count;
 
 	if (!strcmp(current->comm, "v4l_id"))
 		visp_pr_debug("===== [VISP_M2M] Device opened %d times\n",
-			      device_open_count);
+			      device->device_open_count);
 	if (!ctx) {
 		ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 		if (!ctx) {
 			rc = -ENOMEM;
 			goto open_unlock;
 		}
-		ctx->id = device_open_count;
+		ctx->id = device->device_open_count;
 		v4l2_fh_init(&ctx->fh, video_devdata(file));
 		file->private_data = &ctx->fh;
 		ctx->device = device;
@@ -2491,7 +2492,7 @@ int visp_mimo_open(struct file *file)
 		    1, debug, v4l2_dev,
 		    "[v4l2] Created instance: [0x%x], m2m_ctx: [0x%x]\n", ctx,
 		    ctx->fh.m2m_ctx);
-		if (!dev_open) {
+		if (!device->dev_open) {
 			if (!device->isp_dev || !device->isp_dev->rpu ||
 			    !device->isp_dev->rpu->tx_chan ||
 			    !device->isp_dev->rpu->rx_chan) {
@@ -2500,7 +2501,7 @@ int visp_mimo_open(struct file *file)
 				goto open_unlock;
 			}
 			rc = isp_device_create_m_i_m_o(device->isp_dev, 0);
-			dev_open = 1;
+			device->dev_open = 1;
 		} else {
 			visp_pr_debug("===== [VISP_M2M] %s : %d device already "
 				      "opened ..\n",
@@ -2527,8 +2528,8 @@ int visp_mimo_release(struct file *file)
 #endif
 	v4l2_fh_exit(&ctx->fh);
 	mutex_lock(&device->lock);
-	if (dev_open == 1)
-		dev_open = 0;
+	if (device->dev_open == 1)
+		device->dev_open = 0;
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
 	mutex_unlock(&device->lock);
 	kfree(ctx);
@@ -2540,6 +2541,15 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 {
 	int ret = 0;
 	struct device_node *node = pdev->dev.of_node;
+	u32 port = 0;
+
+	strscpy(isp_dev->isp_ports[port].sensor_info.manu_json,
+		VISP_DEFAULT_SENSOR_MANU_JSON,
+		sizeof(isp_dev->isp_ports[port].sensor_info.manu_json));
+
+	strscpy(isp_dev->isp_ports[port].sensor_info.auto_json,
+		VISP_DEFAULT_SENSOR_AUTO_JSON,
+		sizeof(isp_dev->isp_ports[port].sensor_info.auto_json));
 
 	fwnode_property_read_u32(of_fwnode_handle(node), "isp_id",
 				 &isp_dev->id);
@@ -2764,6 +2774,12 @@ int visp_mimo_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err_m2m;
 	}
+
+	// ADD THIS (mcm_input list heads and port_lock were never initialized)
+    for (int port = 0; port < VISP_PORT_NR; port++) {
+        mutex_init(&device->isp_dev->port_lock[port]);
+        INIT_LIST_HEAD(&device->isp_dev->mcm_input[port]);
+    }
 
 	for (int port = 0; port < device->isp_dev->num_streams; port++) {
 		spin_lock_init(&device->isp_dev->frameout_lock[port]);
