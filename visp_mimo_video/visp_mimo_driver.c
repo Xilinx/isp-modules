@@ -431,6 +431,7 @@ void visp_mimo_device_run(void *priv)
 	struct Chn_info info;
 	media_isp_port_attr *isp_port = &device->isp_dev->isp_ports[port];
 	unsigned int src_count = 0, dst_count = 0;
+	long result;
 	int ret;
 
 	inspect_source_buffers(ctx->fh.m2m_ctx,
@@ -501,8 +502,13 @@ void visp_mimo_device_run(void *priv)
 		goto stream_off;
 	}
 
-	wait_event_interruptible(device->isp_dev->wq_frame_done_finished,
-				 !device->isp_dev->apu_wait_for_isp_frame_done);
+	result = wait_event_timeout(device->isp_dev->wq_frame_done_finished,
+				 !device->isp_dev->apu_wait_for_isp_frame_done,
+				 msecs_to_jiffies(5000));
+	if (result == 0) {
+		dev_err(device->isp_dev->dev, "%s: Wait for frame done timed out\n", __func__);
+		goto stream_off;
+	}
 
 	spin_lock_irqsave(&device->isp_dev->frameout_lock[port], flags);
 	msg = device->isp_dev->pending_frameout_msg[port];

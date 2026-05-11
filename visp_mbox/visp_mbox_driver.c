@@ -408,12 +408,12 @@ static ssize_t visp_mbox_rpudev_read(struct file *file, char __user *buf,
 	}
 
 	/* Wait for data to be available in the FIFO */
-	result = wait_event_interruptible(rpu->read_wait,
-					  !kfifo_is_empty(&rpu->app_fifo));
-	if (result != 0) {
-		pr_err("%s: Wait interrupted, error code: %d\n",
-		       __func__, result);
-		bytes_copied = -ERESTARTSYS;
+	result = wait_event_timeout(rpu->read_wait,
+				    !kfifo_is_empty(&rpu->app_fifo),
+				    msecs_to_jiffies(5000));
+	if (result == 0) {
+		pr_err("%s: Wait timed out\n", __func__);
+		bytes_copied = -ETIMEDOUT;
 		goto ERROR;
 	}
 
@@ -624,16 +624,12 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 
 	/* 3-minute timeout for data commands */
 	long timeout_jiffies = msecs_to_jiffies(1000 * 60 * 3);
-	result = wait_for_completion_interruptible_timeout(
+	result = wait_for_completion_timeout(
 	    &isp_dev->apu_wait_for_data, timeout_jiffies);
 	if (result == 0) {
 		dev_err(rpu->dev,
 			"Timeout occurred while waiting for APU ACK\n");
 		ret = -ETIMEDOUT;
-		goto ERROR;
-	} else if (result < 0) {
-		dev_err(rpu->dev, "Wait interrupted\n");
-		ret = -EINVAL;
 		goto ERROR;
 	}
 
@@ -933,7 +929,7 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 
 	if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
 		/* ENQUE_BUFFER: 20s timeout for fast-path */
-		result = wait_for_completion_interruptible_timeout(
+		result = wait_for_completion_timeout(
 		    &isp_dev->apu_wait_for_enq_ack[port][path_idx]
 		    [buffer_index], msecs_to_jiffies(20000));
 
@@ -948,11 +944,6 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 				instance_id, port, path, buffer_index);
 			ret = -ETIMEDOUT;
 			goto ERROR;
-		} else if (result < 0) {
-			/* Interrupted - no FIFO cleanup needed */
-			dev_err(rpu->dev, "Wait interrupted for ENQUE_BUFFER\n");
-			ret = -EINTR;
-			goto ERROR;
 		}
 
 		/* Success: read error code directly from storage */
@@ -960,7 +951,7 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 
 	} else {
 		/* Regular commands: 120s timeout for pipeline operations */
-		result = wait_for_completion_interruptible_timeout(
+		result = wait_for_completion_timeout(
 		    &isp_dev->apu_wait_for_cmd_ack[port],
 		    msecs_to_jiffies(120000));
 
@@ -982,19 +973,6 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 			}
 			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
 			ret = -ETIMEDOUT;
-			goto ERROR;
-		} else if (result < 0) {
-			/* Interrupted - drain FIFO */
-			dev_err(rpu->dev, "Wait interrupted for cmd=%d\n", cmd);
-
-			mbox_post_msg *leaked_msg = NULL;
-
-			mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
-			if (kfifo_out(&isp_dev->cmd_ack_fifo[port],
-				      &leaked_msg, 1))
-				visp_free_rx_buffer(rpu, leaked_msg);
-			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
-			ret = -EINTR;
 			goto ERROR;
 		}
 
