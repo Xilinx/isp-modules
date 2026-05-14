@@ -1714,29 +1714,25 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	struct visp_pad_stream_status *pad_stream =
 	    (struct visp_pad_stream_status *)arg;
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
 	unsigned long flags;
 	int ret = 0;
+	bool upstream_started = false;
+	bool was_streaming = false;
 
 	if (pad_stream->pad >= VISP_PAD_NR)
 		return -EINVAL;
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
-	/*
-	 * The SP1 path (video1 / "self path", chn == MEDIA_ISP_PORT_PAD_SOURCE_SP1-1)
-	 * taps the ISP's internal data flow.  Its upstream pipeline connections
-	 * (sensor → MIPI → ISP) are already managed by the MP / RAW paths and
-	 * the firmware stream_id mechanism.  SP1 must therefore NOT call
-	 * visp_stream_pipeline_subdevs() and must NOT touch subdev_streamon_count,
-	 * which is the reference counter that gates those calls.
-	 */
-	bool is_self_path = (chn == (MEDIA_ISP_PORT_PAD_SOURCE_SP1 - 1));
+
+	mutex_lock(&isp_dev->port_lock[port]);
 
 	if (pad_stream->status == 1) {
 
 		isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 		ret = visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
 		if (ret)
-			return ret;
+			goto ERR_TO_RPU_LOCK;
 
 		/* Reset sequence counter on streamon */
 		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
@@ -1744,24 +1740,19 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 
 		/*
-		 * subdev_streamon_count[port] counts only non-self-path channels
-		 * (MP, SP2, RAW).  SP1 bypasses this entirely - its upstream
-		 * pipeline is controlled via stream_id, not V4L2 s_stream.
+		 * subdev_streamon_count[port] tracks active output paths on this port.
+		 * Start the shared upstream pipeline only for the first active path,
+		 * regardless of whether that path is MP, SP1, SP2 or RAW.
 		 */
-		if (!is_self_path) {
-			if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0) {
-				/* Stream on all pipeline subdevices */
-				ret = visp_stream_pipeline_subdevs(isp_dev, port, 1);
-				if (ret) {
-					dev_err(isp_dev->dev, "Failed to start pipeline streaming on port %d: %d\n",
-						port, ret);
-					goto ERR_TO_RPU_LOCK;
-				}
+		if (ext->subdev_streamon_count[port] == 0) {
+			ret = visp_stream_pipeline_subdevs(isp_dev, port, 1);
+			if (ret) {
+				dev_err(isp_dev->dev,
+					"Failed to start pipeline streaming on port %d: %d\n",
+					port, ret);
+				goto ERR_TO_RPU_LOCK;
 			}
-		} else {
-			dev_dbg(isp_dev->dev,
-				 "ISP:%d port:%d chn:%d (SP1/self-path) stream-on: skipping upstream pipeline\n",
-				 isp_dev->id, port, chn);
+			upstream_started = true;
 		}
 
 		ret = media_isp_device_set_frame_rate(isp_dev, port,
@@ -1789,14 +1780,20 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			ret = -EINVAL;
 			goto ERR_TO_RPU_LOCK;
 		}
-		/* Only non-self-path channels increment the upstream pipeline refcount */
-		if (!is_self_path)
-			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]++;
+		ext->subdev_streamon_count[port]++;
 		/* EXIT PORT Level CRITICAL SECTION */
 	} else {
-		if (!is_self_path &&
-		    ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]) {
-			ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]--;
+		was_streaming = isp_dev->streamon[pad_stream->pad];
+		isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
+
+		if (was_streaming) {
+			if (ext->subdev_streamon_count[port] == 0)
+				dev_warn(isp_dev->dev,
+					 "ISP:%d port:%d chn:%d stream-off with zero active-path refcount\n",
+					 isp_dev->id, port, chn);
+			else
+				ext->subdev_streamon_count[port]--;
+
 			media_isp_stream_off(isp_dev, port, chn);
 			/* subdev_streamon_count
 			 * if > 0 implies there are other pipelines still processing streams
@@ -1804,7 +1801,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 			 * if == 0 implies that the last avaialble pipeline has arrived for
 			 * stream off and proceeds to perform complete cleanup of input pipeline.
 			 */
-			if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0 &&
+			if (ext->subdev_streamon_count[port] == 0 &&
 			    !visp_port_has_active_stream(isp_dev, port)) {
 				/* clean sink pad sink_detect */
 				isp_dev->pad_data[port * VISP_PORT_PAD_NR].sink_detected = 0;
@@ -1818,14 +1815,11 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 						 isp_dev->id, port, ret);
 				}
 			}
-		} else if (is_self_path) {
+		} else {
 			dev_dbg(isp_dev->dev,
-				 "ISP:%d port:%d chn:%d (SP1/self-path) stream-off: skipping upstream pipeline\n",
+				 "ISP:%d port:%d chn:%d stream-off ignored because path is not active\n",
 				 isp_dev->id, port, chn);
-			media_isp_stream_off(isp_dev, port, chn);
 		}
-		isp_dev->streamon[pad_stream->pad] = 0;
-		isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
 
 		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
@@ -1834,11 +1828,22 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 	}
 
+	mutex_unlock(&isp_dev->port_lock[port]);
+
 	return ret;
 
 ERR_TO_RPU_LOCK:
 	isp_dev->streamon[pad_stream->pad] = 0;
 	isp_dev->pad_data[pad_stream->pad].stream = 0;
+	if (upstream_started && ext->subdev_streamon_count[port] == 0) {
+		int stop_ret = visp_stream_pipeline_subdevs(isp_dev, port, 0);
+
+		if (stop_ret)
+			dev_warn(isp_dev->dev,
+				 "Failed to roll back pipeline streaming on port %d: %d\n",
+				 port, stop_ret);
+	}
+	mutex_unlock(&isp_dev->port_lock[port]);
 	return ret;
 }
 
