@@ -470,6 +470,31 @@ static bool visp_enq_stream_on(struct visp_dev *isp_dev, int port,
 	return isp_dev->streamon[pad_index] != 0;
 }
 
+static int visp_resolve_enq_port(struct visp_dev *isp_dev,
+				 cam_device_handle_t h_cam_device,
+				 cam_device_context_t *p_cam_dev_ctx)
+{
+	int port;
+
+	if (!isp_dev)
+		return 0;
+
+	for (port = 0; port < MAX_PORTS; port++) {
+		if (isp_dev->isp_ports[port].cam_device_handle == h_cam_device)
+			return port;
+	}
+
+	/* Fallback for legacy behavior if handle is not discoverable. */
+	if (p_cam_dev_ctx && p_cam_dev_ctx->isp_vt_id < MAX_PORTS) {
+		dev_warn_ratelimited(isp_dev->dev,
+			"ENQ port fallback: handle=%p not matched, using vt_id=%u\n",
+			h_cam_device, p_cam_dev_ctx->isp_vt_id);
+		return p_cam_dev_ctx->isp_vt_id;
+	}
+
+	return 0;
+}
+
 static int visp_send_enq_cmd(struct visp_dev *isp_dev,
 			      cam_device_context_t *p_cam_dev_ctx,
 			      cam_device_buf_chain_id_t buf_id,
@@ -485,12 +510,13 @@ static int visp_send_enq_cmd(struct visp_dev *isp_dev,
 	if (!isp_dev || !p_cam_dev_ctx || !p_media_buf)
 		return RET_NULL_POINTER;
 
-	/* Use vt_id to select port (MP/SP share the same port) */
-	port = p_cam_dev_ctx->isp_vt_id;
+	port = visp_resolve_enq_port(isp_dev,
+				    (cam_device_handle_t)p_cam_dev_ctx,
+				    p_cam_dev_ctx);
 	if (port < 0 || port >= MAX_PORTS) {
 		dev_warn(isp_dev->dev,
-			 "ENQ clamp vt_id=%d to port=0 (max=%d)\n",
-			 p_cam_dev_ctx->isp_vt_id, MAX_PORTS);
+			 "ENQ clamp resolved_port=%d to port=0 (max=%d, vt_id=%d)\n",
+			 port, MAX_PORTS, p_cam_dev_ctx->isp_vt_id);
 		port = 0;
 	}
 
@@ -564,7 +590,9 @@ static void visp_enq_work_handler(struct work_struct *work)
 	int ret;
 
 	if (ctx->isp_dev && ctx->cam_ctx) {
-		port = ctx->cam_ctx->isp_vt_id;
+		port = visp_resolve_enq_port(ctx->isp_dev,
+					    (cam_device_handle_t)ctx->cam_ctx,
+					    ctx->cam_ctx);
 		if (port < 0 || port >= MAX_PORTS)
 			port = 0;
 
@@ -722,16 +750,19 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 		return RET_NULL_POINTER;
 	}
 
-	/* Use vt_id to select port (MP/SP share the same port) */
-	port = p_cam_dev_ctx->isp_vt_id;
+	port = visp_resolve_enq_port(isp_dev, h_cam_device, p_cam_dev_ctx);
 	if (port < 0 || port >= MAX_PORTS) {
 		dev_warn(isp_dev->dev,
-			 "ENQ clamp vt_id=%d to port=0 (max=%d)\n",
-			 p_cam_dev_ctx->isp_vt_id, MAX_PORTS);
+			 "ENQ clamp resolved_port=%d to port=0 (max=%d, vt_id=%d)\n",
+			 port, MAX_PORTS, p_cam_dev_ctx->isp_vt_id);
 		port = 0;
 	}
 
 	if (!visp_enq_stream_on(isp_dev, port, buf_id)) {
+		dev_warn_ratelimited(isp_dev->dev,
+			"ENQ dropped: stream off isp=%d port=%d path=%d vt_id=%d instance_id=%u idx=%u\n",
+			isp_dev->id, port, (int)buf_id, p_cam_dev_ctx->isp_vt_id,
+			p_cam_dev_ctx->instance_id, p_media_buf->index);
 		int path_idx_check = buf_id;
 		int pad_index_check;
 
