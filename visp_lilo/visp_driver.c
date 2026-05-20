@@ -773,7 +773,12 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 		isp_dev->pad_data[pad_stream->pad].sequence = 0;
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
-
+		/*
+		 * TODO: set_frame_rate is applied once per port (on first active path).
+		 * When independent per-path stream-on lands, replace this with a
+		 * per-port "frame_rate_applied" flag, cleared on last stream-off, so a
+		 * fresh path arriving after a full port stream-off re-applies it.
+		 */
 		ret = media_isp_device_set_frame_rate(
 			isp_dev, port,
 			&isp_dev->isp_ports[port].sensor_info.frame_rate);

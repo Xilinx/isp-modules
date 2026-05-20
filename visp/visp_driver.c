@@ -1753,16 +1753,16 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 				goto ERR_TO_RPU_LOCK;
 			}
 			upstream_started = true;
-		}
 
-		ret = media_isp_device_set_frame_rate(isp_dev, port,
-				&isp_dev->isp_ports[port].sensor_info.frame_rate);
-		if (ret != VSI_SUCCESS) {
-			dev_err(isp_dev->dev,
-				"%s isp:%d port %d chn %d Set frame_rate failed, ret is %d",
-				__func__, isp_dev->id, port, chn, ret);
-			ret = -EINVAL;
-			goto ERR_TO_RPU_LOCK;
+			ret = media_isp_device_set_frame_rate(isp_dev, port,
+					&isp_dev->isp_ports[port].sensor_info.frame_rate);
+			if (ret != VSI_SUCCESS) {
+				dev_err(isp_dev->dev,
+					"%s isp:%d port %d chn %d Set frame_rate failed, ret is %d",
+					__func__, isp_dev->id, port, chn, ret);
+				ret = -EINVAL;
+				goto ERR_TO_RPU_LOCK;
+			}
 		}
 
 		ret = media_isp_device_set_format(isp_dev, port, chn);
