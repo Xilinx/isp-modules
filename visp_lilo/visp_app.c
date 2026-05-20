@@ -105,37 +105,6 @@ int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
 	return ret_val;
 }
 
-static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
-					     uint8_t port, uint8_t chn)
-{
-	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
-	int ret_val = VSI_SUCCESS;
-
-	vsi_cam_device_release_buf_mgmt(isp_dev, isp_port->cam_device_handle,
-					chn);
-	vsi_cam_device_destroy_buf_pool(isp_dev, isp_port->cam_device_handle,
-					chn);
-
-	vsi_cam_device_de_init_buf_chain(isp_dev, isp_port->cam_device_handle,
-					 chn);
-	if (chn < MEDIA_ISP_CHN_MAX) {
-		// create isp buf pool by user allocated dma memory
-
-		for (int i = 0;
-		     i < isp_dev->isp_ports[port].isp_chns[chn].num_bufs; i++) {
-			output_buffer_t *p_media_buffer =
-			    isp_port->isp_chns[chn].cam_device_bufs[i];
-			kfree(p_media_buffer);
-		}
-		for (int i = 0; i < ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].num_bufs; i++) {
-			//free the allocated buffers;
-			kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i]);
-		}
-		kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer);
-	}
-	return ret_val;
-}
-
 int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 				uint8_t chn)
 {
@@ -149,8 +118,6 @@ int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 	PathStatus.out_path_enable &= ~(1 << chn);
 	ret_val = vsi_cam_device_set_path_streaming(
 	    isp_dev, isp_port->cam_device_handle, &PathStatus);
-	media_isp_device_destroy_buf_pool(isp_dev, port, chn);
-
 	return ret_val;
 }
 
@@ -220,178 +187,6 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 }
 
 
-static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
-					    uint8_t port, uint8_t chn)
-{
-	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
-	int ret_val = VSI_SUCCESS;
-	int i = 0;
-	uint32_t num_bufs = 0;
-	cam_device_buf_pool_config_t BufPoolCfg;
-	uint32_t buf_size = 0;
-
-	cam_device_buf_chain_config_t BufferChain;
-
-	if (chn < MEDIA_ISP_CHN_MAX)
-		num_bufs = isp_port->isp_chns[chn].num_bufs;
-	else
-		num_bufs = isp_port->mcm_attr.num_bufs;
-	num_bufs = 4; //-LILO
-	buf_size = 0xFD200;
-	/**** STEP 1.INIT BUF CHAIN **********/
-	memset(&BufferChain, 0, sizeof(cam_device_buf_chain_config_t));
-	BufferChain.skip_interval = 0;
-	BufferChain.buf_que_length = num_bufs;
-	BufferChain.empty_que_op.block_type = CAMDEV_BUFQUE_TIMEOUT_TYPE;
-	BufferChain.empty_que_op.wait_time = MEDIA_ISP_EMPTY_BUF_WAIT_TIME;
-	BufferChain.full_que_op.block_type = CAMDEV_BUFQUE_TIMEOUT_TYPE;
-	BufferChain.full_que_op.wait_time = MEDIA_ISP_FULL_BUF_WAIT_TIME;
-
-	ret_val = vsi_cam_device_init_buf_chain(
-	    isp_dev, isp_port->cam_device_handle, chn, &BufferChain);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"%s: CamDevice init buf chain %d failed, ret is %d",
-			__func__, chn, ret_val);
-		ret_val = VSI_ERR_ILLEGAL_PARAM;
-		return ret_val;
-	}
-
-	/****** STEP 2. RESERVE BUFFERS *******/
-	memset(&BufPoolCfg, 0, sizeof(BufPoolCfg));
-	BufPoolCfg.buf_num = num_bufs;
-	BufPoolCfg.buf_mode = CAMDEV_BUFMODE_USERPTR;
-	BufPoolCfg.is_mapped = 0;
-	BufPoolCfg.p_base_addr_list =
-	    kmalloc(num_bufs * sizeof(uint32_t), GFP_KERNEL);
-	BufPoolCfg.p_ipl_addr_list =
-	    kmalloc(num_bufs * sizeof(void *), GFP_KERNEL);
-	if (!BufPoolCfg.p_base_addr_list || !BufPoolCfg.p_ipl_addr_list) {
-		kfree(BufPoolCfg.p_base_addr_list);
-		kfree(BufPoolCfg.p_ipl_addr_list);
-		vsi_cam_device_de_init_buf_chain(isp_dev,
-			isp_port->cam_device_handle, chn);
-		return -ENOMEM;
-	}
-
-	if (chn < MEDIA_ISP_CHN_MAX) {
-		// create isp buf pool by user allocated dma memory
-		for (i = 0; i < isp_port->isp_chns[chn].bufs[0].num_planes;
-		     i++) {
-			buf_size +=
-			    isp_port->isp_chns[chn].bufs[0].planes[i].dma_size;
-		}
-		BufPoolCfg.buf_size = buf_size;
-
-		ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].num_bufs = num_bufs;
-		ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer =
-			kcalloc(num_bufs, sizeof(void *), GFP_KERNEL);
-		if (!ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer) {
-			ret_val = -ENOMEM;
-			goto ERR_TO_DEINIT_CHAIN;
-		}
-
-		for (i = 0; i < num_bufs; i++) {
-			//-LILO
-			void *buf_addr = (void *)kzalloc(buf_size, GFP_KERNEL);
-			if (!buf_addr) {
-				dev_err(isp_dev->dev,
-					"kzalloc buf failed %s %d\n",
-					__func__, __LINE__);
-				while (--i >= 0) {
-					kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i]);
-					kfree(isp_port->isp_chns[chn].cam_device_bufs[i]);
-				}
-				kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer);
-				ret_val = -ENOMEM;
-				goto ERR_TO_DEINIT_CHAIN;
-			}
-			ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i] = buf_addr;
-			BufPoolCfg.p_base_addr_list[i] =
-			    (uint32_t)(uintptr_t)buf_addr;
-			BufPoolCfg.p_ipl_addr_list[i] = VSI_NULL;
-			/*dev_info(isp_dev->dev,"buf[%d] = 0x%x size 0x%x", i,
-		BufPoolCfg.p_base_addr_list[i], buf_size);*/
-			isp_port->isp_chns[chn].cam_device_bufs[i] =
-			    kzalloc(sizeof(output_buffer_t), GFP_KERNEL);
-			output_buffer_t *p_media_buffer =
-			    isp_port->isp_chns[chn].cam_device_bufs[i];
-			if (!p_media_buffer) {
-				dev_err(isp_dev->dev,
-					"FAILED TO KMALLOC %s %d\n", __func__,
-					__LINE__);
-				do {
-					kfree(isp_port->isp_chns[chn].cam_device_bufs[i]);
-					kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i]);
-				} while (--i >= 0);
-				kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer);
-				ret_val = -ENOMEM;
-				goto ERR_TO_DEINIT_CHAIN;
-			}
-			p_media_buffer->index = i;
-			p_media_buffer->base_address =
-			    BufPoolCfg.p_base_addr_list[i];
-
-			/*dev_err(isp_dev->dev, " %s %d idx:%d Add : %x\n",
-			__func__, __LINE__, \ p_media_buffer->index,
-			p_media_buffer->base_address);*/
-		}
-	} else
-		{
-		dev_err(isp_dev->dev,
-			"%s: current not support chn %d to create buf pool",
-			__func__, chn);
-		ret_val = VSI_ERR_NOT_SUPPORT;
-		goto ERR_TO_DEINIT_CHAIN;
-	}
-
-	/************ STEP 3. CREATE BUFFER POOL ****************/
-	ret_val = vsi_cam_device_create_buf_pool(
-	    isp_dev, isp_port->cam_device_handle, chn, &BufPoolCfg);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"CamDevice chn %d create buf pool failed, ret is %d",
-			chn, ret_val);
-		ret_val = VSI_ERR_ILLEGAL_PARAM;
-		goto ERR_TO_FREE_BUFS;
-	}
-	/************ STEP 4. SETUP BUF MGMT *******************/
-	ret_val = vsi_cam_device_setup_buf_mgmt(
-	    isp_dev, isp_port->cam_device_handle, chn);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(
-		    isp_dev->dev,
-		    "CamDevice chn %d setup buf managementfailed, ret is %d",
-		    chn, ret_val);
-		ret_val = VSI_ERR_ILLEGAL_PARAM;
-		goto ERR_TO_DESTROY_BUFPOOL;
-	}
-
-	kfree(BufPoolCfg.p_ipl_addr_list);
-	kfree(BufPoolCfg.p_base_addr_list);
-
-	return ret_val;
-
-ERR_TO_DESTROY_BUFPOOL:
-	vsi_cam_device_destroy_buf_pool(isp_dev, isp_port->cam_device_handle,
-					chn);
-ERR_TO_FREE_BUFS:
-	if (chn < MEDIA_ISP_CHN_MAX) {
-		for (i = 0; i < ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].num_bufs; i++) {
-			kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer[i]);
-			kfree(isp_port->isp_chns[chn].cam_device_bufs[i]);
-		}
-		kfree(ISP_DEV_EXTENDED(isp_dev)->buf_list[chn].buffer);
-	}
-ERR_TO_DEINIT_CHAIN:
-	kfree(BufPoolCfg.p_ipl_addr_list);
-	kfree(BufPoolCfg.p_base_addr_list);
-	vsi_cam_device_de_init_buf_chain(isp_dev, isp_port->cam_device_handle,
-					 chn);
-
-	return ret_val;
-}
-
 int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 			       uint8_t chn)
 {
@@ -399,15 +194,6 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 	int ret_val = VSI_SUCCESS;
 	int pad_index = -1;
 	cam_device_path_streaming_cfg_t PathStatus;
-
-	/*Create Buffer pool*/
-	ret_val = media_isp_device_create_buf_pool(isp_dev, port, chn);
-	if (ret_val != VSI_SUCCESS) {
-		dev_err(isp_dev->dev,
-			"%s: port %d chn %d create buf pool failed, ret is %d",
-			__func__, port, chn, ret_val);
-		return ret_val;
-	}
 
 	pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 	if (strlen(isp_dev->isp_ports[port].fusa_json)) {
@@ -455,7 +241,6 @@ ERR_TO_STOP_FUSA:
 		visp_stop_fusa_event(isp_dev, pad_index);
 
 ERR_TO_DESTROY_BUFPOOL:
-	media_isp_device_destroy_buf_pool(isp_dev, port, chn);
 	media_isp_device_camera_dis_connect(isp_dev, port, chn);
 	isp_destroy_pipeline(isp_dev, port, chn);
 
