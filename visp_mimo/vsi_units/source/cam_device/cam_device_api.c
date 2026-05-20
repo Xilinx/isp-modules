@@ -118,6 +118,7 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
 	if (!packet) {
 		dev_err(isp_dev->dev, "FAILED TO KMALLOC %s %d\n", __func__,
 			__LINE__);
+		cam_device_free_instance(h_cam_device, p_cam_dev_ctx->isp_hw_id);
 		return -ENOMEM;
 	}
 
@@ -134,6 +135,7 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
 
 	if (packet->payload_size > MAX_ITEM) {
 		kfree(packet);
+		cam_device_free_instance(h_cam_device, p_cam_dev_ctx->isp_hw_id);
 		return RET_OUTOFRANGE;
 	}
 
@@ -142,7 +144,11 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS)
+	{
+		kfree(packet);
+		cam_device_free_instance(h_cam_device, p_cam_dev_ctx->isp_hw_id);
 		return RET_FAILURE;
+	}
 
 	*p_handle_cam_device = h_cam_device;
 	kfree(packet);
