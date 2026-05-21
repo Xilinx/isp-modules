@@ -765,7 +765,9 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	if (pad_stream->status == 1) {// streamon
 
 		isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
+		mutex_lock(&isp_dev->port_lock[port]);
 		ret = visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
+		mutex_unlock(&isp_dev->port_lock[port]);
 		if (ret)
 			return ret;
 
@@ -1382,7 +1384,13 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 		return 0;
 	}
 
-	ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+	{
+		int port = format->pad / MEDIA_ISP_PORT_PAD_COUNT;
+
+		mutex_lock(&isp_dev->port_lock[port]);
+		ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+		mutex_unlock(&isp_dev->port_lock[port]);
+	}
 	if (ret)
 		return ret;
 
@@ -1580,9 +1588,12 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_data *pad_data = &isp_dev->pad_data[format->pad];
+	int port = format->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int ret;
 
+	mutex_lock(&isp_dev->port_lock[port]);
 	ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+	mutex_unlock(&isp_dev->port_lock[port]);
 	if (ret)
 		return ret;
 	format->format = pad_data->format;

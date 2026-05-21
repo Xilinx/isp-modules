@@ -436,9 +436,12 @@ int visp_s_interval_event(struct visp_dev *isp_dev, int pad,
 			  struct v4l2_fract *timeperframe)
 {
 	struct visp_event_pkg *event_pkg = isp_dev->event_shm.virt_addr;
+	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int ret;
 
+	mutex_lock(&isp_dev->port_lock[port]);
 	ret = visp_setup_isp_pipeline(isp_dev, pad);
+	mutex_unlock(&isp_dev->port_lock[port]);
 	if (ret)
 		return ret;
 

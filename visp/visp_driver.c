@@ -2688,7 +2688,13 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 		return 0;
 	}
 
-	ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+	{
+		int port = format->pad / MEDIA_ISP_PORT_PAD_COUNT;
+
+		mutex_lock(&isp_dev->port_lock[port]);
+		ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+		mutex_unlock(&isp_dev->port_lock[port]);
+	}
 	if (ret)
 		return ret;
 
@@ -2778,9 +2784,12 @@ static int visp_enum_mbus_code(struct v4l2_subdev *sd,
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_data *pad_data = &isp_dev->pad_data[code->pad];
+	int port = code->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int ret = 0;
 
+	mutex_lock(&isp_dev->port_lock[port]);
 	ret = visp_setup_isp_pipeline(isp_dev, code->pad);
+	mutex_unlock(&isp_dev->port_lock[port]);
 	if (ret)
 		return ret;
 
