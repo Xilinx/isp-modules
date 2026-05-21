@@ -2035,7 +2035,8 @@ void set_default_pad_config(struct visp_dev *isp_dev)
 	for (i = 1; i < VISP_PORT_PAD_NR; i++) {
 		source_pad = &isp_dev->pad_data[i];
 		source_pad->format.field = V4L2_FIELD_NONE;
-		if (ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_MP] == true) {
+		uint8_t out_path = i-1;
+		if (ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[out_path] == true) {
 			source_pad->format.code =  MEDIA_BUS_FMT_VYYUYY8_1X24;
 			format_media.pixel_format = MEDIA_PIX_FMT_NV12;
 		}
