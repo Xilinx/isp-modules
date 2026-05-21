@@ -250,6 +250,10 @@ struct visp_limo_isp_dev_extended {
 	bool notifier_registered;
 	uint8_t llp[4]; /* LLP mode per path: 0=MP, 1=SP1, 2=SP2, 3=RAW (CAMDEV_BUFCHAIN_RAW) */
 	uint8_t llp_capable[4]; /* LLP capability from device tree (which paths can have LLP) */
+	/* Serializes isp_device_create() and the cam_device_handle existence
+	 * check in visp_setup_isp_pipeline() against concurrent callers.
+	 */
+	struct mutex device_create_lock;
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)

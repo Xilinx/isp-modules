@@ -3723,6 +3723,7 @@ static int visp_probe(struct platform_device *pdev)
 	mutex_init(&isp_dev->mlock);
 	mutex_init(&isp_dev->calib_lock);
 	mutex_init(&isp_dev->ctrl_lock);
+	mutex_init(&ISP_DEV_EXTENDED(isp_dev)->device_create_lock);
 	isp_dev->dev = &pdev->dev;
 	platform_set_drvdata(pdev, isp_dev);
 

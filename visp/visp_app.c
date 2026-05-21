@@ -2834,8 +2834,10 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	CamConfig.priority = CAMDEV_SEQ_PRI_0;
 
 	/****CamDeviceCreate*****/
+	mutex_lock(&ISP_DEV_EXTENDED(isp_dev)->device_create_lock);
 	ret_val = vsi_cam_device_create(isp_dev, &CamConfig,
 				       &isp_port->cam_device_handle);
+	mutex_unlock(&ISP_DEV_EXTENDED(isp_dev)->device_create_lock);
 	if (ret_val != VSI_SUCCESS) {
 		dev_err(isp_dev->dev,
 			"CamDevice Creat Isp Device Handle Failed, ret is %d",
