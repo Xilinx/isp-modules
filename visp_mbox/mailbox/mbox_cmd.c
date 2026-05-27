@@ -393,18 +393,20 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 			goto DONE;
 		}
 
-		/* Handle data response */
+		/* Handle data response - route to per-port FIFO/completion */
 		if (cmd == MB_CMD_GET_SUCCESS) {
-			mutex_lock(&rpu->data_fifo_lock);
-			if (!kfifo_in(&rpu->data_fifo, &msg_copy, 1)) {
-				mutex_unlock(&rpu->data_fifo_lock);
-				dev_err(rpu->dev, "Failed to queue into apu data kfifo\n");
+			mutex_lock(&isp_dev->data_fifo_lock[port]);
+			if (!kfifo_in(&isp_dev->data_fifo[port], &msg_copy, 1)) {
+				mutex_unlock(&isp_dev->data_fifo_lock[port]);
+				dev_err(rpu->dev,
+					"Failed to queue into data_fifo[%u]\n",
+					port);
 				ret = -ENOMEM;
 				visp_free_rx_buffer(rpu, msg_copy);
 				goto ERROR;
 			}
-			mutex_unlock(&rpu->data_fifo_lock);
-			complete(&isp_dev->apu_wait_for_data);
+			mutex_unlock(&isp_dev->data_fifo_lock[port]);
+			complete(&isp_dev->apu_wait_for_data[port]);
 			goto DONE;
 		}
 

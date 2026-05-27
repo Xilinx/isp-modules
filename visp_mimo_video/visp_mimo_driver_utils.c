@@ -51,8 +51,15 @@ int xlnx_link_mbox(struct visp_dev *isp_dev)
 				"Failed to allocate cmd_ack_fifo[%d]\n", inst);
 			return -ENOMEM;
 		}
+		/* Per-port data response: completion + private FIFO */
+		init_completion(&isp_dev->apu_wait_for_data[inst]);
+		mutex_init(&isp_dev->data_fifo_lock[inst]);
+		if (kfifo_alloc(&isp_dev->data_fifo[inst], 128, GFP_KERNEL)) {
+			dev_err(isp_dev->dev,
+				"Failed to allocate data_fifo[%d]\n", inst);
+			return -ENOMEM;
+		}
 	}
-	init_completion(&isp_dev->apu_wait_for_data);
 
 	isp_dev->apu_wait_for_isp_frame_done = 0;
 	init_waitqueue_head(&isp_dev->wq_frame_done_finished);

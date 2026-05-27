@@ -600,6 +600,8 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	mbox_post_msg *msg;
 	long result = 0;
 	int ret;
+	uint32_t instance_id;
+	uint32_t port;
 
 	if (!isp_dev) {
 		pr_err("xlnx_mbox_apu_wait_for_data: Invalid ISP device (NULL "
@@ -622,21 +624,38 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 		goto ERROR;
 	}
 
+	/*
+	 * Derive port from instance_id embedded in payload (first uint32).
+	 * Each port owns a private completion + FIFO so concurrent data
+	 * commands on different ports do not get cross-routed.
+	 */
+	memcpy(&instance_id, data, sizeof(uint32_t));
+	instance_id &= 0xFF;
+	port = instance_id % MAX_PORTS;
+	if (port >= MAX_PORTS || port >= isp_dev->num_streams) {
+		dev_err(isp_dev->dev,
+			"%s: invalid port %u (instance_id=%u num_streams=%u)\n",
+			__func__, port, instance_id, isp_dev->num_streams);
+		ret = -EINVAL;
+		goto ERROR;
+	}
+
 	/* 3-minute timeout for data commands */
 	long timeout_jiffies = msecs_to_jiffies(1000 * 60 * 3);
 	result = wait_for_completion_timeout(
-	    &isp_dev->apu_wait_for_data, timeout_jiffies);
+	    &isp_dev->apu_wait_for_data[port], timeout_jiffies);
 	if (result == 0) {
 		dev_err(rpu->dev,
-			"Timeout occurred while waiting for APU ACK\n");
+			"Timeout occurred while waiting for APU ACK (port=%u)\n",
+			port);
 		ret = -ETIMEDOUT;
 		goto ERROR;
 	}
 
-	mutex_lock(&rpu->data_fifo_lock);
-	if (!kfifo_out(&rpu->data_fifo, &msg, 1)) {
-		mutex_unlock(&rpu->data_fifo_lock);
-		pr_err("Failed to dequeue from data_fifo\n");
+	mutex_lock(&isp_dev->data_fifo_lock[port]);
+	if (!kfifo_out(&isp_dev->data_fifo[port], &msg, 1)) {
+		mutex_unlock(&isp_dev->data_fifo_lock[port]);
+		pr_err("Failed to dequeue from data_fifo[%u]\n", port);
 		ret = -ENOMEM;
 		goto ERROR;
 	}
@@ -647,7 +666,7 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	memcpy(data, pkt->payload, sizeof(pkt->payload));
 	ret = pkt->resp_field.error_subcode_t;
 
-	mutex_unlock(&rpu->data_fifo_lock);
+	mutex_unlock(&isp_dev->data_fifo_lock[port]);
 	visp_free_rx_buffer(rpu, msg);
 ERROR:
 	/* Return the error code from the interrupt's response payload */
@@ -662,6 +681,8 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	int result;
 	struct rpu_dev *rpu;
 	uint32_t flag = 0;
+	uint32_t instance_id;
+	uint32_t port;
 
 	if (!isp_dev || !isp_dev->rpu || !data) {
 		pr_err("%s: Invalid input parameters\n", __func__);
@@ -669,6 +690,42 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	}
 
 	rpu = isp_dev->rpu;
+
+	/*
+	 * Derive port from instance_id (first uint32 in payload) and
+	 * reinit the per-port data completion + drain any stale message
+	 * so concurrent data commands on different ports stay isolated.
+	 */
+	payload_packet *pkt = (payload_packet *)data;
+
+	if (!pkt) {
+		dev_err(rpu->dev, "%s: Payload data is NULL\n", __func__);
+		return -EINVAL;
+	}
+	memcpy(&instance_id, pkt->payload, sizeof(uint32_t));
+	instance_id &= 0xFF;
+	port = instance_id % MAX_PORTS;
+	if (port >= MAX_PORTS || port >= isp_dev->num_streams) {
+		dev_err(rpu->dev,
+			"%s: invalid port %u (instance_id=%u num_streams=%u)\n",
+			__func__, port, instance_id, isp_dev->num_streams);
+		return -EINVAL;
+	}
+
+	/* Drain any stale data response left from a previous timeout */
+	if (try_wait_for_completion(&isp_dev->apu_wait_for_data[port])) {
+		mbox_post_msg *stale_msg = NULL;
+
+		mutex_lock(&isp_dev->data_fifo_lock[port]);
+		if (kfifo_out(&isp_dev->data_fifo[port], &stale_msg, 1)) {
+			visp_free_rx_buffer(rpu, stale_msg);
+			dev_warn(rpu->dev,
+				 "Drained stale data response on port %u\n",
+				 port);
+		}
+		mutex_unlock(&isp_dev->data_fifo_lock[port]);
+	}
+	reinit_completion(&isp_dev->apu_wait_for_data[port]);
 
 	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
 					src_cpu);
@@ -683,14 +740,6 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	if (result < 0) {
 		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
 			__func__, __LINE__);
-		goto unlock_and_exit;
-	}
-
-	payload_packet *pkt = (payload_packet *)data;
-
-	if (!pkt) {
-		dev_err(rpu->dev, "%s: Payload data is NULL\n", __func__);
-		result = -EINVAL;
 		goto unlock_and_exit;
 	}
 

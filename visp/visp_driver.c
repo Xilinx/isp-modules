@@ -3673,8 +3673,14 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 			dev_err(isp_dev->dev, "Failed to allocate cmd_ack_fifo[%d]\n", port);
 			return -ENOMEM;
 		}
+		/* Per-port data response: completion + private FIFO */
+		init_completion(&isp_dev->apu_wait_for_data[port]);
+		mutex_init(&isp_dev->data_fifo_lock[port]);
+		if (kfifo_alloc(&isp_dev->data_fifo[port], 128, GFP_KERNEL)) {
+			dev_err(isp_dev->dev, "Failed to allocate data_fifo[%d]\n", port);
+			return -ENOMEM;
+		}
 	}
-	init_completion(&isp_dev->apu_wait_for_data);
 
 	if (!isp_dev->rpu->tx_chan || !isp_dev->rpu->rx_chan) {
 		dev_err(isp_dev->dev, "No TX or RX Channel found on RPU: %d\n",

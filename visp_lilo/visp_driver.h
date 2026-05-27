@@ -337,11 +337,15 @@ struct visp_dev {
 	struct completion apu_wait_for_enq_ack[4][4][32];
 	/* Port-level completions for other commands */
 	struct completion apu_wait_for_cmd_ack[4];  /* 4 ports */
-	struct completion apu_wait_for_data;
+	/* Per-port completion for data responses (private per port) */
+	struct completion apu_wait_for_data[4];
 	struct completion mailbox_completion;
 	/* Port-level FIFOs for other commands */
 	DECLARE_KFIFO_PTR(cmd_ack_fifo[4], struct mbox_post_msg *);
 	struct mutex cmd_ack_fifo_lock[4];  /* One mutex per port */
+	/* Per-port FIFOs for data responses (private per port) */
+	DECLARE_KFIFO_PTR(data_fifo[4], struct mbox_post_msg *);
+	struct mutex data_fifo_lock[4];  /* One mutex per port */
 	/* Direct error code storage - eliminates FIFO overhead for ENQUE_BUFFER */
 	int enq_ack_error[4][4][32];  /* [port][path][buffer_index] */
 	int cmd_ack_error[4];  /* [port] */
