@@ -254,6 +254,17 @@ struct visp_limo_isp_dev_extended {
 	 * check in visp_setup_isp_pipeline() against concurrent callers.
 	 */
 	struct mutex device_create_lock;
+	/*
+	 * Per-(port, path) stream session counter. Incremented in
+	 * media_isp_reset_enq_state() at the start of every new stream-on so
+	 * that a delayed/late stream-off path can detect when its (port, chn)
+	 * slot has been reassigned and skip stamping -ESHUTDOWN over the new
+	 * session's enq_ack_error[] / completions.
+	 * Lives in the extended struct so it is local to the visp module and
+	 * does not perturb the struct visp_dev layout shared with visp_lilo /
+	 * visp_mimo.
+	 */
+	atomic_t stream_seq[MAX_PORTS][4];  /* [port][path] */
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)

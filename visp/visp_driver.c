@@ -3664,6 +3664,11 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 			for (int buf = 0; buf < 32; buf++)
 				init_completion(&isp_dev->apu_wait_for_enq_ack[port][path][buf]);
 
+	/* Initialise per-(port, path) stream-session counters. */
+	for (int port = 0; port < isp_dev->num_streams; port++)
+		for (int path = 0; path < 4; path++)
+			atomic_set(&ISP_DEV_EXTENDED(isp_dev)->stream_seq[port][path], 0);
+
 	/* Initialize port-level completions for other commands */
 	for (int port = 0; port < isp_dev->num_streams; port++) {
 		init_completion(&isp_dev->apu_wait_for_cmd_ack[port]);

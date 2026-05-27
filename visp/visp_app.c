@@ -807,7 +807,8 @@ int isp_destroy_pipeline(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 }
 
 static void media_isp_complete_pending_enq(struct visp_dev *isp_dev,
-					   uint8_t port, uint8_t chn)
+					   uint8_t port, uint8_t chn,
+					   int captured_seq)
 {
 	int path_idx = chn;
 	int buf;
@@ -826,6 +827,16 @@ static void media_isp_complete_pending_enq(struct visp_dev *isp_dev,
 		buf_count = 32;
 
 	for (buf = 0; buf < buf_count; buf++) {
+		/*
+		 * Re-check ownership on every iteration: if a new stream-on
+		 * has already bumped stream_seq for this (port, path) while we
+		 * were running, our session no longer owns these slots and we
+		 * must not clobber the new session's enq_ack_error[] /
+		 * completions with -ESHUTDOWN.
+		 */
+		if (atomic_read(&ISP_DEV_EXTENDED(isp_dev)->stream_seq[port][path_idx]) !=
+		    captured_seq)
+			return;
 		/* Reset first so teardown always publishes a fresh shutdown completion. */
 		reinit_completion(&isp_dev->apu_wait_for_enq_ack[port][path_idx][buf]);
 		isp_dev->enq_ack_error[port][path_idx][buf] = -ESHUTDOWN;
@@ -856,6 +867,54 @@ static void media_isp_reset_enq_state(struct visp_dev *isp_dev,
 		reinit_completion(&isp_dev->apu_wait_for_enq_ack[port][path_idx][buf]);
 		isp_dev->enq_ack_error[port][path_idx][buf] = 0;
 	}
+
+	/*
+	 * Stamp a new session id for this (port, path). Any concurrently
+	 * running stream-off that captured the previous seq value will
+	 * detect the mismatch in media_isp_complete_pending_enq() and bail
+	 * out instead of writing -ESHUTDOWN over our freshly-cleared state.
+	 */
+	atomic_inc(&ISP_DEV_EXTENDED(isp_dev)->stream_seq[port][path_idx]);
+}
+
+/*
+ * Stream-off tail cleanup: clear any -ESHUTDOWN sentinel left in
+ * enq_ack_error[][][] by media_isp_complete_pending_enq() so that when this
+ * (port, chn) / instance_id slot is later reassigned to a new pipeline,
+ * leftover state cannot cause its fresh ENQ ACKs to be dropped as
+ * "stream closed".
+ *
+ * Unlike media_isp_reset_enq_state(), this MUST NOT touch slots that hold
+ * any value other than -ESHUTDOWN, and MUST NOT reinit the completions:
+ * a racing new pipeline (e.g. another consumer on the same port/chn, or
+ * the same instance_id reassigned to a different isp_dev path) may already
+ * have started stream_on, cleared markers, and begun receiving genuine
+ * ACKs by the time we run. Clobbering those would lose buffers and stall
+ * that pipeline.
+ */
+static void media_isp_clear_shutdown_markers(struct visp_dev *isp_dev,
+					     uint8_t port, uint8_t chn)
+{
+	int path_idx = chn;
+	int buf;
+	int buf_count;
+
+	if (!isp_dev || port >= MAX_PORTS)
+		return;
+
+	if (path_idx < 0 || path_idx >= MEDIA_ISP_CHN_MAX)
+		return;
+
+	buf_count = isp_dev->isp_ports[port].isp_chns[path_idx].num_bufs;
+	if (buf_count <= 0)
+		buf_count = 32;
+	else if (buf_count > 32)
+		buf_count = 32;
+
+	for (buf = 0; buf < buf_count; buf++) {
+		(void)cmpxchg(&isp_dev->enq_ack_error[port][path_idx][buf],
+			      -ESHUTDOWN, 0);
+	}
 }
 
 static bool media_isp_port_has_active_stream(struct visp_dev *isp_dev,
@@ -882,13 +941,37 @@ int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 	/* if stream on status would be 0, if not streamed on or closed during streamon*/
 	if (isp_dev->streamon[pad_index] != 0) {
 		/*
+		 * Capture the current stream session id BEFORE doing any
+		 * teardown work. If a new stream_on races in for the same
+		 * (port, chn) slot while we are tearing down (e.g. delayed
+		 * close from the previous session running after a fast
+		 * re-open), media_isp_complete_pending_enq() will observe
+		 * stream_seq advancing past closing_seq and skip stamping
+		 * -ESHUTDOWN over the new session's slots.
+		 */
+		int closing_seq = atomic_read(&ISP_DEV_EXTENDED(isp_dev)->stream_seq[port][chn]);
+
+		/*
 		 * Mark stream off first to gate new QBUF/ENQ while teardown commands
 		 * are in progress.
 		 */
 		isp_dev->streamon[pad_index] = 0;
 		/* Unblock in-flight ENQ waits for the closing path. */
-		media_isp_complete_pending_enq(isp_dev, port, chn);
+		media_isp_complete_pending_enq(isp_dev, port, chn, closing_seq);
 		media_isp_device_stream_off(isp_dev, port, chn);
+		/*
+		 * RPU stream-off has been acknowledged: the path is stopped at
+		 * the RPU and no further ENQ ACKs are expected for this slot.
+		 * Clear ONLY the -ESHUTDOWN sentinel so that when this
+		 * instance_id / (port, chn) slot is later reassigned to a new
+		 * pipeline, leftover state cannot cause its fresh ENQ ACKs to
+		 * be dropped as "stream closed".
+		 *
+		 * Use cmpxchg-style clearing (see helper) so a racing new
+		 * pipeline that has already started stream_on on the same slot
+		 * and is receiving real ACKs is NOT clobbered.
+		 */
+		media_isp_clear_shutdown_markers(isp_dev, port, chn);
 	}
 	/* subdev_streamon_count
 	 * if > 0 implies there are other pipelines still processing streams from this port
