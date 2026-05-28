@@ -188,7 +188,7 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 
 	memcpy(msg, fifo_msg,
 	       sizeof(mbox_post_msg) - sizeof(payload_packet) +
-		   (((fifo_msg->size) + 63) & ~63));
+		   ALIGN(fifo_msg->size, 8));
 
 	/* Update read_offset after memcpy completes - use system barrier for RPU visibility
 	 * NOTE: Barrier is currently commented out; enable if coherence issues are observed.
