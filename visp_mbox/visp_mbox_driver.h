@@ -90,8 +90,8 @@
 #define VISP_MBOX_MAX_RPU_ID 9
 
 struct rpu_dev *visp_mbox_get_rpu_dev(int rpu_id);
-uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev, uint32_t instance_id,
-				   uint32_t path, uint32_t buffer_index, mb_cmd_id_e cmd);
+int xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev, uint32_t instance_id,
+			       uint32_t path, uint32_t buffer_index, mb_cmd_id_e cmd);
 int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 			    void *data, uint32_t size, uint8_t dest_cpu,
 			    uint8_t src_cpu);
@@ -143,6 +143,7 @@ struct reserved_memory {
 struct msg_buf_node {
 	struct list_head list;        /* Free-list linkage */
 	mbox_post_msg msg;            /* Actual message buffer */
+	__u32 reserved[16];
 };
 
 /* Structures to hold the rpu_device specific information */

@@ -257,12 +257,12 @@ static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
 		return -EPROBE_DEFER;
 	}
 
-	INIT_KFIFO(rpu->data_fifo);
+	//INIT_KFIFO(rpu->data_fifo);
 	INIT_KFIFO(rpu->app_fifo);
 
 	/* Initialize mutexes for thread-safe kfifo access in workqueue context */
 	mutex_init(&rpu->app_fifo_lock);
-	mutex_init(&rpu->data_fifo_lock);
+	//mutex_init(&rpu->data_fifo_lock);
 
 	/* Initialize TX mailbox client SKB queue */
 	skb_queue_head_init(&rpu->tx_mc_skbs);
@@ -600,12 +600,27 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	mbox_post_msg *msg;
 	long result = 0;
 	int ret;
-	uint32_t instance_id;
 	uint32_t port;
+	uint8_t *p_data;
+	uint32_t instance_id = 0x99;
 
 	if (!isp_dev) {
 		pr_err("xlnx_mbox_apu_wait_for_data: Invalid ISP device (NULL "
 		       "pointer).\n");
+		ret = -EINVAL;
+		goto ERROR;
+	}
+
+	/* Extract instance_id from payload (common to all commands) */
+	p_data = (uint8_t *)data;
+	memcpy(&instance_id, p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	/* Map instance_id to port: 4 instances per port (16 instances / 4 ports) */
+	port = isp_dev->instanceid_port_map[instance_id % INSTANCES_PER_ISP];
+	if (port >= MAX_PORTS) {
+		pr_err("%s: Invalid port %u (max port %u)\n",
+		       __func__, port, MAX_PORTS - 1);
 		ret = -EINVAL;
 		goto ERROR;
 	}
@@ -620,22 +635,6 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	if (!data) {
 		dev_err(isp_dev->dev, "Invalid data pointer in %s.\n",
 			__func__);
-		ret = -EINVAL;
-		goto ERROR;
-	}
-
-	/*
-	 * Derive port from instance_id embedded in payload (first uint32).
-	 * Each port owns a private completion + FIFO so concurrent data
-	 * commands on different ports do not get cross-routed.
-	 */
-	memcpy(&instance_id, data, sizeof(uint32_t));
-	instance_id &= 0xFF;
-	port = instance_id % MAX_PORTS;
-	if (port >= MAX_PORTS || port >= isp_dev->num_streams) {
-		dev_err(isp_dev->dev,
-			"%s: invalid port %u (instance_id=%u num_streams=%u)\n",
-			__func__, port, instance_id, isp_dev->num_streams);
 		ret = -EINVAL;
 		goto ERROR;
 	}
@@ -704,7 +703,7 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	}
 	memcpy(&instance_id, pkt->payload, sizeof(uint32_t));
 	instance_id &= 0xFF;
-	port = instance_id % MAX_PORTS;
+	port = isp_dev->instanceid_port_map[instance_id % INSTANCES_PER_ISP];
 	if (port >= MAX_PORTS || port >= isp_dev->num_streams) {
 		dev_err(rpu->dev,
 			"%s: invalid port %u (instance_id=%u num_streams=%u)\n",
@@ -819,7 +818,7 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	p_data += sizeof(uint32_t);
 
 	/* Map instance_id to port: 4 instances per port (common to all commands) */
-	port = instance_id % MAX_PORTS;
+	port = isp_dev->instanceid_port_map[instance_id % INSTANCES_PER_ISP];
 
 	if (port >= 4) {
 		pr_err("%s: Invalid port %u (max 3)\n", __func__, port);
@@ -926,9 +925,9 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 }
 EXPORT_SYMBOL(xlnx_send_mbox_acked_cmd);
 
-uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
-				   uint32_t instance_id, uint32_t path,
-				   uint32_t buffer_index, mb_cmd_id_e cmd)
+int xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
+			       uint32_t instance_id, uint32_t path,
+			       uint32_t buffer_index, mb_cmd_id_e cmd)
 {
 	struct rpu_dev *rpu = NULL;
 	long result;
@@ -944,7 +943,7 @@ uint8_t xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 	}
 
 	/* Map instance_id to port: 4 instances per port (16 instances / 4 ports) */
-	port = instance_id % MAX_PORTS;
+	port = isp_dev->instanceid_port_map[instance_id % INSTANCES_PER_ISP];
 
 	if (port >= MAX_PORTS) {
 		pr_err("%s: Invalid instance_id %u -> port %u (max port %u)\n",

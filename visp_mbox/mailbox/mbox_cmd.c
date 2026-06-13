@@ -222,13 +222,6 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	 *   ISP_DEV 5: instance_id 80-95
 	 */
 	isp_id = instance_id / INSTANCES_PER_ISP;
-	/*
-	 * Map instance_id to port (0-3) for array indexing.
-	 * Each ISP has 4 ports with 4 instances per port
-	 * (16 instances / 4 ports).
-	 * instance_id 0-3→port_0,4-7→ port_1,8-11→port_2,12-15→port_3
-	 */
-	port = instance_id % MAX_PORTS;
 
 	/* Validate ISP instance ID range */
 	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES) {
@@ -254,6 +247,12 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		/* Return immediately - no further processing */
 		return -ENODEV;
 	}
+
+	/*
+	 * Map instance_id to port (0-3) for array indexing.
+	 * Each ISP has 4 ports represnt 4 instances per port
+	 */
+	port = isp_dev->instanceid_port_map[instance_id % INSTANCES_PER_ISP];
 
 	/* Guard against ports beyond active streams for this ISP */
 	if (port >= isp_dev->num_streams) {
