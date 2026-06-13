@@ -79,6 +79,8 @@ int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
 int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 				      uint8_t port, uint8_t chn);
 
+int media_isp_device_mimo_camera_dis_connect(struct visp_dev *isp_dev, uint8_t index);
+
 #define ENABLE_LOG 1
 
 #ifdef ENABLE_LOG

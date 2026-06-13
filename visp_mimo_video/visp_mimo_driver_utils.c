@@ -55,8 +55,12 @@ int xlnx_link_mbox(struct visp_dev *isp_dev)
 		init_completion(&isp_dev->apu_wait_for_data[inst]);
 		mutex_init(&isp_dev->data_fifo_lock[inst]);
 		if (kfifo_alloc(&isp_dev->data_fifo[inst], 128, GFP_KERNEL)) {
-			dev_err(isp_dev->dev,
-				"Failed to allocate data_fifo[%d]\n", inst);
+			dev_err(isp_dev->dev, "Failed to allocate data_fifo[%d]\n", inst);
+			kfifo_free(&isp_dev->cmd_ack_fifo[inst]);
+			for (int i = 0; i < inst; i++) {
+				kfifo_free(&isp_dev->data_fifo[i]);
+				kfifo_free(&isp_dev->cmd_ack_fifo[i]);
+			}
 			return -ENOMEM;
 		}
 	}
@@ -97,7 +101,7 @@ int isp_device_create_m_i_m_o(struct visp_dev *isp_dev, uint8_t port)
 		return VSI_SUCCESS;
 
 	CamConfig.work_cfg.work_mode = CAMDEV_WORK_MODE_RDMA;
-	CamConfig.work_cfg.mode_cfg.stream.port_id = 0;
+	CamConfig.work_cfg.mode_cfg.stream.port_id = port + 1;
 
 	CamConfig.output_cfg.output_type = CAMDEV_OUTPUT_TYPE_MEMORY;
 	CamConfig.priority = CAMDEV_SEQ_PRI_0;

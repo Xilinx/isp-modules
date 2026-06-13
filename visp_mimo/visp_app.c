@@ -254,6 +254,32 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 	return VSI_SUCCESS;
 }
 
+int media_isp_device_mimo_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port)
+{
+	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
+
+	dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d\n", __func__, __LINE__);
+
+	if (isp_port->camera_connect_ref_cnt > 0)
+		isp_port->camera_connect_ref_cnt--;
+
+	dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d Camcnt=%d\n", __func__,
+		 __LINE__, isp_port->camera_connect_ref_cnt);
+
+	if (isp_port->camera_connect_ref_cnt == 0) {
+		dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d\n", __func__,
+			 __LINE__);
+		media_isp_device_un_register3a_lib(isp_dev, port, 0);
+		vsi_cam_device_disconnect_camera(isp_dev,
+						 isp_port->cam_device_handle);
+	}
+
+	dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d\n", __func__, __LINE__);
+
+	return VSI_SUCCESS;
+}
+EXPORT_SYMBOL_GPL(media_isp_device_mimo_camera_dis_connect);
+
 static int isp_send_atm_prop_to_rpu(struct visp_dev *isp,
 				    cam_device_handle_t h_cam_device)
 {

@@ -418,6 +418,19 @@ static int visp_set_compatability_flag(struct visp_dev *isp,
 	return 0;
 }
 
+static int visp_mimo_device_ready(void *priv)
+{
+	struct visp_mimo_ctx *ctx = priv;
+
+	if (!v4l2_m2m_num_src_bufs_ready(ctx->fh.m2m_ctx))
+		return 0;
+
+	if (!v4l2_m2m_num_dst_bufs_ready(ctx->fh.m2m_ctx))
+		return 0;
+
+	return 1;
+}
+
 void visp_mimo_device_run(void *priv)
 {
 	struct visp_mimo_ctx *ctx = priv;
@@ -547,8 +560,10 @@ void visp_mimo_device_run(void *priv)
 	src_vb = v4l2_m2m_src_buf_remove(curr_ctx->fh.m2m_ctx);
 
 	/* Validate the dequeue index before using it */
-	if (device->isp_dev->isp_dq_out_index >= vb2_get_num_buffers(v4l2_m2m_get_dst_vq(curr_ctx->fh.m2m_ctx))) {
-		dev_err(device->isp_dev->dev, "Invalid dq_out_index %d, max buffers %d\n",
+	if (v4l2_m2m_num_dst_bufs_ready(curr_ctx->fh.m2m_ctx) <= 0 ||
+	    device->isp_dev->isp_dq_out_index >=
+	    vb2_get_num_buffers(v4l2_m2m_get_dst_vq(curr_ctx->fh.m2m_ctx))) {
+		dev_err(device->isp_dev->dev, "no free dst buffer, or invalid dq_out_index %d (max buffers %d)\n",
 			device->isp_dev->isp_dq_out_index,
 			vb2_get_num_buffers(v4l2_m2m_get_dst_vq(curr_ctx->fh.m2m_ctx)));
 		dst_vb = NULL;
@@ -1876,6 +1891,8 @@ int visp_mimo_v4l2_m2m_ioctl_streamoff(struct file *file, void *fh,
 		if (strlen(ctx->device->isp_dev->isp_ports[port].fusa_json))
 			visp_stop_fusa_event(ctx->device->isp_dev, pad_index);
 
+		media_isp_device_mimo_camera_dis_connect(ctx->device->isp_dev, port);
+
 		isp_destroy_pipeline(ctx->device->isp_dev , port, chn);
 
 		ctx->device->isp_dev->streamon[port] = 0;
@@ -2395,6 +2412,7 @@ static const struct video_device visp_mimo_video_dev = {
 
 static const struct v4l2_m2m_ops m2m_ops = {
 	.device_run = visp_mimo_device_run,
+	.job_ready  = visp_mimo_device_ready,
 };
 
 static const struct vb2_ops visp_mimo_qops = {
@@ -2755,6 +2773,9 @@ int visp_mimo_probe(struct platform_device *pdev)
 		goto err_m2m;
 	}
 
+	for (int i = 0; i < VISP_INPUT_INSTANCES; i++)
+		device->isp_dev->instanceid_port_map[i] = ~0U;
+
 	/* Set back-pointer for event handling */
 	ISP_DEV_EXTENDED_MIMO_VIDEO(device->isp_dev)->mimo_device = device;
 
@@ -2971,6 +2992,10 @@ void visp_mimo_remove(struct platform_device *pdev)
 		visp_mimo_procfs_unregister(device->isp_dev->pde);
 	}
 	mutex_destroy(&device->lock);
+	for (int port = 0; port < device->isp_dev->num_streams; port++) {
+		kfifo_free(&device->isp_dev->cmd_ack_fifo[port]);
+		kfifo_free(&device->isp_dev->data_fifo[port]);
+	}
 
 	probe_cnt--;
 }
