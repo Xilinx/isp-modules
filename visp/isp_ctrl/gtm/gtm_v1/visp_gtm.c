@@ -139,7 +139,6 @@ static int visp_gtm_g_ctrl(struct v4l2_ctrl *ctrl)
 	switch (ctrl->id) {
 		case VISP_CID_GTM_ENABLE:
 		case VISP_CID_GTM_BW_CORRECTION_ENABLE:
-		case VISP_CID_GTM_RESET:
 		case VISP_CID_GTM_MODE:
 		case VISP_CID_GTM_AUTO_LEVEL:
 		case VISP_CID_GTM_AUTO_GAIN:
@@ -213,6 +212,10 @@ static int visp_gtm_g_ctrl(struct v4l2_ctrl *ctrl)
 		*/
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
+
+		case VISP_CID_GTM_RESET:
+			memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
+			return 0;
 
 		default:
 			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
@@ -756,6 +759,7 @@ const struct v4l2_ctrl_config visp_gtm_ctrls[] = {
 		.max = 1048575,
 		.dims = {129, 0, 0, 0},
 	},
+/*
 	{
 		.ops = &visp_gtm_ctrl_ops,
 		.id = VISP_CID_GTM_HIST_STATISTIC_MIN,
@@ -779,7 +783,7 @@ const struct v4l2_ctrl_config visp_gtm_ctrls[] = {
 		.dims = {1, 0, 0, 0},
 	},
 	{
-		/* uint32_t array 128x */
+		// uint32_t array 128x
 		.ops = &visp_gtm_ctrl_ops,
 		.id = VISP_CID_GTM_HIST_STATISTIC_DATA,
 		.type = V4L2_CTRL_TYPE_U32,
@@ -790,6 +794,7 @@ const struct v4l2_ctrl_config visp_gtm_ctrls[] = {
 		.max = 0xFFFFFFFF,
 		.dims = {128, 0, 0, 0},
 	},
+*/
 	{
 		/* uint8_t 3x */
 		.ops = &visp_gtm_ctrl_ops,

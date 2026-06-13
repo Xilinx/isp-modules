@@ -54,3 +54,9 @@ ccflags-y += -DISP_DG_V1
 
 ISP_CPD_V1_1 := 1
 ccflags-y += -DISP_CPD_V1_1
+
+ISP_HIST64 := 1
+ccflags-y += -DISP_HIST64
+
+ISP_HIST256 := 1
+ccflags-y += -DISP_HIST256

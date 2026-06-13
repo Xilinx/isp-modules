@@ -64,6 +64,13 @@ static int visp_sensor_get_sensor_number(struct v4l2_ctrl *ctrl)
 	int ret = 0;
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
+	int port = isp_dev->ctrl_pad / MEDIA_ISP_PORT_PAD_COUNT;
+
+	/* If ISP device is not created, return default (zero) values */
+	if (!isp_dev->isp_ports[port].cam_device_handle) {
+		memset(ctrl->p_new.p_s32, 0, ctrl->elem_size * ctrl->elems);
+		return 0;
+	}
 
 	uint16_t sensor_num = 0;
 
@@ -85,6 +92,13 @@ static int visp_sensor_get_sensor_list(struct v4l2_ctrl *ctrl)
 	int ret = 0;
 	struct visp_dev *isp_dev =
 		container_of(ctrl->handler, struct visp_dev, ctrl_handler);
+	int port = isp_dev->ctrl_pad / MEDIA_ISP_PORT_PAD_COUNT;
+
+	/* If ISP device is not created, return default (zero) values */
+	if (!isp_dev->isp_ports[port].cam_device_handle) {
+		memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
+		return 0;
+	}
 
 	uint16_t sensor_num = 0;
 	int ctrl_size = ctrl->elem_size * ctrl->elems;
@@ -183,12 +197,63 @@ static int visp_sensor_g_ctrl(struct v4l2_ctrl *ctrl)
 		       name_len);
 		break;
 	}
-		break;
 
 	case VISP_CID_SENSOR_MODE:
 		p_mode = (int32_t *)ctrl->p_new.p_s32;
 		*p_mode = (int32_t)isp_dev->isp_ports[port].sensor_info.mode;
 		break;
+
+	case VISP_CID_SENSOR_XML:
+	{
+		size_t ctrl_size = ctrl->elem_size * ctrl->elems;
+		size_t name_len = min_t(size_t, ctrl_size,
+				 sizeof(isp_dev->isp_ports[port].sensor_info.calib));
+
+		memset(ctrl->p_new.p_u8, 0, ctrl_size);
+		memcpy(ctrl->p_new.p_u8,
+		       isp_dev->isp_ports[port].sensor_info.calib,
+		       name_len);
+		break;
+	}
+
+	case VISP_CID_SENSOR_MANU_JSON:
+	{
+		size_t ctrl_size = ctrl->elem_size * ctrl->elems;
+		size_t name_len = min_t(size_t, ctrl_size,
+				 sizeof(isp_dev->isp_ports[port].sensor_info.manu_json));
+
+		memset(ctrl->p_new.p_u8, 0, ctrl_size);
+		memcpy(ctrl->p_new.p_u8,
+		       isp_dev->isp_ports[port].sensor_info.manu_json,
+		       name_len);
+		break;
+	}
+
+	case VISP_CID_SENSOR_AUTO_JSON:
+	{
+		size_t ctrl_size = ctrl->elem_size * ctrl->elems;
+		size_t name_len = min_t(size_t, ctrl_size,
+				 sizeof(isp_dev->isp_ports[port].sensor_info.auto_json));
+
+		memset(ctrl->p_new.p_u8, 0, ctrl_size);
+		memcpy(ctrl->p_new.p_u8,
+		       isp_dev->isp_ports[port].sensor_info.auto_json,
+		       name_len);
+		break;
+	}
+
+	case VISP_CID_SENSOR_ONE_JSON:
+	{
+		size_t ctrl_size = ctrl->elem_size * ctrl->elems;
+		size_t name_len = min_t(size_t, ctrl_size,
+				 sizeof(isp_dev->isp_ports[port].sensor_info.one_json));
+
+		memset(ctrl->p_new.p_u8, 0, ctrl_size);
+		memcpy(ctrl->p_new.p_u8,
+		       isp_dev->isp_ports[port].sensor_info.one_json,
+		       name_len);
+		break;
+	}
 
 	case VISP_CID_SENSOR_NUMBER:
 		ret = visp_sensor_get_sensor_number(ctrl);

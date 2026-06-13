@@ -104,7 +104,6 @@ static int visp_2dnr_g_ctrl(struct v4l2_ctrl *ctrl)
 
 	switch (ctrl->id) {
 		case VISP_CID_2DNR_ENABLE:
-		case VISP_CID_2DNR_RESET:
 		case VISP_CID_2DNR_ENABLE_LUMA:
 		case VISP_CID_2DNR_MODE:
 		case VISP_CID_2DNR_AUTO_LEVEL:
@@ -132,6 +131,10 @@ static int visp_2dnr_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_2DNR_ALL_STATUS:
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
+
+		case VISP_CID_2DNR_RESET:
+			memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
+			return 0;
 
 		default:
 			dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);

@@ -101,7 +101,6 @@ static int visp_rgbir_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_RGBIR_ENABLE:
 		case VISP_CID_RGBIR_RCCC_ENABLE:
 		case VISP_CID_RGBIR_IR_RAW_OUT_ENABLE:
-		case VISP_CID_RGBIR_RESET:
 		case VISP_CID_RGBIR_CC_MATRIX:
 		case VISP_CID_RGBIR_DPCC_MIDDLE_THRESHOLD:
 		case VISP_CID_RGBIR_DPCC_THRESHOLD:
@@ -118,6 +117,10 @@ static int visp_rgbir_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_RGBIR_ALL_STATUS:
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
+
+		case VISP_CID_RGBIR_RESET:
+			memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
+			return 0;
 
 		default:
 			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);

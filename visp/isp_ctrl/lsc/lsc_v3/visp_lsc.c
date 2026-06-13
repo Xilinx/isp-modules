@@ -99,7 +99,6 @@ static int visp_lsc_g_ctrl(struct v4l2_ctrl *ctrl)
 	switch (ctrl->id)
 	{
 		case VISP_CID_LSC_ENABLE:
-		case VISP_CID_LSC_RESET:
 		case VISP_CID_LSC_MODE:
 		case VISP_CID_LSC_AUTO_LEVEL:
 		case VISP_CID_LSC_AUTO_DAMPING:
@@ -116,6 +115,10 @@ static int visp_lsc_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_LSC_ALL_STATUS:
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
+
+		case VISP_CID_LSC_RESET:
+			memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
+			return 0;
 
 		default:
 			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);

@@ -118,6 +118,11 @@ static int visp_bls_g_ctrl(struct v4l2_ctrl *ctrl)
 	case VISP_CID_BLS_ALL_BIT_WIDTH:
 		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 		break;
+
+	case VISP_CID_BLS_RESET:
+		memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
+		return 0;
+
 	default:
 		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
 		return -EACCES;

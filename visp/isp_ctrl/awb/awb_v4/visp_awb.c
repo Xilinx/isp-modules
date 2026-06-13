@@ -120,6 +120,7 @@ static int visp_awb_s_ctrl(struct v4l2_ctrl *ctrl)
 	case VISP_CID_AWB_NONLINEAR_THRESH:
 	case VISP_CID_AWB_ALL_CONFIG:
 	case VISP_CID_AWB_ALL_ROI:
+	case VISP_CID_AWB_ALL_CALIB_DATA:
 		ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 		break;
 
@@ -191,12 +192,19 @@ static int visp_awb_g_ctrl(struct v4l2_ctrl *ctrl)
 	case VISP_CID_AWB_CALIB_CUSTOM_WEIGHT:
 	case VISP_CID_AWB_NONLINEAR_THRESH:
 	case VISP_CID_AWB_RESULT_CCT:
+	case VISP_CID_AWB_RESULT_WHITE_POINT_NUM:
 	case VISP_CID_AWB_ALL_CONFIG:
 	case VISP_CID_AWB_ALL_ROI:
 	case VISP_CID_AWB_ALL_STATUS:
 	case VISP_CID_AWB_ALL_COLOR_TMP_WEIGHT:
+	case VISP_CID_AWB_ALL_RESULT:
+	case VISP_CID_AWB_ALL_CALIB_DATA:
 		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 		break;
+
+	case VISP_CID_AWB_RESET:
+		memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
+		return 0;
 
 	default:
 		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
@@ -826,6 +834,18 @@ const struct v4l2_ctrl_config visp_awb_ctrls[] = {
 		.max  = 10000,
 	},
 	{
+		/* float array 10x32bit */
+		.ops  = &visp_awb_ctrl_ops,
+		.id   = VISP_CID_AWB_RESULT_WHITE_POINT_NUM,
+		.type = V4L2_CTRL_TYPE_U32,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_awb_result_white_point_num",
+		.step = 1,
+		.min  = 0,
+		.max  = 0xFFFFFFFF,
+		.dims = {10},
+	},
+	{
 		/* uint8_t data of CamDeviceAwbConfig_t */
 		.ops = &visp_awb_ctrl_ops,
 		.id = VISP_CID_AWB_ALL_CONFIG,
@@ -872,6 +892,30 @@ const struct v4l2_ctrl_config visp_awb_ctrls[] = {
 		.min = 0,
 		.max = 0xFF,
 		.dims = {0x28},
+	},
+	{
+		/* CamDeviceAwbResult_t */
+		.ops = &visp_awb_ctrl_ops,
+		.id = VISP_CID_AWB_ALL_RESULT,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_awb_all_result",
+		.step = 1,
+		.min = 0,
+		.max = 0xFF,
+		.dims = {0x2c},
+	},
+	{
+		/* CamDeviceAwbCalibData_t */
+		.ops = &visp_awb_ctrl_ops,
+		.id = VISP_CID_AWB_ALL_CALIB_DATA,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_awb_all_calib_data",
+		.step = 1,
+		.min = 0,
+		.max = 0xFF,
+		.dims = {0x138},
 	},
 };
 

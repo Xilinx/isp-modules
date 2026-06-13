@@ -67,6 +67,8 @@ static int visp_hist256_s_ctrl(struct v4l2_ctrl *ctrl)
 	case VISP_CID_HIST256_ENABLE:
 	case VISP_CID_HIST256_RESET:
 	case VISP_CID_HIST256_MODE:
+	case VISP_CID_HIST256_WINDOW:
+	case VISP_CID_HIST256_WEIGHT:
 	case VISP_CID_HIST256_ALL_CONFIG:
 		ret = visp_s_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 		break;
@@ -88,10 +90,16 @@ static int visp_hist256_g_ctrl(struct v4l2_ctrl *ctrl)
 	switch (ctrl->id) {
 	case VISP_CID_HIST256_ENABLE:
 	case VISP_CID_HIST256_MODE:
+	case VISP_CID_HIST256_WINDOW:
+	case VISP_CID_HIST256_WEIGHT:
 	case VISP_CID_HIST256_STATISTIC:
 	case VISP_CID_HIST256_ALL_CONFIG:
 		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 		break;
+
+	case VISP_CID_HIST256_RESET:
+		memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
+		return 0;
 
 	default:
 		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);
@@ -150,6 +158,17 @@ const struct v4l2_ctrl_config visp_hist256_ctrls[] = {
 	},
 	{
 		.ops  = &visp_hist256_ctrl_ops,
+		.id   = VISP_CID_HIST256_WEIGHT,
+		.type = V4L2_CTRL_TYPE_U8,
+		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+		.name = "isp_hist256_weight",
+		.step = 1,
+		.min  = 0,
+		.max  = 16,
+		.dims = {25},
+	},
+	{
+		.ops  = &visp_hist256_ctrl_ops,
 		.id   = VISP_CID_HIST256_STATISTIC,
 		.type = V4L2_CTRL_TYPE_U32,
 		.flags = V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
@@ -169,7 +188,7 @@ const struct v4l2_ctrl_config visp_hist256_ctrls[] = {
 		.step = 1,
 		.min  = 0,
 		.max  = 0xFF,
-		.dims = {12},
+		.dims = {0x28},
 	}
 };
 
