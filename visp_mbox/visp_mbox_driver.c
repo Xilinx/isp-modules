@@ -917,6 +917,8 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 				__func__, cmd, instance_id);
 			return -EPIPE;
 		}
+		if (result == -ESHUTDOWN && cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER)
+			return RET_SUCCESS;
 		dev_err(rpu->dev, "%s: Failed to get ack\n", __func__);
 		return result;
 	}

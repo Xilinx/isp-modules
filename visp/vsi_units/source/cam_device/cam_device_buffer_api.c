@@ -535,9 +535,6 @@ static int visp_send_enq_cmd(struct visp_dev *isp_dev,
 		if (result == RET_SUCCESS)
 			break;
 
-		if (result == -ESHUTDOWN)
-			return RET_SUCCESS;
-
 		/* Retry only on ACK timeout; keep other failures unchanged. */
 		if (result != -ETIMEDOUT || retry == ENQ_TIMEOUT_RETRY_MAX)
 			break;
