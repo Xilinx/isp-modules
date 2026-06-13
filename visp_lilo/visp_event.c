@@ -198,12 +198,14 @@ int visp_l_calib_event(struct visp_dev *isp_dev, int pad)
 	pdata += sizeof(cam_device_context_t);
 	event_pkg->head.data_size += sizeof(cam_device_context_t);
 
-	if (!isp_dev->isp_ports[port].sensor_info.calib[0]) {
-		dev_err(isp_dev->dev,
-			"calib path not set for port %d, aborting calib event\n",
-			port);
-		mutex_unlock(&isp_dev->event_shm.event_lock);
-		return -EINVAL;
+	if (!isp_dev->isp_ports[port].sensor_info.one_json[0]) {
+		if (!isp_dev->isp_ports[port].sensor_info.calib[0]) {
+			dev_err(isp_dev->dev,
+				"calib path not set for port %d, aborting calib event\n",
+				port);
+			mutex_unlock(&isp_dev->event_shm.event_lock);
+			return -EINVAL;
+		}
 	}
 
 	memcpy(pdata, &(isp_dev->isp_ports[port].sensor_info),
@@ -242,13 +244,7 @@ int visp_l_json_event(struct visp_dev *isp_dev, int pad)
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	uint8_t *pdata = NULL;
 
-	if (isp_dev->isp_ports[port].one_json_mode) {
-		if (!isp_dev->isp_ports[port].sensor_info.one_json[0]) {
-			dev_err(isp_dev->dev,
-				"one_json path not set for port %d\n", port);
-			return -EINVAL;
-		}
-	} else {
+	if (!isp_dev->isp_ports[port].sensor_info.one_json[0]) {
 		if (!isp_dev->isp_ports[port].sensor_info.manu_json[0]) {
 			dev_err(isp_dev->dev,
 				"manu_json path not set for port %d\n", port);

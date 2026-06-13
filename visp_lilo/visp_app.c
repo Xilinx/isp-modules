@@ -299,22 +299,6 @@ int isp_destroy_pipeline(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 	return VSI_SUCCESS;
 }
 
-int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
-{
-	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
-
-	media_isp_device_stream_off(isp_dev, port, chn);
-
-	media_isp_device_camera_dis_connect(isp_dev, port, chn);
-	if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0 &&
-	    strlen(isp_dev->isp_ports[port].fusa_json))
-		visp_stop_fusa_event(isp_dev, pad_index);
-
-	isp_destroy_pipeline(isp_dev, port, chn);
-
-	return VSI_SUCCESS;
-}
-
 int media_isp_device_qbuf(struct visp_dev *isp_dev, uint8_t port, uint8_t chn,
 			  media_buf *buf)
 {
@@ -1479,7 +1463,8 @@ int media_isp_calib_load_isp_config(struct visp_dev *isp_dev, uint8_t port)
 		isp_port->sensor_info.manu_json);
 	dev_dbg(isp_dev->dev, "%s: auto_json: %s", __func__,
 		isp_port->sensor_info.auto_json);
-
+	dev_dbg(isp_dev->dev, "%s: one_json: %s", __func__,
+		isp_port->sensor_info.one_json);
 	dev_dbg(isp_dev->dev, "%s: sensor_id: %u", __func__,
 		isp_port->sensor_info.sensor_id);
 	dev_dbg(isp_dev->dev, "%s: port: %u", __func__, port);

@@ -70,7 +70,6 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 int isp_device_destroy(struct visp_dev *isp_dev, uint8_t port, uint8_t chn);
 int isp_destroy_cam_device(struct visp_dev *isp_dev, uint8_t port, uint8_t chn);
 int isp_destroy_pipeline(struct visp_dev *isp_dev, uint8_t port, uint8_t chn);
-int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn);
 int media_isp_device_qbuf(struct visp_dev *isp_dev, uint8_t port, uint8_t chn,
 			  media_buf *buf);
 int media_isp_q_buf(struct visp_dev *isp_dev, int pad_index, media_buf *buf);

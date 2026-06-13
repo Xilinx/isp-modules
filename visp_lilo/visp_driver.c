@@ -775,12 +775,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 		isp_dev->pad_data[pad_stream->pad].sequence = 0;
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
-		/*
-		 * TODO: set_frame_rate is applied once per port (on first active path).
-		 * When independent per-path stream-on lands, replace this with a
-		 * per-port "frame_rate_applied" flag, cleared on last stream-off, so a
-		 * fresh path arriving after a full port stream-off re-applies it.
-		 */
+
 		ret = media_isp_device_set_frame_rate(
 			isp_dev, port,
 			&isp_dev->isp_ports[port].sensor_info.frame_rate);
@@ -2260,6 +2255,11 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 		mutex_init(&isp_dev->data_fifo_lock[port]);
 		if (kfifo_alloc(&isp_dev->data_fifo[port], 128, GFP_KERNEL)) {
 			dev_err(isp_dev->dev, "Failed to allocate data_fifo[%d]\n", port);
+			kfifo_free(&isp_dev->cmd_ack_fifo[port]);
+			for (int i = 0; i < port; i++) {
+				kfifo_free(&isp_dev->data_fifo[i]);
+				kfifo_free(&isp_dev->cmd_ack_fifo[i]);
+			}
 			return -ENOMEM;
 		}
 	}
@@ -2310,6 +2310,9 @@ static int visp_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+	for (int i = 0; i < VISP_INPUT_INSTANCES; i++)
+		isp_dev->instanceid_port_map[i] = ~0U;
+
 	/* Initialize mutexes for cam_device_bufs arrays (num_streams ports × 4 channels) */
 	for (int port = 0; port < isp_dev->num_streams; port++)
 		for (int chn = 0; chn < 4; chn++)
@@ -2337,7 +2340,7 @@ static int visp_probe(struct platform_device *pdev)
 	ret = media_entity_pads_init(&isp_dev->sd.entity, isp_dev->num_pads,
 					 isp_dev->pads);
 	if (ret)
-		return ret;
+		goto err_pads_init;
 
 	ret = visp_async_notifier(isp_dev);
 	if (ret) {
@@ -2430,6 +2433,12 @@ error_regiter_subdev:
 
 err_async_notifier:
 	media_entity_cleanup(&isp_dev->sd.entity);
+
+err_pads_init:
+	for (port = 0; port < isp_dev->num_streams; port++) {
+		kfifo_free(&isp_dev->cmd_ack_fifo[port]);
+		kfifo_free(&isp_dev->data_fifo[port]);
+	}
 	return ret;
 }
 
@@ -2473,6 +2482,11 @@ static void visp_remove(struct platform_device *pdev)
 
 	if (isp_dev->reserve_mem.va)
 		iounmap(isp_dev->reserve_mem.va);
+
+	for (int port = 0; port < isp_dev->num_streams; port++) {
+		kfifo_free(&isp_dev->cmd_ack_fifo[port]);
+		kfifo_free(&isp_dev->data_fifo[port]);
+	}
 
 	dev_info(&pdev->dev, "visp isp driver remove\n");
 }

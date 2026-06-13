@@ -2133,7 +2133,12 @@ int xlnx_link_mbox(struct visp_dev *isp_dev)
 		mutex_init(&isp_dev->data_fifo_lock[inst]);
 		if (kfifo_alloc(&isp_dev->data_fifo[inst], 128, GFP_KERNEL)) {
 			dev_err(isp_dev->dev,
-				"Failed to allocate data_fifo[%d]\n", inst);
+				"Failed to allocate cmd_ack_fifo[%d]\n", inst);
+			kfifo_free(&isp_dev->cmd_ack_fifo[inst]);
+			for (int i = 0; i < inst; i++) {
+				kfifo_free(&isp_dev->data_fifo[i]);
+				kfifo_free(&isp_dev->cmd_ack_fifo[i]);
+			}
 			return -ENOMEM;
 		}
 	}
@@ -2180,6 +2185,9 @@ static int visp_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+	for (int i = 0; i < VISP_INPUT_INSTANCES; i++)
+		isp_dev->instanceid_port_map[i] = ~0U;
+
 	v4l2_subdev_init(&isp_dev->sd, &visp_subdev_ops);
 	snprintf(isp_dev->sd.name, V4L2_SUBDEV_NAME_SIZE, "%s.%d", VISP_NAME,
 		 isp_dev->id);
@@ -2199,7 +2207,7 @@ static int visp_probe(struct platform_device *pdev)
 	ret = media_entity_pads_init(&isp_dev->sd.entity, isp_dev->num_pads,
 					 isp_dev->pads);
 	if (ret)
-		return ret;
+		goto err_pads_init;
 
 	ret = visp_async_notifier(isp_dev);
 	if (ret)
@@ -2252,6 +2260,12 @@ error_regiter_subdev:
 
 err_async_notifier:
 	media_entity_cleanup(&isp_dev->sd.entity);
+
+err_pads_init:
+	for (port = 0; port < isp_dev->num_streams; port++) {
+		kfifo_free(&isp_dev->cmd_ack_fifo[port]);
+		kfifo_free(&isp_dev->data_fifo[port]);
+	}
 	return ret;
 }
 
@@ -2273,6 +2287,12 @@ static void visp_remove(struct platform_device *pdev)
 	media_entity_cleanup(&isp_dev->sd.entity);
 	free_pages((unsigned long)isp_dev->event_shm.virt_addr, 3);
 	/*visp_ctrl_destroy(isp_dev);*/
+
+	for (int port = 0; port < isp_dev->num_streams; port++) {
+		kfifo_free(&isp_dev->cmd_ack_fifo[port]);
+		kfifo_free(&isp_dev->data_fifo[port]);
+	}
+
 	dev_info(&pdev->dev, "vvcam isp driver remove\n");
 
 }

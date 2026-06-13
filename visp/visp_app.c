@@ -206,6 +206,7 @@ static int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 
 	cam_device_path_streaming_cfg_t PathStatus;
+	memset(&PathStatus, 0, sizeof(PathStatus));
 
 	vsi_cam_device_get_path_streaming(isp_dev, isp_port->cam_device_handle,
 					  &PathStatus);
@@ -770,8 +771,10 @@ int isp_device_destroy(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 			return ret_val;
 		}
 
+		mutex_lock(&ISP_DEV_EXTENDED(isp_dev)->device_create_lock);
 		ret_val = vsi_cam_device_destroy(isp_dev,
 						isp_port->cam_device_handle);
+		mutex_unlock(&ISP_DEV_EXTENDED(isp_dev)->device_create_lock);
 		if (ret_val != VSI_SUCCESS) {
 			dev_err(isp_dev->dev,
 				"CamDevice Isp Device handle destroy Failed, "
@@ -939,6 +942,7 @@ int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 {
 	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 	/* if stream on status would be 0, if not streamed on or closed during streamon*/
+	/* should be lock in port lock */
 	if (isp_dev->streamon[pad_index] != 0) {
 		/*
 		 * Capture the current stream session id BEFORE doing any
@@ -2716,7 +2720,8 @@ int media_isp_calib_load_isp_config(struct visp_dev *isp_dev, uint8_t port)
 		isp_port->sensor_info.manu_json);
 	dev_dbg(isp_dev->dev, "%s: auto_json: %s", __func__,
 		isp_port->sensor_info.auto_json);
-
+	dev_dbg(isp_dev->dev, "%s: one_json: %s", __func__,
+		isp_port->sensor_info.one_json);
 	dev_dbg(isp_dev->dev, "%s: sensor_id: %u", __func__,
 		isp_port->sensor_info.sensor_id);
 	dev_dbg(isp_dev->dev, "%s: port: %u", __func__, port);
@@ -3078,7 +3083,11 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 	int ret = 0;
 
-	/* Try to create ISP device if not already created */
+	/*
+	 * Try to create ISP device if not already created
+	 * one port only one path can execute this func,
+	 * avoid duplicate create
+	 */
 	if (!isp_dev->isp_ports[port].cam_device_handle) {
 		ret = isp_device_create(isp_dev, port);
 		if (ret) {
@@ -3086,7 +3095,6 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev,
 				"device creation failed with %d\n",
 				ret);
-
 			return ret;
 		}
 	}

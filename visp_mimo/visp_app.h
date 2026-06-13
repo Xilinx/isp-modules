@@ -58,6 +58,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 
+#define LOAD_CALIB_ENABLE 1
+
 struct Chn_info {
 	uint32_t hw_id;
 	uint32_t mode;
