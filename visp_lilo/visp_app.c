@@ -1818,6 +1818,7 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 	int ret = 0;
 
 	int port = 0; // for LILO
+	int chn = 0;  // for LILO
 	/*Create Instance*/
 	/* Try to create ISP device if not already created */
 	if (!isp_dev->isp_ports[port].cam_device_handle) {
@@ -1835,6 +1836,7 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 				dev_err(isp_dev->dev,
 					"[EVENT_FAIL] %s %d isp:%d port:%d ret:%d\n",
 					__func__, __LINE__, isp_dev->id, port, ret);
+				isp_device_destroy(isp_dev, port, chn);
 				return ret;
 			}
 			if (ret == -EPIPE) {
@@ -1850,6 +1852,7 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 				__func__, __LINE__, isp_dev->id, port);
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			isp_device_destroy(isp_dev, port, chn);
 			return ret;
 		}
 		if (ret == -EPIPE) {
@@ -1864,6 +1867,7 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev,
 				"%s %d FAiled camera connect\n",
 				__func__, __LINE__);
+			isp_device_destroy(isp_dev, port, chn);
 			return ret;
 		}
 
@@ -1874,13 +1878,12 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 			dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
 				__func__, __LINE__, isp_dev->id, port);
 			/*clean connect camera*/
-			int chn = 0;
-
 			if (strlen(isp_dev->isp_ports[port].fusa_json))
 				visp_stop_fusa_event(isp_dev, pad);
 			media_isp_device_camera_dis_connect(isp_dev, port, chn);
 			/*cleanup done Release the lock*/
 			mutex_unlock(&isp_dev->rpu->rpu_lock);
+			isp_device_destroy(isp_dev, port, chn);
 			return ret;
 		}
 		if (ret == -EPIPE) {
