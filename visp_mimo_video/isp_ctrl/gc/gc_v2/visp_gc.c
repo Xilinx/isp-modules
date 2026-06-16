@@ -118,6 +118,9 @@ static int visp_gc_g_ctrl(struct v4l2_ctrl *ctrl)
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
 
+		case VISP_CID_GC_RESET:
+			return 0;
+
 		default:
 			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);
 			return -EACCES;

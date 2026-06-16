@@ -99,7 +99,6 @@ static int visp_exp_g_ctrl(struct v4l2_ctrl *ctrl)
 
 	switch (ctrl->id) {
 	case VISP_CID_EXP_ENABLE:
-	case VISP_CID_EXP_RESET:
 		// case VISP_CID_EXP_R_WEIGHT:
 		// case VISP_CID_EXP_GR_WEIGHT:
 		// case VISP_CID_EXP_GB_WEIGHT:
@@ -115,6 +114,9 @@ static int visp_exp_g_ctrl(struct v4l2_ctrl *ctrl)
 	case VISP_CID_EXP_ALL_MEASURE_WIN:
 		ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 		break;
+
+	case VISP_CID_EXP_RESET:
+		return 0;
 
 	default:
 		dev_err(isp_dev->dev, "unknown v4l2 ctrl id %d\n", ctrl->id);

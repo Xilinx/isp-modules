@@ -110,11 +110,14 @@
 #define VISP_CID_AWB_CALIB_CUSTOM_WEIGHT        (VISP_CID_AWB_BASE + 0x0033)
 #define VISP_CID_AWB_NONLINEAR_THRESH           (VISP_CID_AWB_BASE + 0x0034)
 #define VISP_CID_AWB_RESULT_CCT                 (VISP_CID_AWB_BASE + 0x0035)
+#define VISP_CID_AWB_RESULT_WHITE_POINT_NUM     (VISP_CID_AWB_BASE + 0x0036)
 
 #define VISP_CID_AWB_ALL_CONFIG                 (VISP_CID_AWB_BASE + 0x0040)
 #define VISP_CID_AWB_ALL_ROI                    (VISP_CID_AWB_BASE + 0x0041)
 #define VISP_CID_AWB_ALL_STATUS                 (VISP_CID_AWB_BASE + 0x0042)
 #define VISP_CID_AWB_ALL_COLOR_TMP_WEIGHT       (VISP_CID_AWB_BASE + 0x0043)
+#define VISP_CID_AWB_ALL_RESULT                 (VISP_CID_AWB_BASE + 0x0044)
+#define VISP_CID_AWB_ALL_CALIB_DATA             (VISP_CID_AWB_BASE + 0x0045)
 
 #ifdef __KERNEL__
 int visp_awb_ctrl_count(void);

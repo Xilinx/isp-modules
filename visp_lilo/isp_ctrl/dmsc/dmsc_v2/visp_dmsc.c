@@ -171,7 +171,6 @@ static int visp_dmsc_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_DMSC_SHARPEN_ENABLE:
 		case VISP_CID_DMSC_SHARPEN_LINE_ENABLE:
 		case VISP_CID_DMSC_SKIN_ENABLE:
-		case VISP_CID_DMSC_RESET:
 		case VISP_CID_DMSC_MODE:
 		case VISP_CID_DMSC_AUTO_LEVEL:
 		case VISP_CID_DMSC_AUTO_GAIN:
@@ -294,6 +293,9 @@ static int visp_dmsc_g_ctrl(struct v4l2_ctrl *ctrl)
 		case VISP_CID_DMSC_ALL_SUB_ENABLE:
 			ret = visp_g_ctrl_event(isp_dev, isp_dev->ctrl_pad, ctrl);
 			break;
+
+		case VISP_CID_DMSC_RESET:
+			return 0;
 
 		default:
 			dev_err(isp_dev->dev, "unknow v4l2 ctrl id %d\n", ctrl->id);

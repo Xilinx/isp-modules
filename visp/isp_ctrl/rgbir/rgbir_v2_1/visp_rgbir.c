@@ -119,7 +119,6 @@ static int visp_rgbir_g_ctrl(struct v4l2_ctrl *ctrl)
 			break;
 
 		case VISP_CID_RGBIR_RESET:
-			memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
 			return 0;
 
 		default:

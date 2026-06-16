@@ -120,7 +120,6 @@ static int visp_bls_g_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 
 	case VISP_CID_BLS_RESET:
-		memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
 		return 0;
 
 	default:
