@@ -97,8 +97,10 @@ RESULT vsi_cam_device_un_register_awb_lib(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_UNREGISTER_AWB_LIB, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 
@@ -141,8 +143,10 @@ RESULT vsi_cam_device_awb_disable(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_AWB_DISABLE, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 

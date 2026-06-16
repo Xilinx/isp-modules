@@ -105,8 +105,10 @@ RESULT vsi_cam_device_sensor_open(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_SENSOR_OPEN, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 
@@ -162,8 +164,10 @@ RESULT vsi_cam_device_sensor_drv_handle_register(
 	    isp_dev, APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_REG, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 	return result;
@@ -207,8 +211,10 @@ vsi_cam_device_sensor_drv_handle_un_register(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_SENSOR_DRV_HANDLE_UNREG, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 	return result;
@@ -252,8 +258,10 @@ RESULT vsi_cam_device_sensor_close(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_SENSOR_CLOSE, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 	kfree(packet);
 	return result;
 }

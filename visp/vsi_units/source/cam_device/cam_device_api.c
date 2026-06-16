@@ -203,8 +203,10 @@ RESULT vsi_cam_device_destroy(struct visp_dev *isp_dev,
 	    xlnx_send_mbox_acked_cmd(isp_dev, APU_2_RPU_MB_CMD_DESTORY, packet,
 				     packet->payload_size + payload_extra_size,
 				     isp_dev->isp_rpu, MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 	if (p_cam_dev_ctx->isp_vt_id < VISP_INPUT_INSTANCES)
@@ -267,8 +269,10 @@ RESULT vsi_cam_device_set_out_format(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_SET_OUT_FORMAT, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 	return result;
@@ -323,8 +327,10 @@ RESULT vsi_cam_device_set_in_format(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_SET_IN_FORMAT, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 
@@ -382,8 +388,10 @@ RESULT vsi_cam_device_connect_camera(
 	    isp_dev, APU_2_RPU_MB_CMD_CONNECT_CAMERA, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 
@@ -427,8 +435,10 @@ RESULT vsi_cam_device_disconnect_camera(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_DISCONNECT_CAMERA, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 	return result;
@@ -477,8 +487,10 @@ RESULT vsi_cam_device_start_streaming(cam_device_config_t *p_cam_config,
 	    isp_dev, APU_2_RPU_MB_CMD_START_STREAMING, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 	return result;
@@ -531,8 +543,10 @@ vsi_cam_device_set_path_streaming(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_SET_PATH_STREAMING, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 	return result;
@@ -700,8 +714,10 @@ RESULT vsi_cam_device_free_res_memory(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_FREE_RES_MEMORY, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 	cam_device_free_instance(h_cam_device, p_cam_dev_ctx->isp_hw_id);

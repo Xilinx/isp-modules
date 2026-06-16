@@ -598,8 +598,14 @@ int media_isp_device_deque(struct visp_dev *isp_dev, uint8_t port)
 			dev_err(isp_dev->dev,
 				"VsiCamDeviceEnQueBuffer failed %d", ret_val);
 			ret_val = VSI_ERR_TIMEOUT;
+			kfree(p_media_buf->p_meta_data);
+			kfree(p_media_buf);
 			return ret_val;
 		}
+
+		kfree(p_media_buf->p_meta_data);
+		kfree(p_media_buf);
+
 	}
 	return ret_val;
 }

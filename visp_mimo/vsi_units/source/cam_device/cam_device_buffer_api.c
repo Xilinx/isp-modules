@@ -115,8 +115,10 @@ RESULT vsi_cam_device_init_buf_chain(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_INIT_BUF_CHAIN, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 	return result;
@@ -164,8 +166,10 @@ RESULT vsi_cam_device_de_init_buf_chain(struct visp_dev *isp_dev,
 	    isp_dev, APU_2_RPU_MB_CMD_DEINIT_BUF_CHAIN, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 
@@ -244,8 +248,10 @@ RESULT vsi_cam_device_create_buf_pool(
 	    isp_dev, APU_2_RPU_MB_CMD_CREATE_BUFFER_POOL, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 
@@ -284,15 +290,19 @@ RESULT vsi_cam_device_destroy_buf_pool(struct visp_dev *isp_dev,
 	memcpy(p_data, &buf_id, sizeof(cam_device_buf_chain_id_t));
 	packet->payload_size += sizeof(cam_device_buf_chain_id_t);
 
-	if (packet->payload_size > MAX_ITEM)
+	if (packet->payload_size > MAX_ITEM) {
+		kfree(packet);
 		return RET_OUTOFRANGE;
+	}
 
 	result = xlnx_send_mbox_acked_cmd(
 	    isp_dev, APU_2_RPU_MB_CMD_DESTORY_BUFFER_POOL, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 
@@ -333,15 +343,19 @@ RESULT vsi_cam_device_setup_buf_mgmt(struct visp_dev *isp_dev,
 	packet->payload_size += sizeof(cam_device_buf_chain_id_t);
 	p_data += sizeof(cam_device_buf_chain_id_t);
 
-	if (packet->payload_size > MAX_ITEM)
+	if (packet->payload_size > MAX_ITEM) {
+		kfree(packet);
 		return RET_OUTOFRANGE;
+	}
 
 	result = xlnx_send_mbox_acked_cmd(
 	    isp_dev, APU_2_RPU_MB_CMD_SETUP_BUF_MGMT, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 
@@ -388,14 +402,18 @@ RESULT vsi_cam_device_release_buf_mgmt(struct visp_dev *isp_dev,
 	memcpy(p_data, &buf_id, sizeof(cam_device_buf_chain_id_t));
 	packet->payload_size += sizeof(cam_device_buf_chain_id_t);
 
-	if (packet->payload_size > MAX_ITEM)
+	if (packet->payload_size > MAX_ITEM) {
+		kfree(packet);
 		return RET_OUTOFRANGE;
+	}
 	result = xlnx_send_mbox_acked_cmd(
 	    isp_dev, APU_2_RPU_MB_CMD_RELEASE_BUF_MGMT, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
+		kfree(packet);
 		return RET_FAILURE;
+	}
 
 	kfree(packet);
 
@@ -422,12 +440,16 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 		return -ENOMEM;
 	}
 	p_cam_dev_ctx = (cam_device_context_t *)h_cam_device;
-	if (NULL == p_cam_dev_ctx || NULL == *p_media_buf)
+	if (NULL == p_cam_dev_ctx || NULL == *p_media_buf) {
+		kfree(*p_media_buf);
 		return RET_NULL_POINTER;
+	}
+
 	p_cam_dev_ctx->cookie++;
 
 	packet = kzalloc(sizeof(payload_packet), GFP_KERNEL);
 	if (!packet) {
+		kfree(*p_media_buf);
 		dev_err(isp_dev->dev, "FAILED TO KZALLOC %s %d\n", __func__,
 			__LINE__);
 		return -ENOMEM;
@@ -494,8 +516,12 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 	 * p_data += 1024;
 	 */
 
-	if (packet->payload_size > MAX_ITEM)
+	if (packet->payload_size > MAX_ITEM) {
+		kfree((*p_media_buf)->p_meta_data);
+		kfree(packet);
+		kfree(*p_media_buf);
 		return RET_OUTOFRANGE;
+	}
 	xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_DEQUE_BUFFER, packet,
 				packet->payload_size + payload_extra_size,
 				isp_dev->isp_rpu, MBOX_CORE_APU);
@@ -663,16 +689,19 @@ RESULT vsi_cam_device_en_que_buffer(struct visp_dev *isp_dev,
 	packet->payload_size += sizeof(uint32_t);
 	p_data += sizeof(uint32_t);
 
-	if (packet->payload_size > MAX_ITEM)
+	if (packet->payload_size > MAX_ITEM) {
+		kfree(packet);
 		return RET_OUTOFRANGE;
+	}
 
 	result = xlnx_send_mbox_acked_cmd(
 	    isp_dev, APU_2_RPU_MB_CMD_ENQUE_BUFFER, packet,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
-	if (result != RET_SUCCESS)
+	if (result != RET_SUCCESS) {
 		dev_err(isp_dev->dev, "%s:%d enque_buffer failed, result=%d\n",
 			__func__, __LINE__, result);
+	}
 
 	kfree(packet);
 	return result;
@@ -718,8 +747,10 @@ RESULT vsi_cam_device_get_buffer_size(struct visp_dev *isp_dev,
 	memcpy(p_data, p_buf_size, sizeof(uint32_t));
 	packet->payload_size += sizeof(uint32_t);
 
-	if (packet->payload_size > MAX_ITEM)
+	if (packet->payload_size > MAX_ITEM) {
+		kfree(packet);
 		return RET_OUTOFRANGE;
+	}
 
 	xlnx_send_mbox_data_cmd(isp_dev, APU_2_RPU_MB_CMD_GET_BUFFER_SIZE,
 				packet,
@@ -728,6 +759,7 @@ RESULT vsi_cam_device_get_buffer_size(struct visp_dev *isp_dev,
 
 	memcpy(p_buf_size, p_data, sizeof(uint32_t));
 	if ((*p_buf_size) == 0) {
+		kfree(packet);
 		dev_err(isp_dev->dev, "INVALID BUF SIZE = 0 %d\n", -EINVAL);
 		return -EINVAL;
 	}

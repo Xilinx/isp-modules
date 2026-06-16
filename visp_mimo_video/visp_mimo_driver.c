@@ -547,6 +547,7 @@ void visp_mimo_device_run(void *priv)
 		dev_err(device->isp_dev->dev,
 			"MediaIspDeviceDqbuf failed with error %d\n",
 			ret);
+		kfree(p_media_buffer->p_meta_data);
 		kfree(p_media_buffer);
 		goto stream_off;
 	}
