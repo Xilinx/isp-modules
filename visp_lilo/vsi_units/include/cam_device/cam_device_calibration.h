@@ -78,8 +78,7 @@ extern "C" {
 typedef enum cam_device_door_type_e {
 	CAMDEV_DOOR_TYPE_OUTDOOR = 0, /**< Scene type, outdoor */
 	CAMDEV_DOOR_TYPE_INDOOR,      /**< Scene type, indoor */
-	CAMDEV_DOOR_TYPE_MAX,
-	DUMMY_CAMDEV_DOOR_TYPE = 0xDEADFEED
+	CAMDEV_DOOR_TYPE_MAX
 } cam_device_door_type_t;
 
 /*****************************************************************************/
@@ -91,8 +90,7 @@ typedef enum cam_device_door_type_e {
 typedef enum cam_device_calib_awb_type_e {
 	CAMDEV_CALIB_AWB_TYPE_MANUAL = 0, /**< Manual AWB type */
 	CAMDEV_CALIB_AWB_TYPE_AUTO,	  /**< Auto AWB type */
-	CAMDEV_CALIB_AWB_TYPE_MAX,
-	DUMMY_CALIB_AWB_TYPE = 0xDEADFEED
+	CAMDEV_CALIB_AWB_TYPE_MAX
 } cam_device_calib_awb_type_t;
 
 /*****************************************************************************/
@@ -109,8 +107,7 @@ typedef enum cam_device_calib_illum_type_e {
 	CAMDEV_CALIB_ILLUM_TYPE_F11,   /**< Illumination type: F11 */
 	CAMDEV_CALIB_ILLUM_TYPE_F12,   /**< Illumination type: F12 */
 	CAMDEV_CALIB_ILLUM_TYPE_H,     /**< Illumination type: H */
-	CAMDEV_CALIB_ILLUM_TYPE_MAX,
-	DUMMY_CALIB_ILLUM_TYPE = 0xDEADFEED
+	CAMDEV_CALIB_ILLUM_TYPE_MAX
 } cam_device_calib_illum_type_t;
 
 /******************************************************************************/

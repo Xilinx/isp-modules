@@ -122,6 +122,17 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
 		return -ENOMEM;
 	}
 
+	/* save instanceid and port map */
+	if (virtual_id < VISP_INPUT_INSTANCES &&
+	    p_cam_config->work_cfg.mode_cfg.mcm.port_id >= 1)
+		isp_dev->instanceid_port_map[virtual_id] =
+				p_cam_config->work_cfg.mode_cfg.mcm.port_id - 1;
+	else
+		dev_warn(isp_dev->dev,
+			 "%s: skip invalid instanceid_port_map write (virtual_id=%u port_id=%u)\n",
+			 __func__, virtual_id,
+			 p_cam_config->work_cfg.mode_cfg.mcm.port_id);
+
 	packet->cookie = 0;
 	packet->type = CMD;
 	packet->payload_size = 0;
@@ -196,6 +207,8 @@ RESULT vsi_cam_device_destroy(struct visp_dev *isp_dev,
 		return RET_FAILURE;
 
 	kfree(packet);
+	if (p_cam_dev_ctx->isp_vt_id < VISP_INPUT_INSTANCES)
+		isp_dev->instanceid_port_map[p_cam_dev_ctx->isp_vt_id] = ~0U;
 	cam_device_free_instance(h_cam_device, p_cam_dev_ctx->isp_hw_id);
 
 	return result;
@@ -479,7 +492,6 @@ vsi_cam_device_set_path_streaming(struct visp_dev *isp_dev,
 	RESULT result = RET_SUCCESS;
 	uint8_t *p_data = NULL;
 	payload_packet *packet = NULL;
-	int path_enable = -1;
 
 	cam_device_context_t *p_cam_dev_ctx =
 	    (cam_device_context_t *)h_cam_device;
@@ -502,15 +514,13 @@ vsi_cam_device_set_path_streaming(struct visp_dev *isp_dev,
 
 	p_data = packet->payload;
 
-	*(packet->payload) = p_cam_dev_ctx->instance_id;
-	packet->payload_size += sizeof(uint32_t);
+	memcpy(p_data, &p_cam_dev_ctx->instance_id, sizeof(uint32_t));
 	p_data += sizeof(uint32_t);
-
-	path_enable = p_config->out_path_enable;
-	*(p_data) = path_enable;
-
 	packet->payload_size += sizeof(uint32_t);
-	p_data += sizeof(uint32_t);
+
+	memcpy(p_data, p_config, sizeof(cam_device_path_streaming_cfg_t));
+	packet->payload_size += sizeof(cam_device_path_streaming_cfg_t);
+	p_data += sizeof(cam_device_path_streaming_cfg_t);
 
 	if (packet->payload_size > MAX_ITEM) {
 		kfree(packet);

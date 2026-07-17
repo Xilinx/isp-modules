@@ -122,6 +122,17 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
 		return -ENOMEM;
 	}
 
+	/* save instanceid and port map */
+	if (virtual_id < VISP_INPUT_INSTANCES &&
+	    p_cam_config->work_cfg.mode_cfg.mcm.port_id >= 1)
+		isp_dev->instanceid_port_map[virtual_id] =
+				p_cam_config->work_cfg.mode_cfg.mcm.port_id - 1;
+	else
+		dev_warn(isp_dev->dev,
+			 "%s: skip invalid instanceid_port_map write (virtual_id=%u port_id=%u)\n",
+			 __func__, virtual_id,
+			 p_cam_config->work_cfg.mode_cfg.mcm.port_id);
+
 	packet->cookie = 0;
 	packet->type = CMD;
 	packet->payload_size = 0;
@@ -197,6 +208,8 @@ RESULT vsi_cam_device_destroy(struct visp_dev *isp_dev,
 		return RET_FAILURE;
 
 	kfree(packet);
+	if (p_cam_dev_ctx->isp_vt_id < VISP_INPUT_INSTANCES)
+		isp_dev->instanceid_port_map[p_cam_dev_ctx->isp_vt_id] = ~0U;
 	cam_device_free_instance(h_cam_device, p_cam_dev_ctx->isp_hw_id);
 
 	return result;

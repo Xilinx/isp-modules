@@ -166,8 +166,7 @@ typedef enum _BUFF_MODE_ {
 	BUFF_MODE_INVALID = 0,
 	BUFF_MODE_USRPTR = 1,
 	BUFF_MODE_RESMEM = 2,
-	BUFF_MODE_MAX,
-	DUMMMY_BUFF_MODE = 0xDEADFEED,
+	BUFF_MODE_MAX
 } buff_mode;
 
 #define MEDIA_BUF_ALIGN(buf, align) (((buf) + ((align)-1U)) & ~((align)-1U))
@@ -191,9 +190,8 @@ typedef enum pic_buf_mi_swap_e {
 	PIC_BUF_MI_SWAP_DOUBLE_WORDS =
 	    4,				/**< The value of swap double words. */
 	PIC_BUF_MI_SWAP_FOUR_WORDS = 8, /**< The value of swap four words. */
-	PIC_BUF_MI_SWAP_MAX, /**< upper border (only for an internal evaluation)
+	PIC_BUF_MI_SWAP_MAX /**< upper border (only for an internal evaluation)
 			      */
-	DUMMY_PIC_BUF_MI_SWAP = 0xDEADFEED,
 } pic_buf_mi_data_swap_t;
 
 /*****************************************************************************/
@@ -211,6 +209,27 @@ typedef union pic_buf_mi_swap_u {
 	} yuv_swap;
 	pic_buf_mi_data_swap_t raw_swap;
 } pic_buf_mi_swap_t;
+
+/*****************************************************************************/
+/**
+ * @brief   Structure type to specify the raw and yuv buffer offset control.
+ *
+ * @note    Offset counter init value.
+ *
+ *****************************************************************************/
+typedef struct pic_buf_mi_offset_s {
+	struct {
+		uint32_t y;
+		uint32_t u;
+		uint32_t v;
+	} yuv_offset;
+	uint32_t raw_offset;
+} pic_buf_mi_offset_t;
+
+typedef struct pic_buf_mi_stride_s {
+	uint32_t y;
+	uint32_t raw;
+} pic_buf_mi_stride_t;
 
 typedef struct _buf_identity_ {
 	uint32_t buff_size; // common: biffer size
@@ -281,8 +300,7 @@ typedef enum pic_buf_type_e {
 	PIC_BUF_TYPE_YCbCr32 = 22,
 	// PIC_BUF_TYPE_YCbCr400 = 0x33, // "Black&White"
 	PIC_BUF_TYPE_RGB32 = 23,
-	PIC_BUF_TYPE_DPCC32 = 24,
-	DUMMY_PIC_BUF_TYPE = 0xDEADFEED,
+	PIC_BUF_TYPE_DPCC32 = 24
 } pic_buf_type_t;
 
 /*****************************************************************************/
@@ -299,8 +317,7 @@ typedef enum pic_buf_rdce_type_e {
 	PIC_BUF_RDCE_BIT_DEPTH_RAW12,
 	PIC_BUF_RDCE_BIT_DEPTH_RAW14,
 	PIC_BUF_RDCE_BIT_DEPTH_RAW16,
-	PIC_BUF_RDCE_BIT_DEPTH_MAX,
-	DUMMY_PIC_BUF_RDCE_BIT_DEPTH = 0xDEADFEED,
+	PIC_BUF_RDCE_BIT_DEPTH_MAX
 } pic_buf_rdce_type_t;
 
 /*****************************************************************************/
@@ -316,8 +333,7 @@ typedef enum pic_buf_rdce_bayer_pat_e {
 	PIC_BUF_RDCE_BPT_GRBG, /** < Bayer pattern GRBG. */
 	PIC_BUF_RDCE_BPT_GBRG, /** < Bayer pattern GBRG. */
 	PIC_BUF_RDCE_BPT_BGGR, /** < Bayer pattern BGGR. */
-	PIC_BUF_RDCE_BPT_MAX,
-	DUMMY_PIC_BUF_RDCE_BPT = 0xDEADFEED,
+	PIC_BUF_RDCE_BPT_MAX
 } pic_buf_rdce_bayer_pat_t;
 
 /*****************************************************************************/
@@ -373,8 +389,7 @@ typedef enum pic_buf_layout_e {
 	// PIC_BUF_TYPE_RGB888:    r: R0 R1 R2 R3...;  g:  G0 G1 G2 G3...; b: B0
 	// B1 B2 B3... PIC_BUF_TYPE_RGB666:    r: {00,R0[5:0]}...; g:
 	// {00,G0[5:0]}...;    b:  {00,B0[5:0]}...
-	PIC_BUF_LAYOUT_META_DATA = 0x40,
-	DUMMY_PIC_BUF_LAYOUT = 0xDEADFEED,
+	PIC_BUF_LAYOUT_META_DATA = 0x40
 } pic_buf_layout_t;
 
 /*****************************************************************************/
@@ -394,8 +409,7 @@ typedef enum pic_buf_align_e {
 	    1,			     // pixel data  aligned with double word.
 	PIC_BUF_DATA_ALIGN_WORD = 2, // pixel data  aligned with word.
 	PIC_BUF_DATA_ALIGN_16BIT_MODE = 2, // pixel data  aligned with 16 bit.
-	PIC_BUF_DATA_ALIGN_MODE_MAX,
-	DUMMY_PIC_BUF_DATA_ALIGN_MODE = 0xDEADFEED,
+	PIC_BUF_DATA_ALIGN_MODE_MAX
 } pic_buf_align_t;
 
 typedef enum pic_buf_yuvbit_e {
@@ -403,8 +417,7 @@ typedef enum pic_buf_yuvbit_e {
 	PIC_BUF_DATA_YUV_8_BIT = 0,  //  yuv pixel data 8 bit
 	PIC_BUF_DATA_YUV_10_BIT = 1, // yuv pixel data 10 bit
 	PIC_BUF_DATA_YUV_12_BIT = 2, // yuv pixel data 12 bit
-	PIC_BUF_DATA_YUV_BIT_MAX,
-	DUMMY_PIC_BUF_DATA_YUV_BIT = 0xDEADFEED,
+	PIC_BUF_DATA_YUV_BIT_MAX
 } pic_buf_yuvbit_t;
 
 /*****************************************************************************/
@@ -421,8 +434,7 @@ typedef enum pic_buf_yuv_order_e {
 	PIC_BUF_CHANNEL_ORDER_VYU = 3, /** 3: VYU or BRG */
 	PIC_BUF_CHANNEL_ORDER_UVY = 4, /** 4: UVY or GBR */
 	PIC_BUF_CHANNEL_ORDER_VUY = 5, /** 5: VUY or BGR */
-	PIC_BUF_CHANNEL_ORDER_MAX = 6,
-	DUMMY_PIC_BUF_CHANNEL_ORDER = 0xDEADFEED,
+	PIC_BUF_CHANNEL_ORDER_MAX = 6
 } pic_buf_yuv_order_t;
 
 /*****************************************************************************/
@@ -434,8 +446,7 @@ typedef enum pic_buf_loss_mode_e {
 	PIC_BUF_LOSS_MODE_INVALID = -1, /**< Invalid loss mode*/
 	PIC_BUF_LOSS_LESS_MODE,		/**< lossless mode */
 	PIC_BUF_LOSSY_MODE,		/**< lossy mode */
-	PIC_BUF_LOSS_MODE_MAX,
-	DUMMY_PIC_BUF_LOSS_MODE = 0xDEADFEED,
+	PIC_BUF_LOSS_MODE_MAX
 } pic_buf_loss_mode_t;
 
 /*******************************************************************************
@@ -484,6 +495,72 @@ typedef struct pic_buf_plane_s {
 
 #define PIC_EXP_NUM_MAX 4 /**< Maximum exposure number of image*/
 
+typedef struct meta_data_raw_channel_float_s {
+	float red_channel;
+	float gr_channel;
+	float gb_channel;
+	float blue_channel;
+} meta_data_raw_channel_float_t;
+
+typedef enum meta_dat_exposure_frame_index_e {
+	META_EXPOSURE_LINEAR_FRAME       = 0,
+	META_EXPOSURE_LONG_FRAME         = 0,
+	META_EXPOSURE_SHORT_FRAME,
+	META_EXPOSURE_VERY_SHORT_FRAME,
+	META_EXPOSURE_EXTRA_SHORT_FRAME,
+	META_EXPOSURE_FIFTH_SHORT_FRAME,
+	META_EXPOSURE_COMBINED_FRAME,
+	META_EXPOSURE_FRAME_MAX
+} meta_dat_exposure_frame_index_t;
+
+typedef enum meta_data_lux_index_sensor_mode_e {
+	META_SENSOR_MODE_LINEAR = 0,   /**<  linear mode */
+	META_SENSOR_MODE_NATIVE_2DOL,
+	META_SENSOR_MODE_NATIVE_3DOL,
+	META_SENSOR_MODE_NATIVE_4DOL,
+	META_SENSOR_MODE_STITCHING_2DOL,
+	META_SENSOR_MODE_STITCHING_3DOL,
+	META_SENSOR_MODE_STITCHING_4DOL,
+	META_SENSOR_MODE_MAX
+} meta_data_lux_index_sensor_mode_t;
+
+typedef struct meta_data_integer_range_s {
+	uint32_t  max;         /**< Maximum value*/
+	uint32_t  min;         /**< Minimum value*/
+	uint32_t  step;        /**< Step value */
+} meta_data_integer_range_t;
+
+typedef struct meta_data_float_range_s {
+	float  max;         /**< Maximum value*/
+	float  min;         /**< Minimum value*/
+	float  step;        /**< Step value */
+} meta_data_float_range_t;
+
+#define META_CCM_MATRIX_NUM 9U
+#define META_CCM_OFFSET_NUM 3U
+#define META_CCT_ILLUPROFILE_NUM 10U
+#define META_CCT_CONFIG_PROFILE_NAME 20U
+
+/******************************************************************************/
+/**
+ * @brief   Cam Engine ccm manual configuration structure.
+ *
+ *****************************************************************************/
+typedef struct meta_data_ccm_config_s {
+	float ccm_matrix[META_CCM_MATRIX_NUM]; /**< Color correction matrix coefficient */
+	float ccm_offset[META_CCM_OFFSET_NUM]; /**< Color offset coefficient */
+} meta_data_ccm_config_t;
+
+/******************************************************************************/
+/**
+ * @brief   Cam Engine cct configuration structure.
+ *
+ *****************************************************************************/
+typedef struct meta_data_cct_config_s {
+	char cct_name[META_CCT_CONFIG_PROFILE_NAME];   /**< Color correction matrix coefficient*/
+	float cct_weight;   /**< Color offset coefficient*/
+} meta_data_cct_config_t;
+
 /*****************************************************************************/
 /**
  *          pic_buf_metadata_info_t
@@ -492,22 +569,46 @@ typedef struct pic_buf_plane_s {
  *
  *****************************************************************************/
 typedef struct pic_buf_metadata_info_s {
-	uint64_t frame_count;
+	uint32_t frame_count;
 	uint64_t timestamp_sof; // timestamp for start of the frame
 	uint64_t timestamp_eof; // timestamp for end of the frame
 	float sensor_gain[PIC_EXP_NUM_MAX];
 	/**< In linear mode or native HDR mode:\n sensor_gain[0] is image gain\n
-	 In stitch HDR mode:\n
-		sensor_gain[0]: L image gain\n
-		sensor_gain[1]: S image gain\n
-		sensor_gain[2]: VS image gain\n
-		sensor_gain[3]: ES image gain */
+	 * In stitch HDR mode:\n
+	 *	sensor_gain[0]: L image gain\n
+	 *	sensor_gain[1]: S image gain\n
+	 *	sensor_gain[2]: VS image gain\n
+	 *	sensor_gain[3]: ES image gain
+	 */
 	float expo_info[PIC_EXP_NUM_MAX]; // us
 	/**< In linear mode or native HDR mode:\n expo_info[0] is image
-	 integration time\n In stitch HDR mode:\n expo_info[0]: L image
-	 integration time\n expo_info[1]: S image integration time\n
-	 expo_info[2]: VS image integration time\n
-	 expo_info[3]: ES image integration time */
+	 * integration time\n In stitch HDR mode:\n expo_info[0]: L image
+	 * integration time\n expo_info[1]: S image integration time\n
+	 * expo_info[2]: VS image integration time\n
+	 * expo_info[3]: ES image integration time
+	 */
+	meta_data_ccm_config_t ccm_config;
+	meta_data_cct_config_t cct_config[META_CCT_ILLUPROFILE_NUM];
+	meta_data_raw_channel_float_t sensor_wb_gain[META_EXPOSURE_FRAME_MAX];
+	meta_data_raw_channel_float_t isp_wb_gain;
+	meta_data_raw_channel_float_t isp_dgain;
+	uint32_t integration_time[META_EXPOSURE_FRAME_MAX];
+	meta_data_integer_range_t integration_time_range[META_EXPOSURE_FRAME_MAX];
+	float analog_gain[META_EXPOSURE_FRAME_MAX];    /**< Analog gain */
+	meta_data_float_range_t analog_gain_range[META_EXPOSURE_FRAME_MAX];
+	float digital_gain[META_EXPOSURE_FRAME_MAX];    /**< Digital gain */
+	meta_data_float_range_t digital_gain_range[META_EXPOSURE_FRAME_MAX];
+
+	uint8_t exposure_num;    /**< The number of exposures */
+	uint32_t bit_width;
+	uint32_t width;
+	uint32_t height;
+	uint8_t bayer_pattern;
+	meta_data_lux_index_sensor_mode_t sensor_mode;
+	float hdr_ratio;
+	float total_gain;
+	float lux_index;
+	float edr_value;
 } pic_buf_metadata_info_t;
 
 #define METADATA_MAX_NUM 3
@@ -568,9 +669,12 @@ typedef struct pic_buf_meta_data_s {
 	//  buf_identity             buf_id;
 	pic_buf_cmp_info_t
 	    compress_info; /**< comperss information for decompress*/
+	uint32_t               crc_value;     /**< crc value for isp when vi+isp*/
 	pic_buf_metadata_info_t meta_info;
 	pic_buf_yuv_order_t yuv_order;
 	pic_buf_mi_swap_t swap; // MI output data swap
+	pic_buf_mi_offset_t        buf_fffset;         // MI output buffer offset counter
+	pic_buf_mi_stride_t        buf_stride;         // MI output buffer stride
 	union Data_u {		// the type and layout dependent meta data
 		struct data_s { // DATA
 			uint32_t p_data;
@@ -604,7 +708,6 @@ typedef struct pic_buf_meta_data_s {
 			struct semiplanar_s {
 				pic_buf_plane_t y;
 				pic_buf_plane_t cb_cr;
-				uint8_t bit_width;
 			} semiplanar;
 			struct planar_YUV_s {
 				pic_buf_plane_t y;

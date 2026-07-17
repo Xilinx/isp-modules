@@ -94,9 +94,7 @@ typedef enum cam_device_buf_chain_id_e {
 	    6, /**< ISP input read DMA path buffer chain index*/
 	CAMDEV_BUFCHAIN_RETIMING =
 	    7, /**< ISP input retiming DMA path buffer chain index*/
-	CAMDEV_BUFCHAIN_MAX,
-	DUMMY_CAMDEV_BUFCHAIN =
-	    0xDEADFEED /**< Maximum path buffer chain index */
+	CAMDEV_BUFCHAIN_MAX
 } cam_device_buf_chain_id_t;
 
 /******************************************************************************/

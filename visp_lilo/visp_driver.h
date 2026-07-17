@@ -102,6 +102,8 @@
 /* Per-port per-chain enqueue workqueues (MP/SP1 only) */
 #define ENQ_WQ_CHAIN_MAX 2
 
+#define VISP_INPUT_INSTANCES 16
+
 enum visp_port_pad_e {
 	VISP_PORT_PAD_SINK = 0,
 	VISP_PORT_PAD_SOURCE_MP,
@@ -371,6 +373,7 @@ struct visp_dev {
 	unsigned int out_fmt;
 	unsigned int cap_fmt;
 	unsigned int isp_dq_out_index;
+	unsigned int instanceid_port_map[VISP_INPUT_INSTANCES];
 	void *extended_struct;
 
 	/* Entry in the module-wide visp_dev_global_list (for cross-ISP subdev lookup).

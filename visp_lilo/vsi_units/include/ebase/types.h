@@ -139,8 +139,7 @@ typedef double float64_t;
 typedef long double float128_t;
 typedef enum {
 	BOOL_FALSE = 0,
-	BOOL_TRUE = (!BOOL_FALSE),
-	DUMMY_BOOL = 0xDEADFEED
+	BOOL_TRUE = (!BOOL_FALSE)
 } bool_t;
 
 #define UNUSED_PARAM(unref_param) ((void)(unref_param));

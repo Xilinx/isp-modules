@@ -67,7 +67,6 @@ extern uint32_t cookie;
 #include <linux/ktime.h>
 #include <linux/time.h>
 #include <linux/timekeeping.h>
-#define APU_META_DATA_SIZE 1024
 
 RESULT vsi_cam_device_init_buf_chain(struct visp_dev *isp_dev,
 				     cam_device_handle_t h_cam_device,
@@ -437,7 +436,7 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 	 * size has allocated with 1024
 	 */
 	(*p_media_buf)->p_meta_data =
-	    kzalloc(APU_META_DATA_SIZE, GFP_KERNEL);
+	    kzalloc(sizeof(pic_buf_meta_data_t), GFP_KERNEL);
 
 	packet->cookie = p_cam_dev_ctx->cookie;
 	packet->type = CMD;
@@ -536,9 +535,9 @@ RESULT vsi_cam_device_de_que_buffer(struct visp_dev *isp_dev,
 	p_data += sizeof(uint32_t);
 
 	memcpy((*p_media_buf)->p_meta_data, p_data,
-	       APU_META_DATA_SIZE);
-	packet->payload_size += APU_META_DATA_SIZE;
-	p_data += APU_META_DATA_SIZE;
+	       sizeof(pic_buf_meta_data_t));
+	packet->payload_size += sizeof(pic_buf_meta_data_t);
+	p_data += sizeof(pic_buf_meta_data_t);
 
 #if 0
 	p_data += (sizeof(uint32_t) + sizeof(cam_device_buf_chain_id_t));
