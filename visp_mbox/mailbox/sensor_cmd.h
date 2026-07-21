@@ -566,10 +566,24 @@ typedef struct payload_template {
 	payload_type type;
 	uint32_t cookie;
 	uint32_t payload_size;
-	uint32_t reserved[1];
+	uint32_t seq_counter;
 	response_field_t resp_field;
 	uint8_t payload[MAX_ITEM];
 } payload_packet;
+
+/**
+ * @brief Used byte count of payload_packet (fixed header + payload_data)
+ */
+static inline u32 visp_mbox_payload_used_size(const payload_packet *pkt)
+{
+	return (u32)(sizeof(payload_packet) - MAX_ITEM + pkt->payload_size);
+}
+
+static inline void visp_mbox_set_message_size(mbox_post_msg *msg,
+					      const payload_packet *pkt)
+{
+	msg->size = visp_mbox_payload_used_size(pkt);
+}
 /*
 struct resource_table  {
 	uint8_t rpu0_ready;

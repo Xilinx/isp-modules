@@ -170,6 +170,7 @@ struct rpu_dev {
 	struct list_head rx_free_list;  /* Free RX buffers */
 	spinlock_t tx_free_lock;        /* Protects TX free-list */
 	spinlock_t rx_free_lock;        /* Protects RX free-list */
+	spinlock_t seq_lock;
 	struct list_head node;
 	struct kref refcount;
 	struct visp_dev *isp_dev[MAX_NO_ISP];
@@ -192,6 +193,9 @@ struct rpu_dev {
 	struct completion init_fw_done;
 	int init_fw_status;
 	bool init_fw_synced;
+	u32 inbound_seq;
+	u32 outbound_seq;
+	bool seq_resync_pending;
 };
 
 /*

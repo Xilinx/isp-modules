@@ -53,16 +53,20 @@
  *****************************************************************************/
 
 #include "mbox_cmd.h"
+#include "mbox_crc.h"
+#include "mbox_seq.h"
 #include "mbox_api.h"
 #include "mbox_error_code.h"
 #include <linux/gfp.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/stddef.h>
 
 #include "sensor_cmd.h"
 #include <linux/kernel.h>
 #include <linux/ktime.h>
+#include <linux/string.h>
 
 #include "visp_driver.h"
 #include "visp_mbox_driver.h"
@@ -87,6 +91,91 @@ struct response_packet {
 	u32 error_subcode;
 };
 
+static bool visp_mbox_integrity_enable;
+module_param_named(mbox_integrity, visp_mbox_integrity_enable, bool, 0644);
+MODULE_PARM_DESC(mbox_integrity,
+		 "Enable mailbox CRC-16 and sequence-counter "
+		 "integrity checks (default: disabled)");
+
+/*
+ * Checksum covers the header + seq_counter + payload, but everything before
+ * seq_counter (media_server_flags/checksum/timestamps/msg_id/size/type/
+ * cookie/payload_size) is already final at this point, so that portion can
+ * be digested outside write_lock. visp_mbox_prepare_integrity() below only
+ * has to stamp seq_counter and finish the CRC over the remainder. Note: the
+ * remainder still includes the actual payload bytes (up to MAX_PAYLOAD_SIZE),
+ * so this doesn't fully bound write_lock hold time for large commands - see
+ * review notes; fixing that further would require a payload_packet
+ * wire-format change coordinated with RPU firmware, which is out of scope
+ * here since firmware currently expects this field order.
+ */
+static size_t visp_mbox_integrity_prefix_len(void)
+{
+	return offsetof(mbox_post_msg, payload) +
+	       offsetof(payload_packet, seq_counter);
+}
+
+static u16 visp_mbox_prepare_integrity_prefix(const mbox_post_msg *msg)
+{
+	if (!visp_mbox_integrity_enable)
+		return 0;
+
+	return visp_mbox_crc16(msg, visp_mbox_integrity_prefix_len());
+}
+
+static void visp_mbox_prepare_integrity(struct rpu_dev *rpu, mbox_post_msg *msg,
+					u16 prefix_crc)
+{
+	size_t prefix_len, total_len;
+	payload_packet *pkt;
+
+	if (!visp_mbox_integrity_enable)
+		return;
+
+	pkt = (payload_packet *)msg->payload;
+	pkt->seq_counter = rpu->outbound_seq;
+
+	prefix_len = visp_mbox_integrity_prefix_len();
+	total_len = visp_mbox_checksum_size(msg);
+	msg->checksum = visp_mbox_crc16_update((const u8 *)msg + prefix_len,
+						total_len - prefix_len, prefix_crc);
+}
+
+static int visp_mbox_validate_integrity(struct rpu_dev *rpu, mbox_post_msg *msg)
+{
+	u32 received_checksum;
+	u16 calculated_checksum;
+	payload_packet *pkt;
+
+	if (!visp_mbox_integrity_enable)
+		return VPI_SUCCESS;
+
+	if (!msg || msg->size > MAX_PAYLOAD_SIZE) {
+		dev_err(rpu->dev,
+			"Mailbox invalid payload size from RPU%d: msg_id=%u size=%u max=%u\n",
+			rpu->rpu_id, msg ? msg->msg_id : 0, msg ? msg->size : 0,
+			MAX_PAYLOAD_SIZE);
+		return VPI_ERR_INVALID;
+	}
+
+	received_checksum = msg->checksum;
+	calculated_checksum = visp_mbox_calculate_checksum(msg);
+	if (received_checksum != calculated_checksum) {
+		dev_err(rpu->dev,
+			"Mailbox checksum mismatch from RPU%d: expected 0x%04x got 0x%04x for msg_id=%u crc_len=%u\n",
+			rpu->rpu_id, calculated_checksum, received_checksum,
+			msg->msg_id, (u32)visp_mbox_checksum_size(msg));
+		return VPI_ERR_CHECKSUM;
+	}
+
+	pkt = (payload_packet *)msg->payload;
+	if (msg->msg_id == MB_CMD_RES_SUCCESS &&
+	    pkt->resp_field.processed_cmdid == APU_2_RPU_MB_CMB_INIT_FIRMWARE)
+		visp_mbox_mark_seq_resync(rpu);
+
+	return visp_mbox_validate_seq(rpu, msg);
+}
+
 uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 		       uint32_t flag, mbox_core_id receiver_id,
 		       mbox_core_id core_id)
@@ -94,6 +183,7 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 	int ret;
 	mbox_post_msg *msg = NULL;
 	struct rpu_dev *rpu;
+	u16 integrity_prefix_crc = 0;
 
 	rpu = visp_mbox_get_rpu_dev(receiver_id + VISP_MBOX_RPU6);
 	if (!rpu)
@@ -104,10 +194,10 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 	if (!msg)
 		return -ENOMEM;
 
+	memset(msg, 0, sizeof(*msg));
 	msg->msg_id = cmd_id;
 	msg->media_server_flags = flag;
-	msg->size = sizeof(payload_packet) - MAX_ITEM +
-			((payload_packet *)struct_msg)->payload_size;
+	visp_mbox_set_message_size(msg, (payload_packet *)struct_msg);
 	if (msg->size > MAX_PAYLOAD_SIZE) {
 		dev_err(rpu->dev,
 			"%s: Message size %u exceeds maximum payload size %u\n",
@@ -120,16 +210,21 @@ uint32_t write_mboxcmd(uint32_t cmd_id, void *struct_msg, uint16_t size,
 	if (core_id != MBOX_CORE_APU)
 		core_id = MBOX_CORE_APU;
 
+	integrity_prefix_crc = visp_mbox_prepare_integrity_prefix(msg);
+
 	/*
-	 * LOCK SCOPE OPTIMIZATION: Only protect FIFO write operation.
-	 * Message preparation (memset, memcpy) done lock-free above to
-	 * reduce contention.
-	 * Critical section: ~1µs (FIFO write only) vs ~3-5µs (entire TX path).
-	 * Benefit: 6 ISPs at 30fps → reduced serialization from 15µs to 6µs.
+	 * LOCK SCOPE: stamp the sequence/checksum and enqueue atomically.
+	 * The sequence number is only committed (advanced) on a successful
+	 * enqueue so a dropped (FIFO-full) message does not leave a hole that
+	 * permanently desyncs the RPU's strict in-order validation.
 	 */
 	mutex_lock(&rpu->write_lock);
 
+	visp_mbox_prepare_integrity(rpu, msg, integrity_prefix_crc);
+
 	ret = vpi_mbox_post(rpu->apu_tx_ctrl, msg, receiver_id, NULL);
+	if (ret == VPI_SUCCESS && visp_mbox_integrity_enable)
+		visp_mbox_commit_outbound_seq(rpu);
 	mutex_unlock(&rpu->write_lock);
 
 	/* Return buffer to pool after hardware copies it */
@@ -176,6 +271,12 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		/* Other read errors */
 		pr_err("%s: vpi_mbox_read failed with error: %d\n", __func__,
 		       ret);
+		visp_free_rx_buffer(rpu, msg_copy);
+		return ret;
+	}
+
+	ret = visp_mbox_validate_integrity(rpu, msg_copy);
+	if (ret != VPI_SUCCESS) {
 		visp_free_rx_buffer(rpu, msg_copy);
 		return ret;
 	}

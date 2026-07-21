@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+// SPDX-License-Identifier: MIT
 /****************************************************************************
  *
  * The MIT License (MIT)
@@ -52,29 +52,60 @@
  *
  *****************************************************************************/
 
-#ifndef _MBOX_ERROR_CODE_H_
-#define _MBOX_ERROR_CODE_H_
+#include "mbox_crc.h"
 
-/** Error codes for VeriSilicon Platform interface(VPI) */
-typedef enum vpi_error {
-	VPI_ERR_GENERIC = -1, /**< Generic Error */
-	VPI_SUCCESS = 0,	  /**< Success */
-	VPI_ERR_INVALID,	  /**< Invalid input parameter */
-	VPI_ERR_NOMEM,		  /**< No memory error */
-	VPI_ERR_UNINITED,	  /**< Uninitialized error */
-	VPI_ERR_FULL,		  /**< Resource is full */
-	VPI_ERR_EMPTY,		  /**< Resource is empty */
-	VPI_ERR_IO,			  /**< IO error */
-	VPI_ERR_BUSY,		  /**< Device is busy */
-	VPI_ERR_TIMEOUT,	  /**< Timeout */
-	VPI_ERR_NODEVICE,	  /**< No device error */
-	VPI_ERR_LOST_CON,	  /**< Lost connection */
-	VPI_ERR_NO_ACK,		  /**< No ACK */
-	VPI_ERR_NOT_READY,	  /**< System or data is not ready */
-	VPI_ERR_LACK,		  /**< Not enough data */
-	VPI_ERR_IOCTL,
-	VPI_ERR_SEQ_MISMATCH,
-	VPI_ERR_CHECKSUM
-} vpi_error;
+#define MBOX_CRC16_POLYNOM 0x8005U
+#define MBOX_CRC16_MASK 0xFFFFU
 
-#endif // _MBOX_ERROR_CODE_H_
+static u16 visp_mbox_crc16_update_byte(u16 crc, u8 data)
+{
+	u16 value = crc ^ ((u16)data << 8);
+	int bit;
+
+	for (bit = 0; bit < 8; bit++) {
+		if (value & 0x8000U)
+			value = (value << 1) ^ MBOX_CRC16_POLYNOM;
+		else
+			value <<= 1;
+	}
+
+	return value & MBOX_CRC16_MASK;
+}
+
+u16 visp_mbox_crc16_update(const void *data, size_t len, u16 crc)
+{
+	const u8 *bytes = data;
+	size_t index;
+
+	for (index = 0; index < len; index++)
+		crc = visp_mbox_crc16_update_byte(crc, bytes[index]);
+
+	return crc;
+}
+
+u16 visp_mbox_crc16(const void *data, size_t len)
+{
+	return visp_mbox_crc16_update(data, len, MBOX_CRC16_INIT);
+}
+
+size_t visp_mbox_checksum_size(const mbox_post_msg *msg)
+{
+	return visp_mbox_message_used_size(msg);
+}
+
+u16 visp_mbox_calculate_checksum(mbox_post_msg *msg)
+{
+	u32 checksum = msg->checksum;
+	size_t crc_len;
+	u16 crc;
+
+	if (!msg || msg->size > MAX_PAYLOAD_SIZE)
+		return 0;
+
+	crc_len = visp_mbox_checksum_size(msg);
+	msg->checksum = 0;
+	crc = visp_mbox_crc16(msg, crc_len);
+	msg->checksum = checksum;
+
+	return crc;
+}

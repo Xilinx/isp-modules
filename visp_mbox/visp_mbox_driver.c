@@ -1334,6 +1334,10 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	/* Initialize spinlocks */
 	spin_lock_init(&rpu->tx_free_lock);
 	spin_lock_init(&rpu->rx_free_lock);
+	spin_lock_init(&rpu->seq_lock);
+	rpu->inbound_seq = 0;
+	rpu->outbound_seq = 0;
+	rpu->seq_resync_pending = false;
 
 	/* Add all TX buffers to free list */
 	for (i = 0; i < MSG_BUFFER_POOL_SIZE; i++) {

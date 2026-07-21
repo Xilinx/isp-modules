@@ -8,6 +8,8 @@ $(TARGET)-objs += visp_mbox_driver.o
 #$(TARGET)-objs += isp_ctrl/visp_ctrl.o
 #$(TARGET)-objs += visp_app.o
 $(TARGET)-objs += $(pwd)/mailbox/mbox_cmd.o
+$(TARGET)-objs += $(pwd)/mailbox/mbox_crc.o
+$(TARGET)-objs += $(pwd)/mailbox/mbox_seq.o
 $(TARGET)-objs += $(pwd)/mailbox/mbox_api.o
 $(TARGET)-objs += $(pwd)/mailbox/mbox_fifo.o
 

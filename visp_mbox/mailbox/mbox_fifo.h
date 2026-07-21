@@ -101,13 +101,30 @@ typedef struct fifo_init_data {
  */
 typedef struct mbox_post_msg {
 	uint32_t media_server_flags;
-	/* to meet the 8 byte alignment requirement */
-	uint32_t reserved[3];
+	uint32_t checksum;
+	uint32_t timestamp_low;
+	uint32_t timestamp_high;
 	uint32_t msg_id;
 	uint32_t size;
 	/* Cast to payload_packet* when needed */
 	uint8_t payload[MAX_PAYLOAD_SIZE];
 } __attribute((aligned(8))) mbox_post_msg;
+
+/**
+ * @brief Total used byte count of mbox_post_msg (header + msg->size)
+ */
+static inline size_t visp_mbox_message_used_size(const mbox_post_msg *msg)
+{
+	return sizeof(*msg) - MAX_PAYLOAD_SIZE + msg->size;
+}
+
+/**
+ * @brief FIFO transfer size aligned to 8 bytes (matches visp_mbox_fifo_read/write)
+ */
+static inline size_t visp_mbox_fifo_xfer_size(const mbox_post_msg *msg)
+{
+	return sizeof(*msg) - MAX_PAYLOAD_SIZE + ((msg->size + 7U) & ~7U);
+}
 
 /**
  * @brief Enum structure of Mailbox Interrupt id

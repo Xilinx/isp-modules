@@ -159,6 +159,7 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 {
 	mbox_post_msg *fifo_msg;
 	uint32_t current_write_offset, current_read_offset;
+	uint32_t next_read_offset;
 
 	if (fifo == NULL)
 		return VPI_ERR_INVALID;
@@ -186,17 +187,22 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 	    (mbox_post_msg *)(((char *)fifo->buffer_virt +
 	    (current_read_offset * fifo->item_size)));
 
-	memcpy(msg, fifo_msg,
-	       sizeof(mbox_post_msg) - sizeof(payload_packet) +
-		   ALIGN(fifo_msg->size, 8));
+	next_read_offset = (current_read_offset + 1) >= fifo->item_total ?
+		0 : (current_read_offset + 1);
+
+	if (fifo_msg->size > MAX_PAYLOAD_SIZE) {
+		/* Drop malformed head entries so RX does not wedge on one bad slot. */
+		WRITE_ONCE(fifo->read_offset, next_read_offset);
+		return VPI_ERR_INVALID;
+	}
+
+	memcpy(msg, fifo_msg, visp_mbox_fifo_xfer_size(fifo_msg));
 
 	/* Update read_offset after memcpy completes - use system barrier for RPU visibility
 	 * NOTE: Barrier is currently commented out; enable if coherence issues are observed.
 	 */
 	//dmb(sy);  /* System-wide barrier to ensure RPU sees updated read_offset */
-	WRITE_ONCE(fifo->read_offset,
-		   (current_read_offset + 1) >= fifo->item_total ?
-		   0 : (current_read_offset + 1));
+	WRITE_ONCE(fifo->read_offset, next_read_offset);
 	//dmb(sy);  /* Ensure read_offset update visible to RPU before returning */
 
 	return VPI_SUCCESS;
