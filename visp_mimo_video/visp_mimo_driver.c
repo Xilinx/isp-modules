@@ -2565,6 +2565,8 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 {
 	int ret = 0;
 	struct device_node *node = pdev->dev.of_node;
+	struct device_node *mem_np;
+	char node_name[50];
 	u32 port = 0;
 
 	strscpy(isp_dev->isp_ports[port].sensor_info.manu_json,
@@ -2632,6 +2634,21 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		return ret;
 	} else {
 		dev_dbg(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
+	}
+
+	snprintf(node_name, sizeof(node_name), "isp%d_reserve_memory",
+		 isp_dev->id);
+
+	mem_np = of_find_node_by_name(NULL, node_name);
+
+	if (mem_np) {
+		of_node_put(mem_np);
+		ret = of_reserved_mem_device_init(&pdev->dev);
+		if (ret) {
+			dev_err(&pdev->dev, "of_reserved_mem_device_init: %d\n",
+				ret);
+			return ret;
+		}
 	}
 
 	return 0;
