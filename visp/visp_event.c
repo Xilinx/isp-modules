@@ -291,10 +291,21 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	int ret;
 	struct visp_ctrl *isp_ctrl;
 	u8 *pdata = event_pkg->data;
-	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int port;
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/* vipp always reports pad 0 for ctrl events on LILO's
+		 * live-out path; force the first real pad (MP) so the
+		 * streamon check and port lookup below are correct.
+		 */
+		pad = 1;
+	}
+	port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 
 	/* If stream is not active, control cannot be applied to RPU */
-	if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] < 1) {
+	if (isp_dev->isp_mode == ISP_MODE_LILO ?
+	    (isp_dev->streamon[pad] != 1) :
+	    (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] < 1)) {
 		dev_info(isp_dev->dev, "unable to set control prior to streamon\n");
 		return -EBUSY;
 	}
@@ -355,10 +366,21 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	int ret = 0;
 	struct visp_ctrl *isp_ctrl;
 	u8 *pdata = event_pkg->data;
-	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
+	int port;
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/* vipp always reports pad 0 for ctrl events on LILO's
+		 * live-out path; force the first real pad (MP) so the
+		 * streamon check and port lookup below are correct.
+		 */
+		pad = 1;
+	}
+	port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 
 	/* If stream is not active, return default (zero) values */
-	if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] < 1) {
+	if (isp_dev->isp_mode == ISP_MODE_LILO ?
+	    (isp_dev->streamon[pad] != 1) :
+	    (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] < 1)) {
 		memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
 		return 0;
 	}

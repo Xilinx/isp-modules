@@ -52,6 +52,7 @@
  *
  *****************************************************************************/
 
+#include <linux/build_bug.h>
 #include <linux/module.h>
 #include <linux/of_graph.h>
 #include <linux/of_reserved_mem.h>
@@ -426,6 +427,303 @@ struct visp_format visp_mp_fmts[] = {
 	},
 };
 
+/*
+ * LILO's mbus codes for NV16/NV12 differ from LIMO's (UYVY8_1X16/
+ * VYYUYY8_1X24 here vs. YUYV8_2X8/YUYV8_1_5X8 in visp_mp_fmts[] above).
+ * Every other entry mirrors visp_mp_fmts[] verbatim - kept as a full
+ * separate table (rather than mutating visp_mp_fmts[] in place) since
+ * that table is a shared global read by every visp_dev instance,
+ * including concurrently-probed LIMO instances; mutating it per-mode
+ * would be unsafe. The static_assert() below catches, at build time, the
+ * most common way these two tables could drift apart: a future entry
+ * added to one and forgotten in the other.
+ */
+struct visp_format visp_lilo_mp_fmts[] = {
+	{
+		.fourcc = V4L2_PIX_FMT_NV16,
+		.code = MEDIA_BUS_FMT_UYVY8_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_NV12,
+		.code = MEDIA_BUS_FMT_VYYUYY8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_YUYV,
+		.code = MEDIA_BUS_FMT_YUYV8_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR8,
+		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG8,
+		.code = MEDIA_BUS_FMT_SGBRG8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG8,
+		.code = MEDIA_BUS_FMT_SGRBG8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB8,
+		.code = MEDIA_BUS_FMT_SRGGB8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR10,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG10,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG10,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB10,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR12,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG12,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG12,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB12,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P010,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_GREY,
+		.code = MEDIA_BUS_FMT_Y8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10BPACK,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10DWA,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P00BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P00DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P20BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P20DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I20BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_M48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I48DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I40DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24,
+		.code = MEDIA_BUS_FMT_RBG888_1X24, /* RBG, see visp_lilo/visp_driver.c:234 */
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24DWA,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24P,
+		.code = MEDIA_BUS_FMT_RGB888_3X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR10BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG10BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG10BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB10BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR10DWA,
+		.code = MEDIA_BUS_FMT_SBGGR10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG10DWA,
+		.code = MEDIA_BUS_FMT_SGBRG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG10DWA,
+		.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB10DWA,
+		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR12BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG12BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG12BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB12BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR12DWA,
+		.code = MEDIA_BUS_FMT_SBGGR12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG12DWA,
+		.code = MEDIA_BUS_FMT_SGBRG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG12DWA,
+		.code = MEDIA_BUS_FMT_SGRBG12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB12DWA,
+		.code = MEDIA_BUS_FMT_SRGGB12_1X12,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR14BPACK,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG14BPACK,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG14BPACK,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB14BPACK,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR14DWA,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG14DWA,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG14DWA,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB14DWA,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR14,
+		.code = MEDIA_BUS_FMT_SBGGR14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG14,
+		.code = MEDIA_BUS_FMT_SGBRG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG14,
+		.code = MEDIA_BUS_FMT_SGRBG14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB14,
+		.code = MEDIA_BUS_FMT_SRGGB14_1X14,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR16,
+		.code = MEDIA_BUS_FMT_SBGGR16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG16,
+		.code = MEDIA_BUS_FMT_SGBRG16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG16,
+		.code = MEDIA_BUS_FMT_SGRBG16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB16,
+		.code = MEDIA_BUS_FMT_SRGGB16_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SBGGR24,
+		.code = MEDIA_BUS_FMT_SBGGR24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGBRG24,
+		.code = MEDIA_BUS_FMT_SGBRG24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SGRBG24,
+		.code = MEDIA_BUS_FMT_SGRBG24_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_SRGGB24,
+		.code = MEDIA_BUS_FMT_SRGGB24_1X24,
+	},
+};
+
+static_assert(ARRAY_SIZE(visp_mp_fmts) == ARRAY_SIZE(visp_lilo_mp_fmts),
+	      "visp_mp_fmts[] and visp_lilo_mp_fmts[] must stay in sync - see visp_lilo_mp_fmts[] comment");
+
 struct visp_format visp_sp_fmts[] = {
 	{
 		.fourcc = V4L2_PIX_FMT_NV16,
@@ -522,6 +820,97 @@ struct visp_format visp_sp_fmts[] = {
 		.code = MEDIA_BUS_FMT_RGB888_3X8,
 	},
 };
+
+/* LILO variant of visp_sp_fmts[] above - see visp_lilo_mp_fmts[] comment */
+struct visp_format visp_lilo_sp_fmts[] = {
+	{
+		.fourcc = V4L2_PIX_FMT_NV16,
+		.code = MEDIA_BUS_FMT_UYVY8_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_NV12,
+		.code = MEDIA_BUS_FMT_VYYUYY8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_YUYV,
+		.code = MEDIA_BUS_FMT_YUYV8_1X16,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P010,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_GREY,
+		.code = MEDIA_BUS_FMT_Y8_1X8,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10BPACK,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10DWA,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_Y10,
+		.code = MEDIA_BUS_FMT_Y10_1X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P00BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P00DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P20BPACK,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P20DWA,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_P210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I210,
+		.code = MEDIA_BUS_FMT_YUYV10_2X10,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_M48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I48BPACK,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I48DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_I40DWA,
+		.code = MEDIA_BUS_FMT_YUV8_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24,
+		.code = MEDIA_BUS_FMT_RBG888_1X24, /* RBG, see visp_lilo/visp_driver.c:473 */
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24DWA,
+		.code = MEDIA_BUS_FMT_RGB888_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24P,
+		.code = MEDIA_BUS_FMT_RGB888_3X8,
+	},
+};
+
+static_assert(ARRAY_SIZE(visp_sp_fmts) == ARRAY_SIZE(visp_lilo_sp_fmts),
+	      "visp_sp_fmts[] and visp_lilo_sp_fmts[] must stay in sync - see visp_lilo_mp_fmts[] comment");
 
 /* main path */
 struct visp_format visp_raw_fmts[] = {
@@ -721,25 +1110,27 @@ struct visp_format visp_raw_fmts[] = {
 
 /**
  * visp_mbus_to_fourcc - Find the first fourcc code for a given mbus format
+ * @fmts: Per-pad format table to search (isp_mode-appropriate - see
+ *	  visp_pads_init(), which already picks visp_mp_fmts[]/visp_sp_fmts[]
+ *	  for LIMO or visp_lilo_mp_fmts[]/visp_lilo_sp_fmts[] for LILO)
+ * @num_formats: Number of entries in @fmts
  * @mbus_code: Media bus format code to search for
  *
  * Returns the first matching fourcc code for the given mbus format,
- * or 0 if no match is found.
+ * or 0 if no match is found. Searches only the calling pad's own table
+ * instead of the global LIMO-only visp_mp_fmts[]/visp_sp_fmts[] tables
+ * directly, so it also matches LILO's mbus codes (UYVY8_1X16/
+ * VYYUYY8_1X24) when called for a LILO pad - matches the pattern already
+ * used by visp_enum_mbus_code() below.
  */
-static uint32_t visp_mbus_to_fourcc(uint32_t mbus_code)
+static uint32_t visp_mbus_to_fourcc(struct visp_format *fmts,
+				    uint32_t num_formats, uint32_t mbus_code)
 {
 	int i;
 
-	/* Search in main port formats */
-	for (i = 0; i < ARRAY_SIZE(visp_mp_fmts); i++) {
-		if (visp_mp_fmts[i].code == mbus_code)
-			return visp_mp_fmts[i].fourcc;
-	}
-
-	/* Search in source port formats */
-	for (i = 0; i < ARRAY_SIZE(visp_sp_fmts); i++) {
-		if (visp_sp_fmts[i].code == mbus_code)
-			return visp_sp_fmts[i].fourcc;
+	for (i = 0; i < num_formats; i++) {
+		if (fmts[i].code == mbus_code)
+			return fmts[i].fourcc;
 	}
 
 	return 0; /* No match found */
@@ -960,7 +1351,12 @@ error_free_buf:
  * Return: Pointer to the v4l2_subdev structure if found, NULL otherwise.
  */
 
-#if 0  // Disable unused function
+/*
+ * Only used by LILO's visp_pad_s_stream branch (see below): scans forward
+ * from `port` for the first sink pad with a resolvable upstream subdev.
+ * LIMO does its own upstream discovery via visp_find_subdev_any() /
+ * visp_shared_subdev_* instead.
+ */
 static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev,
 						  int port)
 {
@@ -970,39 +1366,38 @@ static struct v4l2_subdev *visp_get_input_subdev(struct visp_dev *isp_dev,
 
 	dev_dbg(isp_dev->dev, "Searching for input sub-device...\n");
 
-	pad = port * VISP_PORT_PAD_NR;
-	/* Check if this pad is a SINK (input pad) */
-	if (!(isp_dev->pads[pad].flags & MEDIA_PAD_FL_SINK)) {
-		dev_dbg(isp_dev->dev, "pad %d is not a sink, skipping...\n",
-			pad);
-		return NULL;
-	}
+	for (pad = port; pad < isp_dev->num_pads; pad++) {
+		/* Check if this pad is a SINK (input pad) */
+		if (!(isp_dev->pads[pad].flags & MEDIA_PAD_FL_SINK)) {
+			dev_dbg(isp_dev->dev, "Pad %d is not a sink, skipping...\n", pad);
+			continue;
+		}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-	remote_pad = media_pad_remote_pad_first(&isp_dev->pads[pad]);
+		remote_pad = media_pad_remote_pad_first(&isp_dev->pads[pad]);
 #else
-	remote_pad = media_entity_remote_pad(&isp_dev->pads[pad]);
+		remote_pad = media_entity_remote_pad(&isp_dev->pads[pad]);
 #endif
 
-	if (!remote_pad) {
-		dev_dbg(isp_dev->dev, "pad %d has no remote connection.\n",
-			pad);
-		return NULL;
+		if (!remote_pad) {
+			dev_dbg(isp_dev->dev, "Pad %d has no remote connection.\n", pad);
+			continue;
+		}
+
+		if (!is_media_entity_v4l2_subdev(remote_pad->entity)) {
+			dev_dbg(isp_dev->dev, "Pad %d remote entity is not a sub-device.\n", pad);
+			continue;
+		}
+
+		subdev = media_entity_to_v4l2_subdev(remote_pad->entity);
+		dev_dbg(isp_dev->dev, "Found input sub-device: %s on pad %d\n",
+			subdev->name, pad);
+
+		return subdev; /* Return the first valid input sub-device found */
 	}
 
-	if (!is_media_entity_v4l2_subdev(remote_pad->entity)) {
-		dev_dbg(isp_dev->dev,
-			"pad %d remote entity is not a sub-device.\n", pad);
-		return NULL;
-	}
-
-	subdev = media_entity_to_v4l2_subdev(remote_pad->entity);
-	dev_dbg(isp_dev->dev, "Found input sub-device: %s on pad %d\n",
-		 subdev->name, pad);
-
-	return subdev; /* Return the first valid input sub-device found */
+	return NULL;
 }
-#endif
 
 static int visp_shared_subdev_find_slot(struct v4l2_subdev *sd)
 {
@@ -1207,7 +1602,7 @@ static int visp_get_remote_endpoint_port(struct device_node *np, u32 local_port)
 
 static void visp_release_upstream_nodes_dt(struct visp_dev *isp_dev)
 {
-	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
+	struct visp_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
 	u32 port;
 
 	for (port = 0; port < VISP_PORT_NR; port++) {
@@ -1237,7 +1632,7 @@ static bool visp_node_already_parsed(struct device_node **nodes, u32 count,
 
 static int visp_build_upstream_nodes_dt(struct visp_dev *isp_dev)
 {
-	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
+	struct visp_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
 	struct device_node *isp_np = isp_dev->dev->of_node;
 	u32 port;
 
@@ -1465,7 +1860,7 @@ static int visp_discover_pipeline_subdevs(struct visp_dev *isp_dev, int port,
 static int visp_collect_upstream_subdevs(struct visp_dev *isp_dev, int port,
 					 struct v4l2_subdev **subdevs, int max_subdevs)
 {
-	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
+	struct visp_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
 	int count = 0;
 	int i;
 
@@ -1604,7 +1999,7 @@ static int visp_stream_pipeline_subdevs(struct visp_dev *isp_dev, int port, int 
 		 enable ? "ON" : "OFF", port);
 
 	if (count == 0) {
-		struct visp_limo_isp_dev_extended *_ext = ISP_DEV_EXTENDED(isp_dev);
+		struct visp_isp_dev_extended *_ext = ISP_DEV_EXTENDED(isp_dev);
 
 		if (_ext->upstream_node_count[port] > 0) {
 			/*
@@ -1714,7 +2109,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	struct visp_pad_stream_status *pad_stream =
 	    (struct visp_pad_stream_status *)arg;
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
-	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
+	struct visp_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
 	unsigned long flags;
 	int ret = 0;
 	bool upstream_started = false;
@@ -1724,6 +2119,130 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 		return -EINVAL;
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO's own single-upstream-subdev streaming sequence
+		 * (visp_get_input_subdev + visp_stream_on/off's OBA mailbox
+		 * calls), distinct from LIMO's refcounted multi-path
+		 * pipeline-subdev approach below. Not unified into one
+		 * algorithm: LILO has no per-port active-path refcounting
+		 * today (its own TODO here says as much), and folding it
+		 * into LIMO's scheme needs its own validated change, not a
+		 * side effect of this file-level merge.
+		 *
+		 * The upstream subdev itself IS put through LIMO's shared
+		 * visp_shared_subdev_stream_get/put() refcounting below,
+		 * since visp_shared_subdev_refs[] is one table shared by
+		 * every isp_dev in this module - a LILO port and a LIMO
+		 * instance sharing the same upstream subdev (e.g. a common
+		 * broadcaster) must not each call s_stream() on it directly,
+		 * or one mode's stream-off silently kills the other's active
+		 * stream. Calling s_stream() directly here would be safe
+		 * only if no such shared topology can ever exist, which
+		 * isn't something this driver enforces.
+		 */
+		struct v4l2_subdev *subdev;
+
+		/*
+		 * Lock scope matches LIMO's below: held across the entire
+		 * streamon-or-streamoff body, released once before return
+		 * (including via ERR_TO_CAMERA_DISCONNECT), instead of only
+		 * around the initial visp_setup_isp_pipeline() call.
+		 */
+		mutex_lock(&isp_dev->port_lock[port]);
+
+		if (pad_stream->status == 1) {
+			/* streamon */
+			isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
+			ret = visp_setup_isp_pipeline(isp_dev, pad_stream->pad);
+			if (ret)
+				goto ERR_TO_CAMERA_DISCONNECT;
+
+			/* Reset sequence counter on streamon */
+			spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+			isp_dev->pad_data[pad_stream->pad].sequence = 0;
+			spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+
+			/*
+			 * TODO: set_frame_rate is applied once per port (on first active
+			 * path). When independent per-path stream-on lands, replace this
+			 * with a per-port "frame_rate_applied" flag, cleared on last
+			 * stream-off, so a fresh path arriving after a full port
+			 * stream-off re-applies it.
+			 */
+			ret = media_isp_device_set_frame_rate(
+				isp_dev, port,
+				&isp_dev->isp_ports[port].sensor_info.frame_rate);
+			if (ret != VSI_SUCCESS) {
+				dev_err(isp_dev->dev,
+					"%s isp:%d port %d chn %d Set frame_rate failed, ret is %d",
+					__func__, isp_dev->id, port, chn, ret);
+				goto ERR_TO_CAMERA_DISCONNECT;
+			}
+
+			subdev = visp_get_input_subdev(isp_dev, port);
+			if (subdev) {
+				ret = visp_shared_subdev_stream_get(subdev);
+				if (ret) {
+					dev_err(isp_dev->dev,
+						"visp_shared_subdev_stream_get failed isp:%d port:%d ret:%d\n",
+						isp_dev->id, port, ret);
+					goto ERR_TO_CAMERA_DISCONNECT;
+				}
+			}
+
+			ret = visp_stream_on(isp_dev);
+			if (ret != 0) {
+				dev_err(isp_dev->dev, "visp_stream_on failed isp:%d port:%d\n",
+					isp_dev->id, port);
+				/*
+				 * RPU must stop before the shared MIPI subdev is
+				 * disabled - same order as the normal streamoff
+				 * path below. Disabling MIPI first can hang the
+				 * RPU waiting on a source that's already gone.
+				 */
+				visp_stream_off(isp_dev);
+				if (subdev)
+					visp_shared_subdev_stream_put(subdev);
+				goto ERR_TO_CAMERA_DISCONNECT;
+			}
+		} else {
+			/* streamoff */
+			visp_stream_off(isp_dev);
+
+			chn = 0;
+
+			media_isp_device_camera_dis_connect(isp_dev, port, chn);
+
+			isp_destroy_pipeline(isp_dev, port, chn);
+
+			subdev = visp_get_input_subdev(isp_dev, port);
+			if (!subdev) {
+				dev_err(isp_dev->dev, "No valid input sub-device found!\n");
+			} else {
+				visp_shared_subdev_stream_put(subdev);
+			}
+			isp_dev->streamon[pad_stream->pad] = 0;
+			isp_dev->pad_data[pad_stream->pad].stream = pad_stream->status;
+
+			spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+			INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
+			/* Reset sequence counter on streamoff */
+			isp_dev->pad_data[pad_stream->pad].sequence = 0;
+			spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+		}
+
+		mutex_unlock(&isp_dev->port_lock[port]);
+		return ret;
+
+ERR_TO_CAMERA_DISCONNECT:
+		visp_stream_off(isp_dev);
+		isp_dev->streamon[pad_stream->pad] = 0;
+		isp_dev->pad_data[pad_stream->pad].stream = 0;
+		mutex_unlock(&isp_dev->port_lock[port]);
+		return ret;
+	}
 
 	mutex_lock(&isp_dev->port_lock[port]);
 	if (isp_dev->pad_data[pad_stream->pad].stream == 0 &&
@@ -1844,6 +2363,28 @@ ERR_TO_RPU_LOCK:
 	}
 	mutex_unlock(&isp_dev->port_lock[port]);
 	return ret;
+}
+
+/*
+ * The standard v4l2_subdev video_ops.s_stream hook. LIMO's live pipeline
+ * is driven exclusively through the private VISP_PAD_S_STREAM ioctl
+ * (visp_pad_s_stream above), so this is a no-op there - matching the
+ * pre-unification LIMO tree, which left .s_stream unset entirely. LILO
+ * needs it active because vipp's v-frmbuf-wr chain calls the standard
+ * subdev s_stream op on its live-out path; visp_video_ops is one shared
+ * table for both modes, so the mode check has to live here rather than
+ * at the ops-table level.
+ */
+static int visp_s_stream(struct v4l2_subdev *sd, int enable)
+{
+	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+	struct visp_pad_stream_status pad_stream = {1, enable};
+
+	if (isp_dev->isp_mode != ISP_MODE_LILO)
+		return 0;
+
+	visp_pad_s_stream(sd, &pad_stream);
+	return 0;
 }
 
 int visp_buf_done(struct v4l2_subdev *sd, void *arg)
@@ -2584,11 +3125,11 @@ static int visp_get_frame_interval(struct v4l2_subdev *sd,
 }
 
 static struct v4l2_subdev_video_ops visp_video_ops = {
-	/* .s_stream = visp_s_stream, */
+	.s_stream = visp_s_stream,
 };
 
 int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
-					 uint32_t fourcc_code);
+					 uint32_t fourcc_code, enum isp_mode mode);
 static void set_default_pad_config(struct visp_dev *isp_dev)
 {
 	int pad;
@@ -2616,14 +3157,52 @@ static void set_default_pad_config(struct visp_dev *isp_dev)
 		case VISP_PORT_PAD_SOURCE_MP:
 		case VISP_PORT_PAD_SOURCE_SP1:
 		case VISP_PORT_PAD_SOURCE_SP2:
-			/* Source pads use processed RGB format */
-			pad_data->format.code = MEDIA_BUS_FMT_RGB888_1X24;
-			pad_data->format.colorspace = V4L2_COLORSPACE_SRGB;
-			break;
 		case VISP_PORT_PAD_SOURCE_RAW:
-			/* Raw output pads preserve sensor format */
-			pad_data->format.code = MEDIA_BUS_FMT_SRGGB12_1X12;
-			pad_data->format.colorspace = V4L2_COLORSPACE_RAW;
+			if (isp_dev->isp_mode == ISP_MODE_LILO) {
+				/* LILO's memory-out (OBA) path needs a default
+				 * format registered with cam_device up front so
+				 * vipp's link validation (which runs before
+				 * streaming) sees a consistent pad format; LIMO
+				 * relies on the normal lazy S_FMT flow instead.
+				 */
+				uint8_t out_path = (pad % VISP_PORT_PAD_NR) - 1;
+				media_fmt format_media = {0};
+
+				if (ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[out_path]) {
+					pad_data->format.code = MEDIA_BUS_FMT_VYYUYY8_1X24;
+					format_media.pixel_format = MEDIA_PIX_FMT_NV12;
+				} else {
+					pad_data->format.code = MEDIA_BUS_FMT_RBG888_1X24;
+					format_media.pixel_format = V4L2_PIX_FMT_RGB24;
+				}
+				pad_data->format.colorspace = V4L2_COLORSPACE_SRGB;
+
+				format_media.width = pad_data->format.width;
+				format_media.height = pad_data->format.height;
+				format_media.color_space = V4L2_COLORSPACE_SRGB;
+				format_media.quantization = V4L2_QUANTIZATION_DEFAULT;
+				/*
+				 * Use `pad` directly, not isp_dev->pads[pad].index:
+				 * this runs from visp_pads_init(), called BEFORE
+				 * media_entity_pads_init() (which is what actually
+				 * assigns pads[i].index = i) in visp_probe. Using
+				 * the not-yet-initialized .index (always 0 here)
+				 * sent every call to chn=-1 - an out-of-bounds
+				 * write that silently corrupted adjacent memory
+				 * instead of setting isp_chns[chn].format, leaving
+				 * pixel_format at 0 and making media_fmt_to_isp_fmt
+				 * fall through to its RAW24 default for every path.
+				 */
+				media_isp_set_format(isp_dev, pad, format_media);
+			} else if ((pad % VISP_PORT_PAD_NR) == VISP_PORT_PAD_SOURCE_RAW) {
+				/* Raw output pads preserve sensor format */
+				pad_data->format.code = MEDIA_BUS_FMT_SRGGB12_1X12;
+				pad_data->format.colorspace = V4L2_COLORSPACE_RAW;
+			} else {
+				/* Source pads use processed RGB format */
+				pad_data->format.code = MEDIA_BUS_FMT_RGB888_1X24;
+				pad_data->format.colorspace = V4L2_COLORSPACE_SRGB;
+			}
 			break;
 		default:
 			/* Default to RGB format */
@@ -2653,6 +3232,136 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 
 	sink_pad_index = format->pad - (format->pad % VISP_PORT_PAD_NR);
 	sink_pad = &isp_dev->pad_data[sink_pad_index];
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO's format table matching must special-case the
+		 * OBA/YUV420 output type (is_oba_yuv_420[]/
+		 * yuv_420_format_index[]), which has no LIMO equivalent -
+		 * LIMO has no OBA output path in pure mode. Kept as a
+		 * distinct body rather than folding the YUV420 branch into
+		 * LIMO's simpler matching loop below.
+		 */
+		media_fmt format_media;
+		struct v4l2_mbus_framefmt *mbus_format;
+		uint32_t fourcc_code = 0;
+
+		if (sink_pad == cur_pad) {
+			cur_pad->sink_detected = 1;
+			cur_pad->format = format->format;
+			for (i = 1; i < VISP_PORT_PAD_NR; i++) {
+				source_pad = &isp_dev->pad_data[sink_pad_index + i];
+				source_pad->sink_detected = 1;
+			}
+			return 0;
+		}
+
+		{
+			int port = format->pad / MEDIA_ISP_PORT_PAD_COUNT;
+
+			mutex_lock(&isp_dev->port_lock[port]);
+			ret = visp_setup_isp_pipeline(isp_dev, format->pad);
+			mutex_unlock(&isp_dev->port_lock[port]);
+		}
+		if (ret)
+			return ret;
+
+		w = ALIGN(format->format.width, VISP_WIDTH_ALIGN);
+		h = ALIGN(format->format.height, VISP_HEIGHT_ALIGN);
+		w = clamp_t(uint32_t, w, VISP_WIDTH_MIN, sink_pad->format.width);
+		h = clamp_t(uint32_t, h, VISP_HEIGHT_MIN, sink_pad->format.height);
+
+		format->format.width = w;
+		format->format.height = h;
+
+		memcpy(&fourcc_code, format->format.reserved, sizeof(uint32_t));
+
+		int yuv_420_index =
+			ISP_DEV_EXTENDED(isp_dev)->yuv_420_format_index
+			[CAMDEV_BUFCHAIN_MP];
+
+		for (i = 0; i < cur_pad->num_formats; i++) {
+			if (ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[format->pad - 1]) {
+				if (yuv_420_index < 0) {
+					dev_err(isp_dev->dev,
+						"yuv420 format is not avaialable from driver\n");
+					i = 0;
+				} else if (format->format.code == cur_pad->fmts[yuv_420_index].code) {
+					dev_info(isp_dev->dev,
+						 "%s %d MATCH CODE index : %d code:%x:%x\n",
+						 __func__, __LINE__,
+						 yuv_420_index,
+						 cur_pad->fmts[yuv_420_index].code,
+						 cur_pad->fmts[yuv_420_index].fourcc);
+
+					i = yuv_420_index;
+
+				} else {
+					i = yuv_420_index;
+					dev_info(isp_dev->dev,
+						 "The received format is not supported on design, setting the supported format index : %d code:%x:%x\n",
+						 i,
+						 cur_pad->fmts[i].code,
+						 cur_pad->fmts[i].fourcc);
+				}
+				break;
+			} else if (format->format.code == cur_pad->fmts[i].code ||
+				fourcc_code == cur_pad->fmts[i].fourcc) {
+				if (i == yuv_420_index) {
+					i = 0;
+					dev_info(isp_dev->dev,
+						 "The received format is not supported on design, setting the default supported format index : %d code:%x:%x\n",
+						 i,
+						 cur_pad->fmts[i].code,
+						 cur_pad->fmts[i].fourcc);
+				}
+				break;
+			}
+		}
+
+		if (i >= cur_pad->num_formats) {
+			dev_info(isp_dev->dev, "Format not found rolling to 1st avaialble FMT\n");
+			format->format.code = cur_pad->fmts[0].code;
+			memcpy(format->format.reserved, &cur_pad->fmts[0].fourcc,
+			       sizeof(uint32_t));
+		} else {
+			format->format.code = cur_pad->fmts[i].code;
+			memcpy(format->format.reserved, &cur_pad->fmts[i].fourcc,
+			       sizeof(uint32_t));
+		}
+
+		memset(&format_media, 0, sizeof(format_media));
+
+		mbus_format = (struct v4l2_mbus_framefmt *)&format->format;
+		/* Fill the struct to be shared with ISP/RPU*/
+		format_media.width = mbus_format->width;
+		format_media.height = mbus_format->height;
+		format_media.color_space = mbus_format->colorspace;
+		format_media.quantization = mbus_format->quantization;
+		fourcc_code = 0;
+
+		if (sizeof(mbus_format->reserved) == (sizeof(uint16_t) * 10)) {
+			memcpy(&fourcc_code, &mbus_format->reserved,
+			       sizeof(fourcc_code));
+		} else {
+			memcpy(&fourcc_code, &mbus_format->reserved[1],
+			       sizeof(fourcc_code));
+		}
+		ret = media_isp_hal_mbus_fmt_to_media_fmt(
+			&mbus_format->code, &format_media.pixel_format, fourcc_code,
+			isp_dev->isp_mode);
+		if (ret)
+			return ret;
+
+		mediapad_t = &isp_dev->pads[format->pad];
+		ret = media_isp_set_format(isp_dev, mediapad_t->index, format_media);
+		if (ret)
+			return ret;
+
+		cur_pad->format = format->format;
+
+		return 0;
+	}
 
 	/* Apply format to the current pad being set */
 	cur_pad->sink_detected = 1;
@@ -2733,8 +3442,11 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	Format_media.quantization = MBusFormat->quantization;
 	Format_media.stride = fmt_res.stride;
 
-	media_isp_hal_mbus_fmt_to_media_fmt(
-		&MBusFormat->code, &Format_media.pixel_format, fmt_res.fourcc);
+	ret = media_isp_hal_mbus_fmt_to_media_fmt(
+		&MBusFormat->code, &Format_media.pixel_format, fmt_res.fourcc,
+		isp_dev->isp_mode);
+	if (ret)
+		return ret;
 
 	mediapad_t = &isp_dev->pads[format->pad];
 	ret = media_isp_set_format(isp_dev, mediapad_t->index, Format_media);
@@ -2770,7 +3482,8 @@ static int visp_get_fmt(struct v4l2_subdev *sd,
 	format->format = pad_data->format;
 
 	/* Find the corresponding fourcc for this mbus format */
-	fourcc = visp_mbus_to_fourcc(pad_data->format.code);
+	fourcc = visp_mbus_to_fourcc(pad_data->fmts, pad_data->num_formats,
+				     pad_data->format.code);
 
 	memcpy(format->format.reserved, &fourcc, sizeof(fourcc));
 
@@ -2930,6 +3643,51 @@ static int visp_notifier_bound(struct v4l2_async_notifier *notifier,
 	unsigned int source_pad, sink_pad;
 
 	dev_dbg(dev, "ISP %d notifier_bound: '%s'\n", isp_dev->id, sd->name);
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO's own pad-index convention for this link (source_pad
+		 * from link.remote_port, sink_pad from link.local_port) is
+		 * the inverse of LIMO's below and is load-bearing for LILO's
+		 * DT graph authoring - do not "fix" without HW validation.
+		 * LILO also does not need LIMO's peer-ISP disambiguation
+		 * (no broadcaster shared across multiple LILO ISPs today).
+		 */
+		while (1) {
+			ep = fwnode_graph_get_next_endpoint(sd->fwnode, ep);
+			if (!ep)
+				break;
+
+			ret = v4l2_fwnode_parse_link(ep, &link);
+			if (ret < 0) {
+				dev_err(dev, "failed to parse link for %pOF: %d\n",
+					to_of_node(ep), ret);
+				continue;
+			}
+
+			if (sd->entity.pads[link.local_port].flags == MEDIA_PAD_FL_SINK)
+				continue;
+
+			source = &sd->entity;
+			source_pad = link.remote_port;
+			sink = &isp_dev->sd.entity;
+			sink_pad = link.local_port;
+			v4l2_fwnode_put_link(&link);
+			ret = media_create_pad_link(source, source_pad, sink, sink_pad,
+							MEDIA_LNK_FL_ENABLED);
+			isp_dev->ports_mask |=
+				(1 << (source_pad / MEDIA_ISP_PORT_PAD_COUNT));
+			if (ret) {
+				dev_err(dev, "failed to create %s:%u -> %s:%u link\n",
+					source->name, source_pad, sink->name, sink_pad);
+				break;
+			}
+		}
+
+		fwnode_handle_put(ep);
+
+		return ret;
+	}
 
 	if (!sd->fwnode) {
 		dev_err(dev, "Subdev %s has no fwnode, skipping link creation\n",
@@ -3182,7 +3940,7 @@ static const struct v4l2_async_notifier_operations visp_notify_ops = {
 
 static int visp_async_notifier(struct visp_dev *isp_dev)
 {
-	struct visp_limo_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
+	struct visp_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
 	struct v4l2_async_connection *asc;
 	struct device *dev = isp_dev->dev;
 	int ret = 0;
@@ -3198,6 +3956,72 @@ static int visp_async_notifier(struct visp_dev *isp_dev)
 
 	if (dev_fwnode(isp_dev->dev) == NULL)
 		return 0;
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO's simpler per-pad endpoint registration. Deliberately
+		 * NOT switched to LIMO's upstream_nodes[]/device-fwnode
+		 * scheme below without HW validation on LILO's DT graphs:
+		 * LILO has no multi-ISP-shares-one-broadcaster deployment
+		 * today, so the _remote()-endpoint-fwnode approach (which
+		 * LIMO's comment below warns against for that MCM case)
+		 * is safe here and is LILO's own proven-working path.
+		 */
+		struct fwnode_handle *ep;
+		struct fwnode_handle *remote_ep;
+		int pad;
+
+		for (pad = 0; pad < isp_dev->num_pads; pad++) {
+			if (isp_dev->pads[pad].flags != MEDIA_PAD_FL_SINK)
+				continue;
+
+			ep = fwnode_graph_get_endpoint_by_id(
+				dev_fwnode(dev), pad, 0, FWNODE_GRAPH_ENDPOINT_NEXT);
+			if (!ep)
+				continue;
+			remote_ep = fwnode_graph_get_remote_endpoint(ep);
+			if (!remote_ep) {
+				fwnode_handle_put(ep);
+				continue;
+			}
+			fwnode_handle_put(remote_ep);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+			asc = v4l2_async_nf_add_fwnode_remote(
+				&isp_dev->notifier, ep, struct v4l2_async_connection);
+#else
+			asc = v4l2_async_notifier_add_fwnode_remote_subdev(
+				&isp_dev->notifier, ep, struct v4l2_async_subdev);
+#endif
+			fwnode_handle_put(ep);
+
+			if (IS_ERR(asc)) {
+				ret = PTR_ERR(asc);
+				if (ret != -EEXIST) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+					v4l2_async_nf_cleanup(&isp_dev->notifier);
+#else
+					v4l2_async_notifier_cleanup(&isp_dev->notifier);
+#endif
+					return ret;
+				}
+			}
+		}
+
+		ret = v4l2_async_nf_register(&isp_dev->notifier);
+		if (ret) {
+			dev_err(isp_dev->dev, "Async notifier register error\n");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+			v4l2_async_nf_cleanup(&isp_dev->notifier);
+#else
+			v4l2_async_notifier_cleanup(&isp_dev->notifier);
+#endif
+		} else {
+			/* visp_remove()'s unregister is gated on this flag */
+			ISP_DEV_EXTENDED(isp_dev)->notifier_registered = true;
+		}
+
+		return ret;
+	}
 
 	/*
 	 * Add all upstream nodes (broadcaster, MIPI CSI-2 RX, sensor) by their
@@ -3332,7 +4156,7 @@ static int visp_async_notifier(struct visp_dev *isp_dev)
 static int visp_pads_init(struct visp_dev *isp_dev)
 {
 	int pad = 0;
-	int num_pads = visp_get_num_pads(isp_dev->num_streams);
+	int num_pads = visp_get_num_pads(isp_dev);
 
 	/* Allocate pads dynamically based on num_streams */
 	isp_dev->num_pads = num_pads;
@@ -3358,19 +4182,37 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 		case VISP_PORT_PAD_SINK:
 			break;
 		case VISP_PORT_PAD_SOURCE_MP:
-			isp_dev->pad_data[pad].num_formats =
-			    ARRAY_SIZE(visp_mp_fmts);
-			isp_dev->pad_data[pad].fmts = visp_mp_fmts;
+			if (isp_dev->isp_mode == ISP_MODE_LILO) {
+				isp_dev->pad_data[pad].num_formats =
+				    ARRAY_SIZE(visp_lilo_mp_fmts);
+				isp_dev->pad_data[pad].fmts = visp_lilo_mp_fmts;
+			} else {
+				isp_dev->pad_data[pad].num_formats =
+				    ARRAY_SIZE(visp_mp_fmts);
+				isp_dev->pad_data[pad].fmts = visp_mp_fmts;
+			}
 			break;
 		case VISP_PORT_PAD_SOURCE_SP1:
-			isp_dev->pad_data[pad].num_formats =
-			    ARRAY_SIZE(visp_sp_fmts);
-			isp_dev->pad_data[pad].fmts = visp_sp_fmts;
+			if (isp_dev->isp_mode == ISP_MODE_LILO) {
+				isp_dev->pad_data[pad].num_formats =
+				    ARRAY_SIZE(visp_lilo_sp_fmts);
+				isp_dev->pad_data[pad].fmts = visp_lilo_sp_fmts;
+			} else {
+				isp_dev->pad_data[pad].num_formats =
+				    ARRAY_SIZE(visp_sp_fmts);
+				isp_dev->pad_data[pad].fmts = visp_sp_fmts;
+			}
 			break;
 		case VISP_PORT_PAD_SOURCE_SP2:
-			isp_dev->pad_data[pad].num_formats =
-			    ARRAY_SIZE(visp_sp_fmts);
-			isp_dev->pad_data[pad].fmts = visp_sp_fmts;
+			if (isp_dev->isp_mode == ISP_MODE_LILO) {
+				isp_dev->pad_data[pad].num_formats =
+				    ARRAY_SIZE(visp_lilo_sp_fmts);
+				isp_dev->pad_data[pad].fmts = visp_lilo_sp_fmts;
+			} else {
+				isp_dev->pad_data[pad].num_formats =
+				    ARRAY_SIZE(visp_sp_fmts);
+				isp_dev->pad_data[pad].fmts = visp_sp_fmts;
+			}
 			break;
 		case VISP_PORT_PAD_SOURCE_RAW:
 			isp_dev->pad_data[pad].num_formats =
@@ -3487,6 +4329,152 @@ static int parse_iba(struct visp_dev *isp_dev, struct device_node *np)
 }
 
 /*
+ * LILO-only: resolves which entry in a source pad's format table (fmts[])
+ * matches the design's YUV420 mbus code, caching the index in
+ * yuv_420_format_index[] for visp_set_fmt's LILO branch to use. Must run
+ * after visp_pads_init() has populated pad_data[].fmts.
+ */
+static void get_yuv_420_format_index(struct visp_dev *isp_dev, int path)
+{
+	struct visp_pad_data *cur_pad = &isp_dev->pad_data[path + 1];
+	int i = 0;
+
+	for (i = 0; i < cur_pad->num_formats; i++) {
+		if (cur_pad->fmts[i].code == MEDIA_BUS_FMT_VYYUYY8_1X24) {
+			dev_info(isp_dev->dev, "%s %d MATCH CODE index:%d num_fmts : %d code:%x\n",
+				 __func__, __LINE__, i, cur_pad->num_formats,
+				 cur_pad->fmts[i].code);
+			break;
+		}
+	}
+
+	if (i >= cur_pad->num_formats) {
+		i = -1;
+		dev_err(isp_dev->dev, "The format in design is not supported isp:%d fmt:%x\n",
+			isp_dev->id, MEDIA_BUS_FMT_VYYUYY8_1X24);
+	} else {
+		ISP_DEV_EXTENDED(isp_dev)->yuv_420_format_index[path] = i;
+	}
+}
+
+/*
+ * LILO-only: parses the xlnx,obaN_{mp,sp}_* DT properties (OBA hardware
+ * config for the memory/live-out path) and records whether each output
+ * path is YUV420 in is_oba_yuv_420[], consumed by set_default_pad_config()
+ * and visp_set_fmt()'s LILO branches.
+ */
+static int parse_oba(struct visp_dev *isp_dev, struct device_node *np)
+{
+	int num_streams = isp_dev->num_streams;
+	int i;
+
+	if (num_streams > 1) {
+		dev_err(isp_dev->dev,
+			"num_streams exceeds maximum allowed (%d)\n",
+			MAX_IBA_PER_ISP);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < num_streams; i++) {
+		char property_name[64];
+		int oba_index;
+
+		if ((isp_dev->id % 2) == 0) {
+			oba_index = 0;
+		} else if ((isp_dev->id % 2) == 1) {
+			oba_index = 1;
+		} else {
+			dev_err(isp_dev->dev, "Unsupported isp_id: %d\n",
+				isp_dev->id);
+			return -EINVAL;
+		}
+
+		snprintf(property_name, sizeof(property_name),
+			 "xlnx,oba%d_mp_ppc", oba_index);
+		if (of_property_read_u32(
+			np, property_name,
+			&isp_dev->oba[CAMDEV_BUFCHAIN_MP].ppc)) {
+			dev_err(isp_dev->dev, "Failed to read %s\n",
+				property_name);
+			return -EINVAL;
+		}
+
+		snprintf(property_name, sizeof(property_name),
+			 "xlnx,oba%d_mp_bpp", oba_index);
+		if (of_property_read_u32(
+			np, property_name,
+			&isp_dev->oba[CAMDEV_BUFCHAIN_MP].bpp)) {
+			dev_err(isp_dev->dev, "Failed to read %s\n",
+				property_name);
+			return -EINVAL;
+		}
+
+		snprintf(property_name, sizeof(property_name),
+			 "xlnx,oba%d_mp_data_format", oba_index);
+		if (of_property_read_string(
+			np, property_name,
+			&isp_dev->oba[CAMDEV_BUFCHAIN_MP].data_format)) {
+			dev_err(isp_dev->dev, "Failed to read %s\n",
+				property_name);
+			return -EINVAL;
+		}
+		if (strcasecmp(isp_dev->oba[CAMDEV_BUFCHAIN_MP].data_format, "YUV420") == 0)
+			ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_MP] = true;
+		else
+			ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_MP] = false;
+
+		snprintf(property_name, sizeof(property_name),
+			 "xlnx,oba%d_sp_ppc", oba_index);
+		if (of_property_read_u32(
+			np, property_name,
+			&isp_dev->oba[CAMDEV_BUFCHAIN_SP1].ppc)) {
+			dev_err(isp_dev->dev, "Failed to read %s\n",
+				property_name);
+			return -EINVAL;
+		}
+
+		snprintf(property_name, sizeof(property_name),
+			 "xlnx,oba%d_sp_bpp", oba_index);
+		if (of_property_read_u32(
+			np, property_name,
+			&isp_dev->oba[CAMDEV_BUFCHAIN_SP1].bpp)) {
+			dev_err(isp_dev->dev, "Failed to read %s\n",
+				property_name);
+			return -EINVAL;
+		}
+
+		snprintf(property_name, sizeof(property_name),
+			 "xlnx,oba%d_sp_data_format", oba_index);
+		if (of_property_read_string(
+			np, property_name,
+			&isp_dev->oba[CAMDEV_BUFCHAIN_SP1].data_format)) {
+			dev_err(isp_dev->dev, "Failed to read %s\n",
+				property_name);
+			return -EINVAL;
+		}
+		if (strcasecmp(isp_dev->oba[CAMDEV_BUFCHAIN_SP1].data_format, "YUV420") == 0)
+			ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_SP1] = true;
+		else
+			ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[CAMDEV_BUFCHAIN_SP1] = false;
+
+		dev_dbg(
+			isp_dev->dev, "OBA%d: ppc=%d, bpp=%d, data_format=%s\n",
+			CAMDEV_BUFCHAIN_MP, isp_dev->oba[CAMDEV_BUFCHAIN_MP].ppc,
+			isp_dev->oba[CAMDEV_BUFCHAIN_MP].bpp,
+			isp_dev->oba[CAMDEV_BUFCHAIN_MP].data_format);
+		dev_dbg(
+			isp_dev->dev, "OBA%d: ppc=%d, bpp=%d, data_format=%s\n",
+			CAMDEV_BUFCHAIN_SP1, isp_dev->oba[CAMDEV_BUFCHAIN_SP1].ppc,
+			isp_dev->oba[CAMDEV_BUFCHAIN_SP1].bpp,
+			isp_dev->oba[CAMDEV_BUFCHAIN_SP1].data_format);
+	}
+
+	return 0;
+}
+
+static const struct of_device_id visp_of_match[];
+
+/*
  * Parse device tree parameters
  */
 static int visp_parse_params(struct visp_dev *isp_dev,
@@ -3495,6 +4483,49 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	int port = 0;
 	int ret = 0;
 	struct device_node *node = pdev->dev.of_node;
+
+	/* Read string property for SS-MODE-i0 (LIMO, etc.) */
+	ret = of_property_read_string(node, "xlnx,io_mode", &isp_dev->ss_mode_i0);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to read xlnx,io_mode\n");
+		return ret;
+	} else {
+		dev_dbg(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
+	}
+
+	/*
+	 * isp_mode MUST come from the compatible string that matched this
+	 * of_device_id entry (guaranteed correct - it's the reason this
+	 * platform_driver bound to this node at all), NOT from xlnx,io_mode.
+	 * That DT string was dead/unread before this unification
+	 * (get_isp_mode_from_str had zero callers in either original
+	 * driver), so overlays can carry a stale/inconsistent io_mode value
+	 * that was completely harmless under the old separate single-mode
+	 * drivers and only became load-bearing here. Confirmed on real HW:
+	 * a node with compatible="xlnx,visp-ss-limo-1.0" (correctly bound as
+	 * LIMO) but io_mode="lilo" (stale) - using io_mode as authoritative
+	 * silently ran LILO's default-pad-config/output-type logic on a
+	 * true LIMO instance. isp_mode is what the rest of the unified
+	 * driver (starting right below, with the hw_mcm gate) branches on,
+	 * so this must run before anything else in parse_params that checks
+	 * isp_mode.
+	 */
+	{
+		const struct of_device_id *match =
+			of_match_device(visp_of_match, &pdev->dev);
+
+		if (!match) {
+			dev_err(&pdev->dev, "No of_match entry for this device\n");
+			return -EINVAL;
+		}
+		isp_dev->isp_mode = (enum isp_mode)(uintptr_t)match->data;
+
+		if (get_isp_mode_from_str(isp_dev->ss_mode_i0) != isp_dev->isp_mode) {
+			dev_warn(&pdev->dev,
+				 "xlnx,io_mode='%s' does not match the compatible this node bound with; using the compatible (isp_mode=%u). Fix the DT.\n",
+				 isp_dev->ss_mode_i0, isp_dev->isp_mode);
+		}
+	}
 
 	/* Read stream info (multi-stream, single-stream) */
 	ret = of_property_read_u32(node, "xlnx,num_streams",
@@ -3518,11 +4549,9 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 
 		isp_dev->isp_ports[port].sensor_info.sensor_id =
 		    sensor_dev_id[port];
-		if(isp_dev->num_streams > 1)
-		{
+		/* hw_mcm (multi-camera-mode chaining) is a LIMO-only feature */
+		if (isp_dev->isp_mode != ISP_MODE_LILO && isp_dev->num_streams > 1)
 			isp_dev->isp_ports[port].hw_mcm = (bool_t)CAMDEV_MCM_OP_HW;
-
-		}
 	}
 
 	fwnode_property_read_u32(of_fwnode_handle(node), "isp_id",
@@ -3534,15 +4563,6 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	if (isp_dev->id < 0 || isp_dev->id > 5) {
 		dev_err(&pdev->dev, "Invalid ISP id %d\n", isp_dev->id);
 		return -EINVAL;
-	}
-
-	/* Read string property for SS-MODE-i0 (LIMO, etc.) */
-	ret = of_property_read_string(node, "xlnx,io_mode", &isp_dev->ss_mode_i0);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to read xlnx,io_mode\n");
-		return ret;
-	} else {
-		dev_dbg(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
 	}
 
 	ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
@@ -3567,8 +4587,10 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		return -EINVAL;
 	}
 
-	/* Read LLP (Low Latency Path) device tree parameters - optional */
-	{
+	/* LLP (Low Latency Path) is a LIMO-only feature; llp[]/llp_capable[]
+	 * are already zero from the extended struct's devm_kzalloc.
+	 */
+	if (isp_dev->isp_mode != ISP_MODE_LILO) {
 		u32 llpath0_iba = 0;
 		u32 llpath0_oba = 0;
 		bool llpath0_tile0_enabled = false;
@@ -3636,6 +4658,13 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 			return -EINVAL;
 		isp_dev->reserve_mem.pa = rmem->base;
 		isp_dev->reserve_mem.size = rmem->size;
+	}
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		if (parse_oba(isp_dev, node)) {
+			dev_err(&pdev->dev, "Failed to parse OBA parameters\n");
+			return -EINVAL;
+		}
 	}
 
 	return 0;
@@ -3740,7 +4769,7 @@ static int visp_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	isp_dev->extended_struct =
-		devm_kzalloc(&pdev->dev, sizeof(struct visp_limo_isp_dev_extended), GFP_KERNEL);
+		devm_kzalloc(&pdev->dev, sizeof(struct visp_isp_dev_extended), GFP_KERNEL);
 	if (!isp_dev->extended_struct)
 		return -ENOMEM;
 
@@ -3762,9 +4791,15 @@ static int visp_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	ret = visp_build_upstream_nodes_dt(isp_dev);
-	if (ret && ret != -ENODEV)
-		dev_warn(&pdev->dev, "failed to parse upstream DT forward nodes: %d\n", ret);
+	if (isp_dev->isp_mode != ISP_MODE_LILO) {
+		/* MCM upstream-node discovery is LIMO-only; visp_release_upstream_nodes_dt()
+		 * in visp_remove() is safe to call unconditionally against the
+		 * resulting empty upstream_nodes[].
+		 */
+		ret = visp_build_upstream_nodes_dt(isp_dev);
+		if (ret && ret != -ENODEV)
+			dev_warn(&pdev->dev, "failed to parse upstream DT forward nodes: %d\n", ret);
+	}
 
 	ret = xlnx_link_mbox(isp_dev);
 	if (ret) {
@@ -3783,7 +4818,8 @@ static int visp_probe(struct platform_device *pdev)
 				       .cam_device_bufs_lock);
 
 	v4l2_subdev_init(&isp_dev->sd, &visp_subdev_ops);
-	snprintf(isp_dev->sd.name, VISP_SUBDEV_NAME_SIZE, "%s.%d", VISP_NAME,
+	snprintf(isp_dev->sd.name, VISP_SUBDEV_NAME_SIZE, "%s.%d",
+		 isp_dev->isp_mode == ISP_MODE_LILO ? VISP_NAME_LILO : VISP_NAME,
 		 isp_dev->id);
 
 	isp_dev->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
@@ -3792,7 +4828,8 @@ static int visp_probe(struct platform_device *pdev)
 	isp_dev->sd.owner = THIS_MODULE;
 	isp_dev->sd.internal_ops = &visp_internal_ops;
 	isp_dev->sd.entity.ops = &visp_entity_ops;
-	isp_dev->sd.entity.function = MEDIA_ENT_F_PROC_VIDEO_ISP;
+	isp_dev->sd.entity.function = isp_dev->isp_mode == ISP_MODE_LILO ?
+		MEDIA_ENT_F_V4L2_SUBDEV_UNKNOWN : MEDIA_ENT_F_PROC_VIDEO_ISP;
 	isp_dev->sd.entity.obj_type = MEDIA_ENTITY_TYPE_V4L2_SUBDEV;
 	isp_dev->sd.entity.name = isp_dev->sd.name;
 	v4l2_set_subdevdata(&isp_dev->sd, isp_dev);
@@ -3871,7 +4908,9 @@ static int visp_probe(struct platform_device *pdev)
 			snprintf(wq_name, sizeof(wq_name), "visp-enq-%d-%d",
 				 port, chain);
 			isp_dev->enq_wq_chain[port][chain] = alloc_workqueue(
-				wq_name, WQ_UNBOUND | WQ_HIGHPRI, ENQ_WQ_MAX_ACTIVE);
+				wq_name, WQ_UNBOUND | WQ_HIGHPRI,
+				isp_dev->isp_mode == ISP_MODE_LILO ?
+					ENQ_WQ_MAX_ACTIVE_LILO : ENQ_WQ_MAX_ACTIVE_LIMO);
 			if (!isp_dev->enq_wq_chain[port][chain]) {
 				dev_err(dev,
 					"Failed to create enqueue workqueue for port %d chain %d\n",
@@ -3890,8 +4929,21 @@ static int visp_probe(struct platform_device *pdev)
 		/* goto error; */
 	}
 
-	/* Register Callback function */
-	isp_dev->frameout_cb = handle_frameout_buffer;
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO's OBA/live-out path has no APU-managed vb2 buffer
+		 * completion to notify (v-frmbuf-wr's own IRQ/vb2 completion
+		 * handles it), so no frameout_cb is registered here.
+		 * yuv_420_format_index[] must be resolved after visp_pads_init()
+		 * has populated pad_data[].fmts[], which it has by this point.
+		 */
+		isp_dev->frameout_cb = NULL;
+		get_yuv_420_format_index(isp_dev, CAMDEV_BUFCHAIN_MP);
+		get_yuv_420_format_index(isp_dev, CAMDEV_BUFCHAIN_SP1);
+	} else {
+		/* Register Callback function */
+		isp_dev->frameout_cb = handle_frameout_buffer;
+	}
 	/* sensor_pipeline_init(isp_dev); */
 
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
@@ -4008,6 +5060,11 @@ static const struct dev_pm_ops visp_pm_ops = {};
 static const struct of_device_id visp_of_match[] = {
 	{
 		.compatible = "xlnx,visp-ss-limo-1.0",
+		.data = (const void *)ISP_MODE_LIMO,
+	},
+	{
+		.compatible = "xlnx,visp-ss-lilo-1.0",
+		.data = (const void *)ISP_MODE_LILO,
 	},
 	{/* sentinel */},
 };

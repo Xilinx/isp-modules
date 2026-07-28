@@ -90,4 +90,8 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad);
 int inform_llp_config_to_rpu(struct visp_dev *isp_dev, uint8_t port,
 				cam_device_handle_t h_cam_device, uint8_t chn);
 
+/* LILO-only: see definitions in visp_app.c */
+int visp_stream_on(struct visp_dev *isp_dev);
+void visp_stream_off(struct visp_dev *isp_dev);
+
 #endif

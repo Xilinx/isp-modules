@@ -93,7 +93,7 @@ int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
 				    uint32_t *frame_rate)
 {
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
-	int ret_val = VSI_SUCCESS;
+	int ret_val;
 
 	ret_val = vsi_cam_device_sensor_set_frame_rate(
 	    isp_dev, isp_port->cam_device_handle, frame_rate);
@@ -213,7 +213,16 @@ static int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 	PathStatus.out_path_enable &= ~(1 << chn);
 	ret_val = vsi_cam_device_set_path_streaming(
 	    isp_dev, isp_port->cam_device_handle, &PathStatus);
-	media_isp_device_destroy_buf_pool(isp_dev, port, chn);
+	/*
+	 * LILO's OBA/live-out path never calls media_isp_device_create_buf_pool()
+	 * (that function doesn't exist in LILO's original driver at all - only
+	 * LIMO's memory-out path and MCM allocate host buffer pools), so there
+	 * is nothing here to destroy. Calling it anyway sends RELEASE_BUF_MGMT/
+	 * DESTROY_BUF_POOL/DE_INIT_BUF_CHAIN for a buffer-management context the
+	 * RPU never initialized via CREATE_BUF_POOL.
+	 */
+	if (isp_dev->isp_mode != ISP_MODE_LILO)
+		media_isp_device_destroy_buf_pool(isp_dev, port, chn);
 
 	return ret_val;
 }
@@ -281,6 +290,28 @@ int media_isp_device_camera_dis_connect(struct visp_dev *isp_dev, uint8_t port,
 					uint8_t chn)
 {
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO's own camera_connect_ref_cnt (incremented in
+		 * media_isp_device_camera_connect below) tracks this pairing
+		 * independently of LIMO's subdev_streamon_count[], which
+		 * LILO's stream-on/off path never touches.
+		 */
+		if (isp_port->camera_connect_ref_cnt > 0)
+			isp_port->camera_connect_ref_cnt--;
+		else
+			return 0;
+
+		if (isp_port->camera_connect_ref_cnt == 0) {
+			media_isp_device_un_register3a_lib(isp_dev, port, chn);
+			vsi_cam_device_disconnect_camera(isp_dev,
+							 isp_port->cam_device_handle);
+			media_isp_device_sensor_close(isp_dev, port);
+		}
+
+		return 0;
+	}
 
 	if ((ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0)) {
 		isp_port->camera_connect_ref_cnt = 0;
@@ -657,6 +688,65 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 	cam_device_path_streaming_cfg_t PathStatus;
 
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO's OBA-direct output writes straight to hardware with
+		 * no host-visible buffers, so it skips LIMO's buf-pool
+		 * create/ATM/ENQ-state-reset machinery below entirely - that
+		 * machinery is for the memory-output (vb2) path only.
+		 */
+		pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
+		if (strlen(isp_dev->isp_ports[port].fusa_json)) {
+			ret_val = visp_l_fusa_event(isp_dev, pad_index);
+			if (ret_val != 0 && ret_val != -EPIPE) {
+				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+					__func__, __LINE__, isp_dev->id, port);
+				goto ERR_TO_DESTROY_BUFPOOL_LILO;
+			}
+			if (ret_val == -EPIPE) {
+				dev_err(isp_dev->dev,
+					"Proceed without loadFuSa isp:%d port:%d\n",
+					isp_dev->id, port);
+			}
+		}
+
+		/*Get currest streaming state*/
+		ret_val = vsi_cam_device_get_path_streaming(
+		    isp_dev, isp_port->cam_device_handle, &PathStatus);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev,
+				"%s: port %d chn %d create GetPathStreaming failed, "
+				"ret is %d",
+				__func__, port, chn, ret_val);
+			goto ERR_TO_STOP_FUSA_LILO;
+		}
+		PathStatus.out_path_enable |= (1 << chn);
+
+		/*Set streaming state*/
+		ret_val = vsi_cam_device_set_path_streaming(
+		    isp_dev, isp_port->cam_device_handle, &PathStatus);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(
+			    isp_dev->dev,
+			    "port %d chn %d CamDevice start stream failed, ret is %d",
+			    port, chn, ret_val);
+			ret_val = VSI_ERR_NOTREADY;
+			goto ERR_TO_STOP_FUSA_LILO;
+		}
+
+		return ret_val;
+
+ERR_TO_STOP_FUSA_LILO:
+		if (strlen(isp_dev->isp_ports[port].fusa_json))
+			visp_stop_fusa_event(isp_dev, pad_index);
+
+ERR_TO_DESTROY_BUFPOOL_LILO:
+		media_isp_device_camera_dis_connect(isp_dev, port, chn);
+		isp_destroy_pipeline(isp_dev, port, chn);
+
+		return ret_val;
+	}
+
 	/*Create Buffer pool*/
 	ret_val = media_isp_device_create_buf_pool(isp_dev, port, chn);
 	if (ret_val != VSI_SUCCESS) {
@@ -752,6 +842,118 @@ ERR_TO_DESTROY_BUFPOOL:
 	isp_destroy_pipeline(isp_dev, port, chn);
 
 	return ret_val;
+}
+
+/*
+ * LILO-only: walks the DT "ports" node directly and stream-on's every
+ * pad with a valid remote endpoint in one call, unlike LIMO's per-pad
+ * incremental visp_pad_s_stream flow. Called from visp_driver.c's LILO
+ * branch of visp_pad_s_stream.
+ */
+int visp_stream_on(struct visp_dev *isp_dev)
+{
+	int pad = 0;
+	int port = 0;
+	struct device *dev = isp_dev->dev;
+	struct fwnode_handle *ep = NULL;
+	struct fwnode_handle *ports, *port_p,  *remote;
+	int ret;
+
+	/* Get the "ports" block under visp node*/
+	ports = fwnode_get_named_child_node(dev_fwnode(dev), "ports");
+	if (!ports) {
+		dev_err(dev, "no 'ports' node\n");
+		return -ENODEV;
+	}
+
+	fwnode_for_each_available_child_node(ports, port_p) {
+		ret = fwnode_property_read_u32(port_p, "reg", &pad);
+		if (ret || pad == 0) {
+			dev_warn(dev, "port %s has no reg\n", fwnode_get_name(port_p));
+			continue;
+		}
+
+		/* Look at endpoints under this port */
+		fwnode_for_each_available_child_node(port_p, ep) {
+			remote = fwnode_graph_get_remote_endpoint(ep);
+			if (remote) {
+				dev_info(dev,
+					 "pad=%u (%s) has valid remote %s\n",
+					 pad,
+					 fwnode_get_name(port_p),
+					 fwnode_get_name(remote));
+
+				fwnode_handle_put(remote);
+
+				int chn = pad - 1;
+
+				ret = media_isp_device_set_format(isp_dev, port, chn);
+				if (ret != 0) {
+					dev_err(isp_dev->dev,
+						"%s isp_id : %d FAILED SetFormat\n",
+						__func__, isp_dev->id);
+					return -EINVAL;
+				}
+
+				ret = media_isp_device_stream_on(isp_dev, port, chn);
+				if (ret != 0) {
+					dev_err(isp_dev->dev,
+						"%s %d FAILED to stream  on\n",
+						__func__, __LINE__);
+					return -EINVAL;
+				}
+				isp_dev->streamon[pad] = 1;
+			}
+		}
+	}
+
+	fwnode_handle_put(ports);
+	return 0;
+}
+
+void visp_stream_off(struct visp_dev *isp_dev)
+{
+	int pad = 0;
+	int port = 0;
+	struct device *dev = isp_dev->dev;
+	struct fwnode_handle *ep = NULL;
+	struct fwnode_handle *ports, *port_p, *remote;
+	int ret;
+	/* Get the "ports" block under visp device */
+	ports = fwnode_get_named_child_node(dev_fwnode(dev), "ports");
+	if (!ports)
+		dev_err(dev, "no 'ports' node\n");
+
+	fwnode_for_each_available_child_node(ports, port_p) {
+		ret = fwnode_property_read_u32(port_p, "reg", &pad);
+		if (ret || pad == 0) {
+			dev_warn(dev, "port %s has no reg\n", fwnode_get_name(port_p));
+			continue;
+		}
+
+		/* Look at endpoints under this port */
+		fwnode_for_each_available_child_node(port_p, ep) {
+			remote = fwnode_graph_get_remote_endpoint(ep);
+			if (remote) {
+				dev_info(dev,
+					 "pad=%u (%s) has valid remote %s\n",
+					 pad,
+					 fwnode_get_name(port_p),
+					 fwnode_get_name(remote));
+
+				fwnode_handle_put(remote);
+				/* obtain chn by offsetting pad*/
+				int chn = pad - 1;
+
+				if (isp_dev->streamon[pad] == 1) {
+					/*stream off on chn*/
+					media_isp_device_stream_off(isp_dev, port, chn);
+					isp_dev->streamon[pad] = 0;
+				}
+			}
+		}
+	}
+	fwnode_handle_put(ports);
 }
 
 int isp_device_destroy(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
@@ -1049,8 +1251,30 @@ int media_isp_q_buf(struct visp_dev *isp_dev, int pad_index, media_buf *buf)
 }
 
 static int media_isp_hal_media_fmt_to_m_bus_fmt(uint32_t *code,
-						uint32_t *pixel_format)
+						uint32_t *pixel_format,
+						enum isp_mode mode)
 {
+	/*
+	 * NV16/NV12/RGB24 are the pixel formats with a different mbus code
+	 * between LIMO and LILO (see visp_lilo_mp_fmts[] RGB24 comment for
+	 * why RGB24 specifically needs RBG888_1X24, not RGB888_1X24, on
+	 * LILO) - every other case below is mode-independent.
+	 */
+	if (mode == ISP_MODE_LILO) {
+		if (*code == MEDIA_PIX_FMT_NV16) {
+			*pixel_format = MEDIA_BUS_FMT_UYVY8_1X16;
+			return VSI_SUCCESS;
+		}
+		if (*code == MEDIA_PIX_FMT_NV12) {
+			*pixel_format = MEDIA_BUS_FMT_VYYUYY8_1X24;
+			return VSI_SUCCESS;
+		}
+		if (*code == MEDIA_PIX_FMT_RGB24) {
+			*pixel_format = MEDIA_BUS_FMT_RBG888_1X24;
+			return VSI_SUCCESS;
+		}
+	}
+
 	switch (*code) {
 	case MEDIA_PIX_FMT_NV16:
 		*pixel_format = MEDIA_BUS_FMT_YUYV8_2X8;
@@ -1277,9 +1501,31 @@ static int media_isp_hal_media_fmt_to_m_bus_fmt(uint32_t *code,
 }
 
 int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
-					uint32_t fourcc)
+					uint32_t fourcc, enum isp_mode mode)
 {
 	uint32_t new_code = 0;
+
+	/*
+	 * LILO's NV16/NV12/RGB24 mbus codes (UYVY8_1X16/VYYUYY8_1X24/
+	 * RBG888_1X24) have no case below - that switch only ever had
+	 * LIMO's codes (YUYV8_2X8/YUYV8_1_5X8/RGB888_1X24). Handle LILO's
+	 * codes explicitly first; everything else is mode-independent and
+	 * reaches the switch below unchanged.
+	 */
+	if (mode == ISP_MODE_LILO) {
+		if (*code == MEDIA_BUS_FMT_UYVY8_1X16) {
+			*pixel_format = MEDIA_PIX_FMT_NV16;
+			goto roundtrip_check;
+		}
+		if (*code == MEDIA_BUS_FMT_VYYUYY8_1X24) {
+			*pixel_format = MEDIA_PIX_FMT_NV12;
+			goto roundtrip_check;
+		}
+		if (*code == MEDIA_BUS_FMT_RBG888_1X24) {
+			*pixel_format = MEDIA_PIX_FMT_RGB24;
+			goto roundtrip_check;
+		}
+	}
 
 	switch (*code) {
 	case MEDIA_BUS_FMT_YUYV8_2X8:
@@ -1340,8 +1586,19 @@ int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
 		return VSI_ERR_ILLEGAL_PARAM;
 	}
 
-	/* double check fourcc and media bus format*/
-	media_isp_hal_media_fmt_to_m_bus_fmt(&new_code, pixel_format);
+roundtrip_check:
+	/*
+	 * double check fourcc and media bus format
+	 * NOTE: this call's arguments were previously swapped (passed a
+	 * zeroed local as the input and the just-computed pixel_format as
+	 * the output), so this check always compared 0 against *code and
+	 * always failed - silently, since no caller here checks this
+	 * function's return value. Fixed to pass pixel_format as input and
+	 * new_code as output, matching what the comparison below expects,
+	 * and threaded mode through so LILO's NV16/NV12 codes round-trip
+	 * correctly instead of back to LIMO's.
+	 */
+	media_isp_hal_media_fmt_to_m_bus_fmt(pixel_format, &new_code, mode);
 	if (new_code != *code)
 		return VSI_ERR_ILLEGAL_PARAM;
 
@@ -1370,18 +1627,33 @@ int media_isp_hal_set_fmt(struct visp_dev *isp_dev, int pad,
 	SdFmt->format.colorspace = format->color_space;
 	SdFmt->format.quantization = format->quantization;
 
-	memset(&fmt_res, 0, sizeof(fmt_res));
-	fmt_res.fourcc = format->pixel_format;
-	fmt_res.stride = format->stride;
-	if (sizeof(SdFmt->format.reserved) >= sizeof(fmt_res)) {
-		memcpy(SdFmt->format.reserved, &fmt_res, sizeof(fmt_res));
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * Must match the plain-fourcc (no stride) layout LILO's
+		 * visp_set_fmt reads back from format.reserved.
+		 */
+		if (sizeof(SdFmt->format.reserved) == (sizeof(uint16_t) * 10)) {
+			memcpy(SdFmt->format.reserved, &format->pixel_format,
+			       sizeof(format->pixel_format));
+		} else {
+			memcpy(&SdFmt->format.reserved[1], &format->pixel_format,
+			       sizeof(format->pixel_format));
+		}
 	} else {
-		kfree(SdFmt);
-		return -EINVAL;
+		memset(&fmt_res, 0, sizeof(fmt_res));
+		fmt_res.fourcc = format->pixel_format;
+		fmt_res.stride = format->stride;
+		if (sizeof(SdFmt->format.reserved) >= sizeof(fmt_res)) {
+			memcpy(SdFmt->format.reserved, &fmt_res, sizeof(fmt_res));
+		} else {
+			kfree(SdFmt);
+			return -EINVAL;
+		}
 	}
 
 	ret_val = media_isp_hal_media_fmt_to_m_bus_fmt(&format->pixel_format,
-						      &SdFmt->format.code);
+						      &SdFmt->format.code,
+						      isp_dev->isp_mode);
 	if (ret_val != 0) {
 		kfree(SdFmt);
 		dev_err(isp_dev->dev, "%s: media_isp_hal_set_fmt failed %d",
@@ -1400,7 +1672,8 @@ int media_isp_hal_set_fmt(struct visp_dev *isp_dev, int pad,
 }
 
 static int media_fmt_to_isp_fmt(uint32_t *media_fmt,
-				cam_device_pipe_out_fmt_t *IspFmt)
+				cam_device_pipe_out_fmt_t *IspFmt,
+				enum isp_mode mode)
 {
 	switch (*media_fmt) {
 	case MEDIA_PIX_FMT_YUYV:
@@ -1488,6 +1761,15 @@ static int media_fmt_to_isp_fmt(uint32_t *media_fmt,
 		IspFmt->data_bits = 10;
 		break;
 	case MEDIA_PIX_FMT_RGB24:
+		/*
+		 * LIMO's memory-out path wants interleaved RGB888; LILO's
+		 * OBA/live-out path wants the same packed layout as RGB24P.
+		 */
+		if (mode == ISP_MODE_LILO) {
+			IspFmt->out_format = CAMDEV_PIX_FMT_RGB888P;
+			IspFmt->data_bits = 8;
+			break;
+		}
 		IspFmt->out_format = CAMDEV_PIX_FMT_RGB888;
 		IspFmt->data_bits = 8;
 		break;
@@ -1584,6 +1866,14 @@ static int media_fmt_to_isp_fmt(uint32_t *media_fmt,
 		IspFmt->data_bits = 24;
 		break;
 	default:
+		if (mode == ISP_MODE_LILO) {
+			/* LILO falls back to raw24 instead of failing here. */
+			pr_warn("%s: unrecognized pixel_format=0x%x on LILO, falling back to RAW24\n",
+				__func__, *media_fmt);
+			IspFmt->out_format = CAMDEV_PIX_FMT_RAW24;
+			IspFmt->data_bits = 24;
+			break;
+		}
 		printk(KERN_ERR "Not support format %s", (char *)media_fmt);
 		return VSI_ERR_NOT_SUPPORT;
 	}
@@ -1944,10 +2234,70 @@ int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 	IspFormat.out_height = isp_dev->isp_ports[port]
 				   .isp_chns[chn]
 				   .format.height; //  format->height;
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO always runs its output paths live/stream-type (OBA);
+		 * it also cares about pad width/height + alpha/yuv_order for
+		 * the RPU's live pixel pipeline instead of LIMO's host
+		 * buf_stride (memory-out only needs that). Derived from
+		 * isp_dev->isp_mode (matched compatible), not the xlnx,io_mode
+		 * DT string - see the isp_mode derivation comment in
+		 * visp_parse_params for why that string isn't trustworthy.
+		 */
+		isp_port->path_out_type[chn] = 1;
+		IspFormat.path_out_type = isp_port->path_out_type[chn];
+
+		ret_val = media_fmt_to_isp_fmt(
+		    &(isp_dev->isp_ports[port].isp_chns[chn].format.pixel_format),
+		    &IspFormat, isp_dev->isp_mode);
+		if (ret_val)
+			return ret_val;
+
+		IspFormat.out_width =
+		    isp_dev->pad_data[port * MEDIA_ISP_PORT_PAD_COUNT + chn + 1]
+			.format.width;
+		IspFormat.out_height =
+		    isp_dev->pad_data[port * MEDIA_ISP_PORT_PAD_COUNT + chn + 1]
+			.format.height;
+		IspFormat.alpha = 0;
+		IspFormat.yuv_order = 0;
+
+		ret_val = vsi_cam_device_set_out_format(
+		    isp_dev, isp_port->cam_device_handle, chn, &IspFormat);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev,
+				"port %d chn %d set format failed, ret is %d", port,
+				chn, ret_val);
+			ret_val = VSI_ERR_TIMEOUT;
+			goto ERR_TO_CAMERA_DISCONNECT_LILO;
+		}
+		/*
+		 * Unconditional: the enclosing isp_mode == ISP_MODE_LILO check
+		 * above already guarantees LILO. Do not re-derive mode from
+		 * isp_dev->ss_mode_i0 (the xlnx,io_mode DT string) here - it's
+		 * the same unreliable string the comment above this block
+		 * already warns about. A node correctly bound as LILO via
+		 * compatible but with a stale io_mode string would silently
+		 * skip OBA init here even though set_out_format just
+		 * succeeded, leaving OBA uninitialized.
+		 */
+		oba_init_send_command(isp_dev, isp_port->cam_device_handle, chn);
+
+		return ret_val;
+
+ERR_TO_CAMERA_DISCONNECT_LILO:
+		if (isp_dev->isp_ports[port].camera_connect_ref_cnt)
+			media_isp_device_camera_dis_connect(isp_dev, port, chn);
+		if (isp_dev->isp_ports[port].cam_device_handle)
+			isp_destroy_pipeline(isp_dev, port, chn);
+		return ret_val;
+	}
+
 	IspFormat.path_out_type = isp_port->path_out_type[chn];
 	ret_val = media_fmt_to_isp_fmt(
 	    &(isp_dev->isp_ports[port].isp_chns[chn].format.pixel_format),
-	    &IspFormat);
+	    &IspFormat, isp_dev->isp_mode);
 	if (ret_val)
 		return ret_val;
 
@@ -2265,7 +2615,8 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 		goto ERR_TO_RELEASE_CAMCOMMON;
 	}
 
-	if (isp_dev->ports_mask != 0x01) {
+	/* MCM (multi-camera-mode chaining) is a LIMO-only feature */
+	if (isp_dev->isp_mode != ISP_MODE_LILO && isp_dev->ports_mask != 0x01) {
 		ret_val = media_isp_device_mcm_init(isp_dev, port);
 		if (ret_val != VSI_SUCCESS) {
 			dev_err(isp_dev->dev,
@@ -2295,10 +2646,14 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 		goto ERR_TO_TERMINATE_MCM;
 	}
 
+	/* Paired with media_isp_device_camera_dis_connect()'s LILO branch */
+	if (isp_dev->isp_mode == ISP_MODE_LILO)
+		isp_port->camera_connect_ref_cnt++;
+
 	return ret_val;
 
 ERR_TO_TERMINATE_MCM:
-	if (isp_dev->ports_mask != 0x01)
+	if (isp_dev->isp_mode != ISP_MODE_LILO && isp_dev->ports_mask != 0x01)
 		media_isp_device_mcm_terminate(isp_dev, port);
 ERR_TO_CLOSE_SENSOR:
 	if (vsi_cam_device_sensor_close(isp_dev, isp_port->cam_device_handle)) {
@@ -2689,8 +3044,21 @@ int media_isp_calib_query_sensor(struct visp_dev *isp_dev, uint8_t port)
 	       &QueryInfo->sensor_mode_info[sensor_mode],
 	       sizeof(QueryInfo->sensor_mode_info[sensor_mode]));
 
-	isp_port->sensor_info.frame_rate =
-	    isp_port->sensor_info.mode_info.max_fps;
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO only defaults frame_rate to the sensor's max_fps once;
+		 * a later re-query (e.g. reconnect) must not clobber a
+		 * frame rate the user already set via S_INTERVAL.
+		 */
+		if (!ISP_DEV_EXTENDED(isp_dev)->fps_initialized) {
+			isp_port->sensor_info.frame_rate =
+			    isp_port->sensor_info.mode_info.max_fps;
+			ISP_DEV_EXTENDED(isp_dev)->fps_initialized = true;
+		}
+	} else {
+		isp_port->sensor_info.frame_rate =
+		    isp_port->sensor_info.mode_info.max_fps;
+	}
 
 	return ret_val;
 }
@@ -2900,16 +3268,25 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 	}
 
 	CamConfig.isp_hw_id = isp_dev->id;
+	/*
+	 * Both LIMO and LILO are sensor-fed; this module is never built into
+	 * visp_mimo, so there's no "mi*" case to handle here. Matches LIMO's
+	 * original unconditional hardcode - not derived from the xlnx,io_mode
+	 * string (see the isp_mode derivation comment in visp_parse_params).
+	 */
 	CamConfig.input_cfg.input_type = CAMDEV_INPUT_TYPE_SENSOR;
 	if (isp_port->cam_device_handle)
 		goto CHANGE_SENSOR_MODE;
 
-	if (isp_dev->ports_mask != 0x01) {
+	/* MCM (multi-camera-mode chaining) is a LIMO-only feature */
+	if (isp_dev->isp_mode != ISP_MODE_LILO && isp_dev->ports_mask != 0x01) {
 		CamConfig.work_cfg.work_mode = CAMDEV_WORK_MODE_MCM;
 		CamConfig.work_cfg.mode_cfg.mcm.port_id =
 		    port + 1; //"1:CAMDEV_MCM_PORT_0, 2:CAMDEV_MCM_PORT_1, ..."
+		/* 1:CAMDEV_MCM_OP_SW, 2:CAMDEV_MCM_OP_HW */
 		CamConfig.work_cfg.mode_cfg.mcm.mcm_op =
-			isp_dev->isp_ports[port].hw_mcm ? CAMDEV_MCM_OP_HW : CAMDEV_MCM_OP_SW;; //"1:CAMDEV_MCM_OP_SW, 2:CAMDEV_MCM_OP_HW"
+			isp_dev->isp_ports[port].hw_mcm ?
+			CAMDEV_MCM_OP_HW : CAMDEV_MCM_OP_SW;
 		dev_info(isp_dev->dev, "isp : %d Port :%d MCM Mode %d",
 				isp_dev->id, port, CamConfig.work_cfg.mode_cfg.mcm.mcm_op);
 	} else {
@@ -2918,7 +3295,16 @@ int isp_device_create(struct visp_dev *isp_dev, uint8_t port)
 		    port + 1; //"1:CAMDEV_MCM_PORT_0, 2:CAMDEV_MCM_PORT_1, ..."
 	}
 
-	CamConfig.output_cfg.output_type = CAMDEV_OUTPUT_TYPE_MEMORY;
+	/*
+	 * LIMO's memory-out path needs CAMDEV_OUTPUT_TYPE_MEMORY; LILO's
+	 * OBA/live-out path needs CAMDEV_OUTPUT_TYPE_ONLINE. Gated on
+	 * isp_dev->isp_mode (derived from the matched compatible), not the
+	 * xlnx,io_mode DT string directly - that string can be stale/
+	 * inconsistent with the compatible on real overlays (see the
+	 * isp_mode derivation comment in visp_parse_params).
+	 */
+	CamConfig.output_cfg.output_type = isp_dev->isp_mode == ISP_MODE_LILO ?
+		CAMDEV_OUTPUT_TYPE_ONLINE : CAMDEV_OUTPUT_TYPE_MEMORY;
 	CamConfig.priority = CAMDEV_SEQ_PRI_0;
 
 	/****CamDeviceCreate*****/
@@ -3037,8 +3423,10 @@ CHANGE_SENSOR_MODE:
 	format->width = isp_port->sink_info.rect.width;
 	format->height = isp_port->sink_info.rect.height;
 	format->pixel_format = isp_port->sink_info.fourcc;
-	visp_get_format_stride_public(isp_dev, format->pixel_format,
-				      format->width, format->height, &format->stride);
+	/* LILO's media_isp_hal_set_fmt branch never reads format->stride */
+	if (isp_dev->isp_mode != ISP_MODE_LILO)
+		visp_get_format_stride_public(isp_dev, format->pixel_format,
+					      format->width, format->height, &format->stride);
 
 	ret_val = media_isp_hal_set_fmt(isp_dev, port * MEDIA_ISP_PORT_PAD_COUNT,
 				       format);
@@ -3079,6 +3467,97 @@ ERR_TO_DESTROY_CAMDEVICE_HANDLE:
 
 int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 {
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		/*
+		 * LILO hardcodes port=0/chn=0 here (matches its typical
+		 * single-port deployment) rather than deriving from pad like
+		 * LIMO does below, and reorders the FUSA-event load to before
+		 * calib/camera-connect rather than after - both are LILO's
+		 * own established, working sequence and kept exactly as-is.
+		 * camera_connect_ref_cnt is a true symmetric refcount here
+		 * (incremented inside media_isp_device_camera_connect's LILO
+		 * branch, decremented in _dis_connect's), unlike LIMO's use
+		 * of it below as a one-time "already set up" latch.
+		 */
+		int ret = 0;
+		int port = 0;
+		int chn = 0;
+
+		if (!isp_dev->isp_ports[port].cam_device_handle) {
+			ret = isp_device_create(isp_dev, port);
+			if (ret != VSI_SUCCESS) {
+				dev_err(isp_dev->dev, "CamDevice Creat Isp , ret is %d", ret);
+				return ret;
+			}
+		}
+		if (isp_dev->isp_ports[port].camera_connect_ref_cnt == 0) {
+			if (strlen(isp_dev->isp_ports[port].fusa_json)) {
+				ret = visp_l_fusa_event(isp_dev, pad);
+				if (ret != 0 && ret != -EPIPE) {
+					dev_err(isp_dev->dev,
+						"[EVENT_FAIL] %s %d isp:%d port:%d ret:%d\n",
+						__func__, __LINE__, isp_dev->id, port, ret);
+					isp_device_destroy(isp_dev, port, chn);
+					return ret;
+				}
+				if (ret == -EPIPE) {
+					dev_err(isp_dev->dev,
+						"Proceed without loadFuSa isp:%d port:%d\n",
+						isp_dev->id, port);
+				}
+			}
+#ifdef LOAD_CALIB_ENABLE
+			mutex_lock(&isp_dev->rpu->rpu_lock);
+			ret = visp_l_calib_event(isp_dev, pad);
+			if (ret != 0 && ret != -EPIPE) {
+				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+					__func__, __LINE__, isp_dev->id, port);
+				mutex_unlock(&isp_dev->rpu->rpu_lock);
+				isp_device_destroy(isp_dev, port, chn);
+				return ret;
+			}
+			if (ret == -EPIPE) {
+				dev_err(isp_dev->dev, "Proceed without loadcalib isp:%d port:%d\n",
+					isp_dev->id, port);
+			}
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+#endif
+
+			ret = media_isp_device_camera_connect(isp_dev, pad);
+			if (ret != 0) {
+				dev_err(isp_dev->dev,
+					"%s %d FAiled camera connect\n",
+					__func__, __LINE__);
+				isp_device_destroy(isp_dev, port, chn);
+				return ret;
+			}
+
+#ifdef LOAD_CALIB_ENABLE
+			mutex_lock(&isp_dev->rpu->rpu_lock);
+			ret = visp_l_json_event(isp_dev, pad);
+			if (ret != 0 && ret != -EPIPE) {
+				dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d isp:%d port:%d\n",
+					__func__, __LINE__, isp_dev->id, port);
+				/*clean connect camera*/
+				if (strlen(isp_dev->isp_ports[port].fusa_json))
+					visp_stop_fusa_event(isp_dev, pad);
+				media_isp_device_camera_dis_connect(isp_dev, port, chn);
+				/*cleanup done Release the lock*/
+				mutex_unlock(&isp_dev->rpu->rpu_lock);
+				isp_device_destroy(isp_dev, port, chn);
+				return ret;
+			}
+			if (ret == -EPIPE) {
+				dev_err(isp_dev->dev, "Proceed without loadJson/3A isp:%d port:%d\n",
+					isp_dev->id, port);
+			}
+			mutex_unlock(&isp_dev->rpu->rpu_lock);
+#endif
+		}
+
+		return ret;
+	}
+
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 	int ret = 0;

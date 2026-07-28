@@ -143,13 +143,17 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 				   isp_dev->isp_ports[port].sensor_info.i2c_id);
 			seq_printf(sfile, "buffer_type : %s\n",
 				   isp_dev->isp_ports[port].bufmode);
-			seq_printf(sfile, "hw_mcm      : %s\n",
-					isp_dev->isp_ports[port].hw_mcm ? "1 / Enable" : "0 / Disable" );
+			if (isp_dev->isp_mode == ISP_MODE_LIMO)
+				seq_printf(sfile, "hw_mcm      : %s\n",
+						isp_dev->isp_ports[port].hw_mcm ? "1 / Enable" : "0 / Disable");
 			seq_printf(sfile, "fusa_json   : %s\n",
 				   isp_dev->isp_ports[port].fusa_json);
 
-			/* Display LLP status, capability, and which path it's enabled for */
-			{
+			/* LLP (low-latency path) is a LIMO/MCM-only concept; LILO has
+			 * no consumer for llp[]/llp_capable[], so keep it out of the
+			 * LILO view rather than showing an always-inert knob.
+			 */
+			if (isp_dev->isp_mode == ISP_MODE_LIMO) {
 				int llp_path = -1;
 				int capable_path = -1;
 				int i;

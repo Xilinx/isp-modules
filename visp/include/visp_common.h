@@ -75,7 +75,7 @@ int media_isp_device_qbuf(struct visp_dev *isp_dev, uint8_t port, uint8_t chn,
 			  media_buf *buf);
 int media_isp_q_buf(struct visp_dev *isp_dev, int pad_index, media_buf *buf);
 int media_isp_hal_mbus_fmt_to_media_fmt(uint32_t *code, uint32_t *pixel_format,
-					uint32_t fourcc);
+					uint32_t fourcc, enum isp_mode mode);
 int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 				uint8_t chn);
 int media_isp_calib_get_mode_info(struct visp_dev *isp_dev, uint8_t port,

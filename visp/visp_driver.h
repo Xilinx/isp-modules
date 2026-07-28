@@ -79,6 +79,7 @@
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
 #define VISP_NAME "visp-isp-subdev"
+#define VISP_NAME_LILO "visp-isp-subdev-lilo"
 #define VISP_SUBDEV_NAME_SIZE 52
 
 #define VISP_WIDTH_ALIGN 16
@@ -97,8 +98,13 @@
 #define MAX_PORTS 4 // Number of ports to parse
 #define MAX_NO_ISP 6
 #define VISP_MAX_UPSTREAM_NODES 16
-/* Allow MP+SP on the same port to enqueue in parallel */
-#define ENQ_WQ_MAX_ACTIVE 3
+/* Max concurrent active work items in a port's enqueue workqueue.
+ * LIMO allows MP+SP1+SP2 to enqueue in parallel; LILO's memory-out
+ * path keeps them serialized. Selected per isp_mode at workqueue
+ * creation (visp_driver.c).
+ */
+#define ENQ_WQ_MAX_ACTIVE_LIMO 3
+#define ENQ_WQ_MAX_ACTIVE_LILO 1
 /* Per-port per-chain enqueue workqueues (MP/SP1 only) */
 #define ENQ_WQ_CHAIN_MAX 2
 
@@ -114,12 +120,6 @@ enum visp_port_pad_e {
 };
 
 #define VISP_PAD_NR (VISP_PORT_NR * VISP_PORT_PAD_NR)
-
-/* Helper function to calculate number of pads based on num_streams */
-static inline int visp_get_num_pads(u32 num_streams)
-{
-	return num_streams * VISP_PORT_PAD_NR;
-}
 
 /* Forward declaration for mailbox message structure */
 struct mbox_post_msg;
@@ -188,17 +188,6 @@ typedef struct iba_info {
 	u32 frame_rate;
 } __attribute((__packed__)) __attribute((aligned(8))) iba_info_t;
 
-struct visp_sensor_info {
-	char sensor[MEDIA_ISP_CHAR_LENGTH_MAX];
-	uint8_t mode;
-	char calib[MEDIA_ISP_CHAR_LENGTH_MAX];
-	char manu_json[MEDIA_ISP_PATH_LENGTH_MAX];
-	char auto_json[MEDIA_ISP_PATH_LENGTH_MAX];
-	char one_json[MEDIA_ISP_PATH_LENGTH_MAX];
-	uint32_t vc_id;
-	uint32_t sensor_id;
-};
-
 struct visp_port_info {
 	uint32_t vcid;
 	uint32_t data_format;
@@ -237,8 +226,21 @@ enum isp_mode {
 	ISP_MODE_UNKNOWN,
 };
 
-struct visp_limo_isp_dev_extended {
-	int id;
+struct buf_instance {
+	int num_bufs;  /* how many buffers this instance has */
+	void **buffer; /* array of buffer pointers */
+};
+
+/*
+ * Superset of the mode-specific state that used to live in separate
+ * visp_limo_isp_dev_extended / visp_lilo_isp_dev_extended structs before
+ * visp and visp_lilo were unified into one driver. LIMO fields are only
+ * populated/consumed under ISP_MODE_LIMO; LILO fields only under
+ * ISP_MODE_LILO. Kept out of struct visp_dev itself so its layout stays
+ * stable across isp_mode (and shared with visp_mimo).
+ */
+struct visp_isp_dev_extended {
+	/* --- LIMO: MCM / cross-ISP shared-upstream pipeline discovery --- */
 	int subdev_streamon_count[VISP_PORT_PAD_NR];
 	struct device_node *upstream_nodes[VISP_PORT_NR][VISP_MAX_UPSTREAM_NODES];
 	u32 upstream_node_count[VISP_PORT_NR];
@@ -262,11 +264,14 @@ struct visp_limo_isp_dev_extended {
 	 * that a delayed/late stream-off path can detect when its (port, chn)
 	 * slot has been reassigned and skip stamping -ESHUTDOWN over the new
 	 * session's enq_ack_error[] / completions.
-	 * Lives in the extended struct so it is local to the visp module and
-	 * does not perturb the struct visp_dev layout shared with visp_lilo /
-	 * visp_mimo.
 	 */
 	atomic_t stream_seq[MAX_PORTS][4];  /* [port][path] */
+
+	/* --- LILO: OBA / memory-out buffer tracking --- */
+	bool is_oba_yuv_420[VISP_PORT_PAD_NR];
+	int yuv_420_format_index[VISP_PORT_PAD_NR];
+	struct buf_instance buf_list[VISP_PORT_PAD_NR];
+	bool fps_initialized;
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
@@ -414,7 +419,11 @@ int visp_get_pipeline_subdev_count(struct visp_dev *isp_dev, int port);
 struct v4l2_subdev *visp_get_pipeline_subdev(struct visp_dev *isp_dev, int port, int index);
 
 #define ISP_DEV_EXTENDED(isp_dev) \
-((struct visp_limo_isp_dev_extended *)((isp_dev)->extended_struct))
+((struct visp_isp_dev_extended *)((isp_dev)->extended_struct))
 
-//
+static inline int visp_get_num_pads(struct visp_dev *isp_dev)
+{
+	return isp_dev->num_streams * VISP_PORT_PAD_NR;
+}
+
 #endif
