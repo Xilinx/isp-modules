@@ -62,7 +62,7 @@
 #include <linux/slab.h>
 #include <mbox_fifo.h>
 #include <sensor_cmd.h>
-#include <asm-generic/barrier.h>
+#include <asm/barrier.h>
 
 void visp_mbox_fifo_info(fifo_control *fifo)
 {
@@ -114,9 +114,9 @@ int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 	 * CRITICAL: Read indices with system barrier for cross-cluster visibility
 	 * read_offset: Modified by RPU (consumer), must see fresh value (now simple index)
 	 * write_offset: Local to this producer (now simple index)
-	 * Use //dmb(sy) not dmb(ish) - RPU may be in different cluster
+	 * Use dmb(sy) not dmb(ish) - RPU may be in different cluster
 	 */
-	//dmb(sy);  /* System-wide barrier - invalidate cache before reading RPU's read_offset */
+	dmb(sy);  /* System-wide barrier - invalidate cache before reading RPU's read_offset */
 	current_write_offset = fifo->write_offset;
 	current_read_offset = READ_ONCE(fifo->read_offset);
 
@@ -139,17 +139,16 @@ int visp_mbox_fifo_write(mbox_post_msg *msg, fifo_control *fifo)
 		     8));
 	/*
 	 * CRITICAL: Memory barrier sequence for APU→RPU communication
-	 * Use //dmb(sy) for full system visibility (matches RPU's dsb_sync_barrier)
-	 * 1. //dmb(sy): Ensure memcpy completes before updating write_offset
+	 * Use dmb(sy) for full system visibility (matches RPU's dsb_sync_barrier)
+	 * 1. dmb(sy): Ensure memcpy completes before updating write_offset
 	 * 2. WRITE_ONCE: Atomic write of write_offset
-	 * 3. //dmb(sy): Ensure write_offset visible to RPU before IPI trigger
-	 * NOTE: Barriers are currently commented out; enable if coherence issues are observed.
+	 * 3. dmb(sy): Ensure write_offset visible to RPU before IPI trigger
 	 */
-	//dmb(sy);
+	dmb(sy);
 	WRITE_ONCE(fifo->write_offset,
 		   (current_write_offset + 1) >= fifo->item_total ?
 		   0 : (current_write_offset + 1));
-	//dmb(sy);
+	dmb(sy);
 
 	return VPI_SUCCESS;
 }
@@ -167,15 +166,14 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 	/*
 	 * CRITICAL: Memory barrier sequence for RPU→APU communication
 	 * FIXED ORDERING (was causing false EMPTY reads):
-	 * 1. //dmb(sy): System-wide barrier BEFORE reading - invalidates cached write_offset
+	 * 1. dmb(sy): System-wide barrier BEFORE reading - invalidates cached write_offset
 	 *             Ensures we see RPU's latest write_offset even from different cluster
 	 * 2. READ_ONCE: Atomic read of write_offset from memory (not cache)
 	 * 3. Check empty with fresh value
 	 *
 	 * OLD BUG: Barrier was AFTER read → CPU used stale cached write_offset → false EMPTY
-	 * NOTE: Barriers are currently commented out; enable if coherence issues are observed.
 	 */
-	//dmb(sy);  /* Full system barrier - invalidate cache before read */
+	dmb(sy);  /* Full system barrier - invalidate cache before read */
 	current_write_offset = READ_ONCE(fifo->write_offset);
 	current_read_offset = fifo->read_offset; /* Local index, no need for READ_ONCE */
 
@@ -198,12 +196,10 @@ int visp_mbox_fifo_read(mbox_post_msg *msg, fifo_control *fifo)
 
 	memcpy(msg, fifo_msg, visp_mbox_fifo_xfer_size(fifo_msg));
 
-	/* Update read_offset after memcpy completes - use system barrier for RPU visibility
-	 * NOTE: Barrier is currently commented out; enable if coherence issues are observed.
-	 */
-	//dmb(sy);  /* System-wide barrier to ensure RPU sees updated read_offset */
+	/* Update read_offset after memcpy completes - use system barrier for RPU visibility */
+	dmb(sy);  /* System-wide barrier to ensure RPU sees updated read_offset */
 	WRITE_ONCE(fifo->read_offset, next_read_offset);
-	//dmb(sy);  /* Ensure read_offset update visible to RPU before returning */
+	dmb(sy);  /* Ensure read_offset update visible to RPU before returning */
 
 	return VPI_SUCCESS;
 }
