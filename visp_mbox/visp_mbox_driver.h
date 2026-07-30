@@ -196,6 +196,8 @@ struct rpu_dev {
 	u32 inbound_seq;
 	u32 outbound_seq;
 	bool seq_resync_pending;
+	/* Consecutive irrecoverable (stale/backward) sequence mismatches. */
+	u32 seq_mismatch_count;
 };
 
 /*

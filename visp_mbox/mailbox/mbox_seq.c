@@ -58,6 +58,17 @@
 
 #define MBOX_SEQ_MAX INT_MAX
 
+/*
+ * Bounds for the "unified receiver rule" documented in
+ * telluride_isp_fw/docs/MBOX_INTEGRITY_FEATURES.md: a small forward gap is
+ * normal message loss and must be accepted/resynced immediately, while a
+ * backward/stale value or an implausibly large gap is only trustworthy after
+ * it repeats, so we escalate (force a resync) after a run of consecutive
+ * irrecoverable mismatches instead of stalling forever on a single one.
+ */
+#define MBOX_SEQ_FORWARD_GAP_MAX 1024U
+#define MBOX_SEQ_MISMATCH_ESCALATE 8U
+
 u32 visp_mbox_seq_increment(u32 seq)
 {
 	return (seq >= MBOX_SEQ_MAX) ? 0 : (seq + 1);
@@ -73,6 +84,7 @@ int visp_mbox_validate_seq(struct rpu_dev *rpu, mbox_post_msg *msg)
 	unsigned long flags;
 	u32 expected_seq;
 	u32 received_seq;
+	u32 gap;
 
 	received_seq = ((payload_packet *)msg->payload)->seq_counter;
 	if (received_seq > MBOX_SEQ_MAX) {
@@ -83,24 +95,62 @@ int visp_mbox_validate_seq(struct rpu_dev *rpu, mbox_post_msg *msg)
 	}
 
 	spin_lock_irqsave(&rpu->seq_lock, flags);
+
 	if (rpu->seq_resync_pending) {
 		rpu->seq_resync_pending = false;
+		rpu->seq_mismatch_count = 0;
 		rpu->inbound_seq = visp_mbox_seq_increment(received_seq);
 		spin_unlock_irqrestore(&rpu->seq_lock, flags);
 		return VPI_SUCCESS;
 	}
+
 	expected_seq = rpu->inbound_seq;
-	if (received_seq != expected_seq) {
+	if (received_seq == expected_seq) {
+		rpu->seq_mismatch_count = 0;
+		rpu->inbound_seq = visp_mbox_seq_increment(received_seq);
 		spin_unlock_irqrestore(&rpu->seq_lock, flags);
-		dev_err(rpu->dev,
-			"Mailbox sequence mismatch from RPU%d: expected %u got %u for msg_id=%u\n",
-			rpu->rpu_id, expected_seq, received_seq, msg->msg_id);
-		return VPI_ERR_SEQ_MISMATCH;
+		return VPI_SUCCESS;
 	}
-	rpu->inbound_seq = visp_mbox_seq_increment(received_seq);
+
+	/* Circular forward distance from expected to received in the
+	 * [0, MBOX_SEQ_MAX] sequence space (handles rollover).
+	 */
+	gap = (received_seq - expected_seq) & MBOX_SEQ_MAX;
+	if (gap > 0 && gap <= MBOX_SEQ_FORWARD_GAP_MAX) {
+		/* Small forward gap: message(s) lost, not corruption. Accept
+		 * and resync instead of stalling forever on a dropped frame.
+		 */
+		dev_warn_ratelimited(rpu->dev,
+			"Mailbox sequence gap from RPU%d: expected %u got %u (dropped %u), resyncing\n",
+			rpu->rpu_id, expected_seq, received_seq, gap);
+		rpu->seq_mismatch_count = 0;
+		rpu->inbound_seq = visp_mbox_seq_increment(received_seq);
+		spin_unlock_irqrestore(&rpu->seq_lock, flags);
+		return VPI_SUCCESS;
+	}
+
+	/* Backward/stale/duplicate value, or an implausibly large forward
+	 * gap: do not trust it on a single occurrence, but escalate to a
+	 * forced resync after a run of consecutive irrecoverable mismatches
+	 * so a corrupted or desynced counter cannot wedge this RPU forever.
+	 */
+	rpu->seq_mismatch_count++;
+	if (rpu->seq_mismatch_count >= MBOX_SEQ_MISMATCH_ESCALATE) {
+		dev_err(rpu->dev,
+			"Mailbox %u consecutive sequence mismatches from RPU%d, forcing resync at %u\n",
+			rpu->seq_mismatch_count, rpu->rpu_id, received_seq);
+		rpu->seq_mismatch_count = 0;
+		rpu->inbound_seq = visp_mbox_seq_increment(received_seq);
+		spin_unlock_irqrestore(&rpu->seq_lock, flags);
+		return VPI_SUCCESS;
+	}
 	spin_unlock_irqrestore(&rpu->seq_lock, flags);
 
-	return VPI_SUCCESS;
+	dev_err(rpu->dev,
+		"Mailbox sequence mismatch from RPU%d: expected %u got %u for msg_id=%u (count=%u)\n",
+		rpu->rpu_id, expected_seq, received_seq, msg->msg_id,
+		rpu->seq_mismatch_count);
+	return VPI_ERR_SEQ_MISMATCH;
 }
 
 void visp_mbox_mark_seq_resync(struct rpu_dev *rpu)
