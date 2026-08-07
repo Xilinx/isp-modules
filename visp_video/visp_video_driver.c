@@ -74,6 +74,69 @@
 
 #include "visp_video_register.h"
 
+/*
+ * Provided by visp.ko (visp/visp_driver.c) - looks up a probed ISP's own
+ * v4l2_subdev by device_node, for LILO mixed-mode memory-out phandle
+ * binding (visp,source-subdev/visp,source-pad).
+ *
+ * This prototype exists only so symbol_get()/typeof() below can compute the
+ * right type - it must NOT be called directly. A direct call would bake an
+ * unconditional undefined-symbol reference into visp_video.ko: the kernel
+ * module loader resolves every symbol reference at insmod time, regardless
+ * of whether the referencing code path (phandle_mode) is ever reached, so
+ * visp_video.ko would fail to load at all ("Unknown symbol visp_get_subdev")
+ * whenever it's inserted before visp.ko - including on every plain-LIMO or
+ * plain-LILO system that never uses mixed mode. Resolving it via
+ * symbol_get() at the one call site below (visp_lookup_subdev()) makes the
+ * dependency optional: visp_video.ko always loads standalone.
+ */
+extern struct v4l2_subdev *visp_get_subdev(struct device_node *np);
+
+/*
+ * visp_lookup_subdev_pinned - resolve+call visp_get_subdev() at runtime,
+ * leaving visp.ko pinned on success
+ * @np: DT node of the target ISP subdev (from visp,source-subdev)
+ * @pinned: set to true iff visp.ko's module refcount was taken by this call
+ *
+ * Looks up the symbol via symbol_get() instead of calling it directly, so
+ * visp_video.ko has no compile/load-time dependency on visp.ko.
+ *
+ * Returns the subdev pointer only once visp_get_subdev() has confirmed it's
+ * actually bound into a media graph (see that function's comment - the
+ * readiness check is done there, under visp_dev_global_mutex, not by this
+ * function or its caller), or NULL if not yet registered/ready there, or NULL
+ * if visp.ko is not currently loaded - all three cases are handled
+ * identically by the caller: treat as "not ready yet" and defer probe.
+ *
+ * Unlike an earlier version of this function, the symbol_get() pin is NOT
+ * released before returning - the caller keeps dereferencing the returned
+ * pointer (src_sd[i]->entity, ...) well after this call returns, and
+ * releasing the pin first would leave a window where visp.ko unloading in
+ * the meantime turns sd into a dangling pointer. *pinned tells the caller
+ * whether it now owns a pin it must release (symbol_put(visp_get_subdev)) on
+ * any path that does not retain sd long-term - see the call site in
+ * visp_video_probe() and the matching release in
+ * visp_video_put_src_subdevs().
+ *
+ * Only works because visp_get_subdev() is EXPORT_SYMBOL_GPL - symbol_get()
+ * refuses to resolve a plain EXPORT_SYMBOL regardless of whether the
+ * exporting module is loaded. Both modules are MODULE_LICENSE "GPL", so this
+ * is not a licensing constraint, just the export macro that must be used.
+ */
+static struct v4l2_subdev *visp_lookup_subdev_pinned(struct device_node *np,
+						     bool *pinned)
+{
+	struct v4l2_subdev *(*get_subdev_fn)(struct device_node *np);
+
+	*pinned = false;
+	get_subdev_fn = symbol_get(visp_get_subdev);
+	if (!get_subdev_fn)
+		return NULL;		/* visp.ko not loaded (yet) */
+
+	*pinned = true;
+	return get_subdev_fn(np);
+}
+
 /**
  * visp_video_discover_pipeline_subdevs - Discover all subdevices in the pipeline
  * @visp_mdev: visp media device
@@ -354,6 +417,13 @@ static int visp_video_notifier_complete(struct v4l2_async_notifier *notifier)
 	dev_dbg(visp_mdev->dev,
 		 "=== Async notifier complete - creating media pipeline links ===\n");
 
+	/*
+	 * This callback only fires for a notifier registered via
+	 * visp_video_async_register_subdev(), which visp_video_probe() only
+	 * calls on the legacy (non-phandle_mode) path - the phandle_mode path
+	 * never registers a notifier at all, creating its links directly in
+	 * visp_video_probe() instead. So no phandle_mode branch belongs here.
+	 */
 	list_for_each_entry(asc, &notifier->done_list, asc_entry) {
 		dev_dbg(visp_mdev->dev, "Pipeline bound: '%pOF'\n",
 			 to_of_node(asc->match.fwnode));
@@ -601,15 +671,101 @@ static const struct media_device_ops visp_video_media_ops = {
 	.link_notify = v4l2_pipeline_link_notify,
 };
 
+/*
+ * visp_video_parse_phandle_sources - LILO mixed-mode (memory-out) binding
+ *
+ * When the visp_video DT node declares its ISP source(s) by phandle instead
+ * of an OF-graph endpoint, each "visp,source-subdev" phandle (with a
+ * matching "visp,source-pad" index) becomes one memory-out video node bound
+ * to that ISP subdev source pad. The media link itself is created later, in
+ * visp_video_probe()/visp_video_notifier_complete(), once the subdev is
+ * known to be bound into a media graph. The number of sources becomes
+ * visp_mdev->ports.
+ */
+static int visp_video_parse_phandle_sources(struct visp_media_dev *visp_mdev,
+					    struct platform_device *pdev)
+{
+	struct device_node *np = pdev->dev.of_node;
+	int count, i;
+
+	count = of_count_phandle_with_args(np, "visp,source-subdev", NULL);
+	if (count <= 0) {
+		dev_err(&pdev->dev,
+			"visp,source-subdev: invalid phandle list (%d)\n", count);
+		return -EINVAL;
+	}
+	if (count > VISP_VIDEO_PORT_MAX) {
+		dev_warn(&pdev->dev, "clamping source count %d to %d\n",
+			 count, VISP_VIDEO_PORT_MAX);
+		count = VISP_VIDEO_PORT_MAX;
+	}
+
+	for (i = 0; i < count; i++) {
+		u32 pad = 0;
+
+		visp_mdev->src_subdev_np[i] =
+			of_parse_phandle(np, "visp,source-subdev", i);
+		if (!visp_mdev->src_subdev_np[i]) {
+			int j;
+
+			dev_err(&pdev->dev,
+				"visp,source-subdev[%d]: bad phandle\n", i);
+			/*
+			 * of_parse_phandle() took a node reference (of_node_get())
+			 * for every earlier successfully-parsed entry - release
+			 * those before bailing out, or they leak permanently
+			 * (phandle_mode is only set true on full success below,
+			 * so visp_video_put_src_subdevs() would no-op if called
+			 * from here or from the probe()-level error path).
+			 */
+			for (j = 0; j < i; j++) {
+				of_node_put(visp_mdev->src_subdev_np[j]);
+				visp_mdev->src_subdev_np[j] = NULL;
+			}
+			return -EINVAL;
+		}
+		/* matching source-pad index; defaults to 0 if the array is short */
+		of_property_read_u32_index(np, "visp,source-pad", i, &pad);
+		visp_mdev->src_subdev_pad[i] = pad;
+		visp_mdev->video_params[i].m2m = false;
+		dev_info(&pdev->dev, "mixed-mode source %d: '%pOF' pad %u\n",
+			 i, visp_mdev->src_subdev_np[i], pad);
+	}
+
+	visp_mdev->phandle_mode = true;
+	visp_mdev->ports = count;
+	return 0;
+}
+
+/*
+ * Release phandle references taken by visp_video_parse_phandle_sources(),
+ * and the visp.ko module pin taken per successfully-resolved source in
+ * visp_video_probe() (see the symbol_get() call there for why).
+ */
+static void visp_video_put_src_subdevs(struct visp_media_dev *visp_mdev)
+{
+	int i;
+
+	if (!visp_mdev->phandle_mode)
+		return;
+	for (i = 0; i < VISP_VIDEO_PORT_MAX; i++) {
+		if (visp_mdev->src_sd[i]) {
+			symbol_put(visp_get_subdev);
+			visp_mdev->src_sd[i] = NULL;
+		}
+		if (visp_mdev->src_subdev_np[i]) {
+			of_node_put(visp_mdev->src_subdev_np[i]);
+			visp_mdev->src_subdev_np[i] = NULL;
+		}
+	}
+}
+
 static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 				   struct platform_device *pdev)
 {
-	unsigned int port_id = 0;
 	int ret;
 	char node_name[50];
 	struct device_node *mem_np;
-
-	struct fwnode_handle *ep;
 
 	ret = fwnode_property_read_u32(of_fwnode_handle(pdev->dev.of_node),
 				       "id", &visp_mdev->id);
@@ -618,19 +774,31 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 		return -EINVAL;
 	}
 
-	while (1) {
-		ep = fwnode_graph_get_endpoint_by_id(
-		    dev_fwnode(visp_mdev->dev), port_id, 0,
-		    FWNODE_GRAPH_ENDPOINT_NEXT);
-		if (!ep)
-			break;
-		port_id++;
-		if (port_id >= VISP_VIDEO_PORT_MAX) {
-			dev_warn(&pdev->dev,
-				 "Reached max ports %d, ignoring additional ports\n",
-				 VISP_VIDEO_PORT_MAX);
-			break;
+	if (of_find_property(pdev->dev.of_node, "visp,source-subdev", NULL)) {
+		/* LILO mixed-mode: memory-out sources declared by phandle */
+		ret = visp_video_parse_phandle_sources(visp_mdev, pdev);
+		if (ret)
+			return ret;
+	} else {
+		/* Legacy binding: count ports from OF-graph endpoints */
+		unsigned int port_id = 0;
+		struct fwnode_handle *ep;
+
+		while (1) {
+			ep = fwnode_graph_get_endpoint_by_id(
+			    dev_fwnode(visp_mdev->dev), port_id, 0,
+			    FWNODE_GRAPH_ENDPOINT_NEXT);
+			if (!ep)
+				break;
+			port_id++;
+			if (port_id >= VISP_VIDEO_PORT_MAX) {
+				dev_warn(&pdev->dev,
+					 "Reached max ports %d, ignoring additional ports\n",
+					 VISP_VIDEO_PORT_MAX);
+				break;
+			}
 		}
+		visp_mdev->ports = port_id;
 	}
 
 	snprintf(node_name, sizeof(node_name), "isp%d_reserve_memory",
@@ -651,7 +819,6 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 		return -ENOMEM;
 	}
 
-	visp_mdev->ports = port_id;
 	return 0;
 }
 
@@ -676,6 +843,97 @@ static int visp_video_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	if (visp_mdev->phandle_mode) {
+		/*
+		 * LILO mixed-mode: this visp_media_dev owns no media_device/
+		 * v4l2_device of its own - it joins whichever one already
+		 * claimed the ISP subdev's live-out path (xilinx-vipp/vcap),
+		 * found via visp_get_subdev() rather than an OF-graph
+		 * endpoint (see that function's comment in visp/visp_driver.c
+		 * for why). Defer until the ISP subdev has probed AND been
+		 * bound into a media graph by whatever owns its live path -
+		 * src_sd->v4l2_dev is NULL until then.
+		 */
+		int i;
+
+		for (i = 0; i < visp_mdev->ports; i++) {
+			struct v4l2_subdev *sd;
+			bool pinned;
+
+			/*
+			 * visp.ko stays pinned (if resolved at all) for as long
+			 * as src_sd[i] is retained - released in
+			 * visp_video_put_src_subdevs(). The mdev-readiness check
+			 * itself (sd->v4l2_dev/->mdev) happens inside
+			 * visp_get_subdev(), under visp_dev_global_mutex, not
+			 * here: that peer instance is only guaranteed live while
+			 * that mutex is held, so a non-NULL sd returned here is
+			 * already confirmed ready - re-checking sd->v4l2_dev/
+			 * ->mdev after the fact would dereference a pointer that
+			 * a concurrent unbind of that specific peer could have
+			 * turned dangling in the meantime.
+			 */
+			sd = visp_lookup_subdev_pinned(visp_mdev->src_subdev_np[i],
+						       &pinned);
+
+			if (!sd) {
+				if (pinned)
+					symbol_put(visp_get_subdev);
+				dev_dbg(dev,
+					"mixed: source subdev not ready (visp.ko not loaded yet, or subdev not bound), deferring\n");
+				visp_video_put_src_subdevs(visp_mdev);
+				return -EPROBE_DEFER;
+			}
+			visp_mdev->src_sd[i] = sd;
+		}
+		visp_mdev->shared_v4l2_dev = visp_mdev->src_sd[0]->v4l2_dev;
+
+		ret = visp_video_register_ports(visp_mdev);
+		if (ret) {
+			dev_err(dev, "register video device nodes error\n");
+			goto err_put;
+		}
+
+		for (i = 0; i < visp_mdev->ports; i++) {
+			struct media_entity *sd_ent = &visp_mdev->src_sd[i]->entity;
+			struct video_device *vdev;
+
+			if (!visp_mdev->video_devs[i])
+				continue;
+			if (visp_mdev->src_subdev_pad[i] >= sd_ent->num_pads) {
+				dev_err(dev,
+					"mixed: source-pad %u out of range on '%s'\n",
+					visp_mdev->src_subdev_pad[i], sd_ent->name);
+				ret = -EINVAL;
+				goto err_unreg_ports;
+			}
+			vdev = visp_mdev->video_devs[i]->video;
+			ret = media_create_pad_link(sd_ent,
+						    visp_mdev->src_subdev_pad[i],
+						    &vdev->entity, 0,
+						    MEDIA_LNK_FL_ENABLED);
+			if (ret) {
+				dev_err(dev,
+					"mixed: link %s:%u -> %s:0 failed: %d\n",
+					sd_ent->name, visp_mdev->src_subdev_pad[i],
+					vdev->entity.name, ret);
+				goto err_unreg_ports;
+			}
+			dev_info(dev, "mixed: linked %s:%u -> %s:0\n",
+				 sd_ent->name, visp_mdev->src_subdev_pad[i],
+				 vdev->entity.name);
+		}
+
+		dev_info(&pdev->dev, "visp video driver (mixed) probe success\n");
+		return 0;
+
+err_unreg_ports:
+		visp_video_unregister_ports(visp_mdev);
+err_put:
+		visp_video_put_src_subdevs(visp_mdev);
+		return ret;
+	}
+
 	mdev = &visp_mdev->mdev;
 	mdev->dev = dev;
 	mdev->ops = &visp_video_media_ops;
@@ -688,6 +946,7 @@ static int visp_video_probe(struct platform_device *pdev)
 		dev_err(dev, "register v4l2 device error\n");
 		return ret;
 	}
+	visp_mdev->shared_v4l2_dev = &visp_mdev->v4l2_dev;
 
 	ret = visp_video_register_ports(visp_mdev);
 	if (ret) {
@@ -716,6 +975,7 @@ err_unregister_video_ports:
 	visp_video_unregister_ports(visp_mdev);
 err_unregister_v4l2_device:
 	v4l2_device_unregister(&visp_mdev->v4l2_dev);
+	visp_video_put_src_subdevs(visp_mdev);
 
 	return ret;
 }
@@ -726,10 +986,20 @@ static void visp_video_remove(struct platform_device *pdev)
 
 	visp_mdev = platform_get_drvdata(pdev);
 
-	visp_video_async_unregister_subdev(visp_mdev);
-	visp_video_unregister_ports(visp_mdev);
-	media_device_unregister(&visp_mdev->mdev);
-	v4l2_device_unregister(&visp_mdev->v4l2_dev);
+	if (visp_mdev->phandle_mode) {
+		/*
+		 * Mixed mode: we own only the video nodes; the media/v4l2
+		 * device belongs to the ISP subdev's live-out owner.
+		 */
+		visp_video_unregister_ports(visp_mdev);
+		visp_video_put_src_subdevs(visp_mdev);
+	} else {
+		visp_video_async_unregister_subdev(visp_mdev);
+		visp_video_unregister_ports(visp_mdev);
+		media_device_unregister(&visp_mdev->mdev);
+		v4l2_device_unregister(&visp_mdev->v4l2_dev);
+		visp_video_put_src_subdevs(visp_mdev);
+	}
 	dev_info(&pdev->dev, "visp video driver remove\n");
 }
 

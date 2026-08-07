@@ -2959,7 +2959,13 @@ int visp_video_register(struct visp_media_dev *visp_mdev, int port)
 	visp_vdev->video->fops = &visp_video_fops;
 	visp_vdev->video->ioctl_ops = &visp_video_ioctl_ops;
 	visp_vdev->video->release = video_device_release_empty;
-	visp_vdev->video->v4l2_dev = &visp_mdev->v4l2_dev;
+	/*
+	 * Phandle mode (LILO mixed-mode memory-out): shared_v4l2_dev is the
+	 * v4l2_device the ISP subdev's live-out owner (xilinx-vipp/vcap)
+	 * already created, so this node joins that media device. Legacy:
+	 * it points at our own v4l2_dev.
+	 */
+	visp_vdev->video->v4l2_dev = visp_mdev->shared_v4l2_dev;
 	visp_vdev->video->lock          = &visp_vdev->video_lock;
 	visp_vdev->video->device_caps =
 	    V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;

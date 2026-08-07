@@ -129,6 +129,41 @@ struct visp_media_dev {
 	struct visp_v4l2_link *pipeline_link;
 	uint32_t pipeline_link_size;
 #endif
+	/*
+	 * LILO mixed-mode (memory-out) binding. When the visp_video DT node
+	 * declares its ISP source(s) by phandle ("visp,source-subdev" /
+	 * "visp,source-pad") instead of an OF-graph endpoint, the media link
+	 * to the ISP subdev source pad is created programmatically at
+	 * notifier-complete. This keeps the ISP subdev's memory-path source
+	 * pad free of any OF-graph endpoint, so the in-kernel xilinx-vipp
+	 * bridge never walks (and never aborts on) that link. Legacy
+	 * endpoint-based binding (LIMO, and plain LILO) is used when
+	 * phandle_mode is false.
+	 */
+	bool phandle_mode;
+	struct device_node *src_subdev_np[VISP_VIDEO_PORT_MAX];
+	u32 src_subdev_pad[VISP_VIDEO_PORT_MAX];
+	/*
+	 * Mixed mode reuses the source subdev's existing v4l2_device /
+	 * media_device (the one xilinx-vipp created and the ISP subdev is
+	 * already bound into) instead of creating its own. shared_v4l2_dev
+	 * points there; in legacy mode it points at our own v4l2_dev.
+	 */
+	struct v4l2_device *shared_v4l2_dev;
+	/*
+	 * Resolved once in visp_video_probe() and pinned there (visp.ko's
+	 * module refcount is held for as long as each entry is non-NULL,
+	 * released in visp_video_put_src_subdevs()) - the module-level pin
+	 * only protects against visp.ko being unloaded, not against the
+	 * specific owning ISP instance being torn down independently (its
+	 * own visp_remove() while visp.ko stays resident for other
+	 * instances). Currently safe because nothing dereferences an entry
+	 * after probe (visp_video_put_src_subdevs() only null-checks and
+	 * releases the pin). Any future code that dereferences src_sd[i]
+	 * post-probe (e.g. a v4l2_subdev_call()) MUST re-resolve/validate
+	 * it first rather than trusting this cached pointer indefinitely.
+	 */
+	struct v4l2_subdev *src_sd[VISP_VIDEO_PORT_MAX];
 };
 
 struct visp_video_fmt_info {
