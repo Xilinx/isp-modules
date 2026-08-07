@@ -199,8 +199,40 @@ static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 	return ret_val;
 }
 
-static int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
-				       uint8_t chn)
+/*
+ * media_isp_mixed_mode_sibling_active - is another chn on this port still
+ * actively streaming?
+ * @exclude_chn: the chn whose own attempt (success or failure) must not
+ *   count as a "sibling" of itself
+ *
+ * A LILO mixed-mode port's camera/pipeline connection is shared by every
+ * chn on it. isp_dev->streamon[pad] is set the moment each individual chn
+ * actually starts streaming - including partway through a single
+ * visp_stream_on() DT-graph walk, which streams on every live chn on the
+ * port in one call and can leave an earlier chn successfully streaming
+ * when a later one in the same walk fails. port_stream_refcnt[port] only
+ * counts how many *outer* visp_pad_s_stream() calls are in flight for this
+ * port - it does not see a sibling that succeeded and failed within the
+ * same walk, inside a single outer call. A camera/pipeline-teardown
+ * decision must check the real per-chn streaming state here instead of
+ * relying on port_stream_refcnt[port] alone.
+ */
+bool media_isp_mixed_mode_sibling_active(struct visp_dev *isp_dev,
+					 uint8_t port, uint8_t exclude_chn)
+{
+	int c;
+
+	for (c = 0; c < MEDIA_ISP_PORT_PAD_COUNT - 1; c++) {
+		if (c == exclude_chn)
+			continue;
+		if (isp_dev->streamon[port * MEDIA_ISP_PORT_PAD_COUNT + c + 1])
+			return true;
+	}
+	return false;
+}
+
+int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
+				uint8_t chn)
 {
 	int ret_val = VSI_SUCCESS;
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
@@ -219,9 +251,15 @@ static int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 	 * LIMO's memory-out path and MCM allocate host buffer pools), so there
 	 * is nothing here to destroy. Calling it anyway sends RELEASE_BUF_MGMT/
 	 * DESTROY_BUF_POOL/DE_INIT_BUF_CHAIN for a buffer-management context the
-	 * RPU never initialized via CREATE_BUF_POOL.
+	 * RPU never initialized via CREATE_BUF_POOL. A mixed-mode memory-out
+	 * chn (output_type[port][chn] == VISP_PATH_OUT_TYPE_MEMORY) did create
+	 * one via media_isp_device_stream_on()'s generic-path handling, so
+	 * it needs destroying here too - leaving it would leak the pool and never
+	 * retire the RPU buffer-chain/DMA state across stream-on/off cycles.
 	 */
-	if (isp_dev->isp_mode != ISP_MODE_LILO)
+	if (isp_dev->isp_mode != ISP_MODE_LILO ||
+	    (ISP_DEV_EXTENDED(isp_dev)->per_path_out_type &&
+	     isp_dev->output_type[port][chn] == VISP_PATH_OUT_TYPE_MEMORY))
 		media_isp_device_destroy_buf_pool(isp_dev, port, chn);
 
 	return ret_val;
@@ -688,12 +726,30 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 	cam_device_path_streaming_cfg_t PathStatus;
 
-	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+	if (isp_dev->isp_mode == ISP_MODE_LILO &&
+	    (!ISP_DEV_EXTENDED(isp_dev)->per_path_out_type ||
+	     isp_dev->output_type[port][chn] != VISP_PATH_OUT_TYPE_MEMORY)) {
 		/*
+		 * output_type[port][chn] defaults to VISP_PATH_OUT_TYPE_MEMORY
+		 * (0) whenever per_path_out_type is false (i.e. plain LILO,
+		 * mixed mode not configured via DT) - it's a plain zero-
+		 * initialized struct visp_dev member, never written unless
+		 * "xlnx,path_out_type" is present. Without the
+		 * per_path_out_type check first, every plain-LILO chn would
+		 * misclassify as memory-out and reach LIMO's
+		 * buf-pool/ATM machinery below - regressing every existing
+		 * plain-LILO deployment, not just mixed mode.
+		 *
 		 * LILO's OBA-direct output writes straight to hardware with
 		 * no host-visible buffers, so it skips LIMO's buf-pool
 		 * create/ATM/ENQ-state-reset machinery below entirely - that
-		 * machinery is for the memory-output (vb2) path only.
+		 * machinery is for the memory-output (vb2) path only. A
+		 * mixed-mode memory-out chn (output_type[port][chn] ==
+		 * VISP_PATH_OUT_TYPE_MEMORY) reaches that machinery below
+		 * instead, same as LIMO - which is also where it picks
+		 * up the ATM prop push (isp_send_atm_prop_to_rpu()) "for
+		 * free": that's the RPU DMA-address-translation call a
+		 * memory-out path needs and a live-out path doesn't.
 		 */
 		pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 		if (strlen(isp_dev->isp_ports[port].fusa_json)) {
@@ -741,8 +797,28 @@ ERR_TO_STOP_FUSA_LILO:
 			visp_stop_fusa_event(isp_dev, pad_index);
 
 ERR_TO_DESTROY_BUFPOOL_LILO:
-		media_isp_device_camera_dis_connect(isp_dev, port, chn);
-		isp_destroy_pipeline(isp_dev, port, chn);
+		/*
+		 * This is the live-out chn's own failure path, reached via
+		 * visp_stream_on()'s DT-walk. For a mixed-mode port
+		 * (per_path_out_type), the shared camera/pipeline connection
+		 * is owned by visp_pad_s_stream()'s port-level teardown
+		 * (mixed_on_err), not by this per-chn failure path - it
+		 * already re-derives the same real per-chn streaming state
+		 * (media_isp_mixed_mode_sibling_active()) once, after this
+		 * function returns ret_val to it, so deciding it again here
+		 * would call camera_dis_connect()/isp_destroy_pipeline()
+		 * twice for the same failure (harmless only because those
+		 * calls happen to be idempotent, not by design). Skip
+		 * entirely and defer to that single decision point. Always
+		 * false for LIMO and plain LILO (per_path_out_type is only
+		 * ever set for a mixed-mode LILO instance), so this preserves
+		 * the original unconditional teardown for every other caller,
+		 * which has no such outer handler to defer to.
+		 */
+		if (!ISP_DEV_EXTENDED(isp_dev)->per_path_out_type) {
+			media_isp_device_camera_dis_connect(isp_dev, port, chn);
+			isp_destroy_pipeline(isp_dev, port, chn);
+		}
 
 		return ret_val;
 	}
@@ -838,8 +914,28 @@ ERR_TO_STOP_FUSA:
 
 ERR_TO_DESTROY_BUFPOOL:
 	media_isp_device_destroy_buf_pool(isp_dev, port, chn);
-	media_isp_device_camera_dis_connect(isp_dev, port, chn);
-	isp_destroy_pipeline(isp_dev, port, chn);
+	/*
+	 * A mixed-mode memory-out chn shares its port's camera/pipeline
+	 * connection with a live-out sibling chn - both are brought up once,
+	 * at the port's boundary, by visp_setup_isp_pipeline() (see
+	 * visp_pad_s_stream()'s mixed-mode branch). visp_pad_s_stream()'s own
+	 * teardown (mixed_on_err) already re-derives the real per-chn
+	 * streaming state (media_isp_mixed_mode_sibling_active()) once, after
+	 * this function returns ret_val to it, and decides there whether the
+	 * connection is safe to tear down - doing the same decision again
+	 * here would call camera_dis_connect()/isp_destroy_pipeline() twice
+	 * for the same failure (harmless only because those calls happen to
+	 * be idempotent, not by design). Skip entirely and defer to that
+	 * single decision point. Always false for LIMO and plain LILO
+	 * (per_path_out_type is only ever set for a mixed-mode LILO
+	 * instance), so this preserves the original unconditional behavior
+	 * for every other caller, which has no such outer handler to defer
+	 * to.
+	 */
+	if (!ISP_DEV_EXTENDED(isp_dev)->per_path_out_type) {
+		media_isp_device_camera_dis_connect(isp_dev, port, chn);
+		isp_destroy_pipeline(isp_dev, port, chn);
+	}
 
 	return ret_val;
 }
@@ -2237,20 +2333,42 @@ int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 
 	if (isp_dev->isp_mode == ISP_MODE_LILO) {
 		/*
-		 * LILO always runs its output paths live/stream-type (OBA);
-		 * it also cares about pad width/height + alpha/yuv_order for
-		 * the RPU's live pixel pipeline instead of LIMO's host
-		 * buf_stride (memory-out only needs that). Derived from
-		 * isp_dev->isp_mode (matched compatible), not the xlnx,io_mode
-		 * DT string - see the isp_mode derivation comment in
-		 * visp_parse_params for why that string isn't trustworthy.
+		 * LILO cares about pad width/height + alpha/yuv_order for the
+		 * RPU's pixel pipeline instead of LIMO's isp_chns[chn].format
+		 * source above. Derived from isp_dev->isp_mode (matched
+		 * compatible), not the xlnx,io_mode DT string - see the
+		 * isp_mode derivation comment in visp_parse_params for why
+		 * that string isn't trustworthy.
+		 *
+		 * Mixed mode (per_path_out_type): path_out_type[chn] comes
+		 * from DT "xlnx,path_out_type" (isp_dev->output_type[][]) so
+		 * a memory-out path is correctly marked MEMORY here instead
+		 * of always STREAM. Plain LILO (no mixed mode) keeps its
+		 * original always-live default.
 		 */
-		isp_port->path_out_type[chn] = 1;
+		if (ISP_DEV_EXTENDED(isp_dev)->per_path_out_type)
+			isp_port->path_out_type[chn] =
+				(isp_dev->output_type[port][chn] ==
+				 VISP_PATH_OUT_TYPE_STREAM) ? 1 : 0;
+		else
+			isp_port->path_out_type[chn] = 1;
 		IspFormat.path_out_type = isp_port->path_out_type[chn];
 
+		/*
+		 * A memory-out chn is consumed via vb2/visp_video exactly
+		 * like a LIMO chn, not via OBA/FBWR like every other LILO
+		 * chn - media_fmt_to_isp_fmt() must see ISP_MODE_LIMO for it
+		 * so it picks LIMO's interleaved CAMDEV_PIX_FMT_RGB888
+		 * instead of LILO's OBA-oriented planar CAMDEV_PIX_FMT_RGB888P
+		 * (see that function's RGB24 case). Passing isp_dev->isp_mode
+		 * unconditionally here would program the RPU with the wrong
+		 * (planar) pixel layout for every mixed-mode memory-out chn.
+		 */
 		ret_val = media_fmt_to_isp_fmt(
 		    &(isp_dev->isp_ports[port].isp_chns[chn].format.pixel_format),
-		    &IspFormat, isp_dev->isp_mode);
+		    &IspFormat,
+		    isp_port->path_out_type[chn] == VISP_PATH_OUT_TYPE_MEMORY ?
+			    ISP_MODE_LIMO : isp_dev->isp_mode);
 		if (ret_val)
 			return ret_val;
 
@@ -2263,6 +2381,50 @@ int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 		IspFormat.alpha = 0;
 		IspFormat.yuv_order = 0;
 
+		/*
+		 * Output buffer line stride: the RPU DMAs each output line at
+		 * this stride, so a stride of 0 (the previous behavior)
+		 * misplaces every line in a memory-out path's vb2 buffer -
+		 * this is the root cause of the mixed-mode RPU DMA-to-wrong-
+		 * memory stall (see the SET_ATM/buf-pool-teardown notes
+		 * elsewhere in this series; this is the third of the three
+		 * missing pieces). Harmless to compute unconditionally for a
+		 * live-out (OBA) path too - LIMO already does the same for
+		 * every path via the buf_stride assignment below this block.
+		 */
+		{
+			uint32_t stride = 0;
+			uint32_t fourcc = isp_dev->isp_ports[port]
+						  .isp_chns[chn]
+						  .format.pixel_format;
+
+			if (visp_get_format_stride_public(isp_dev, fourcc,
+							  IspFormat.out_width,
+							  IspFormat.out_height,
+							  &stride) == 0) {
+				isp_dev->isp_ports[port].isp_chns[chn].format.stride =
+					stride;
+				if (IspFormat.out_format < CAMDEV_PIX_FMT_RGB888P) {
+					IspFormat.buf_stride.y = stride;
+					/* except RGB24DWA / YUV444 aligned mode0 */
+					if (IspFormat.out_format ==
+						CAMDEV_PIX_FMT_RGB888_ALIGNED_MODE0 ||
+					    IspFormat.out_format ==
+						CAMDEV_PIX_FMT_YUV444I_ALIGNED_MODE0)
+						IspFormat.buf_stride.y = 0;
+				} else {
+					IspFormat.buf_stride.raw = stride;
+					/* except raw 8 */
+					if (IspFormat.out_format == CAMDEV_PIX_FMT_RAW8)
+						IspFormat.buf_stride.raw = 0;
+				}
+			} else {
+				dev_warn(isp_dev->dev,
+					 "%s: port %d chn %d stride calc failed for fourcc=0x%x - buf_stride left at 0, RPU DMA may misplace output lines\n",
+					 __func__, port, chn, fourcc);
+			}
+		}
+
 		ret_val = vsi_cam_device_set_out_format(
 		    isp_dev, isp_port->cam_device_handle, chn, &IspFormat);
 		if (ret_val != VSI_SUCCESS) {
@@ -2273,24 +2435,46 @@ int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 			goto ERR_TO_CAMERA_DISCONNECT_LILO;
 		}
 		/*
-		 * Unconditional: the enclosing isp_mode == ISP_MODE_LILO check
-		 * above already guarantees LILO. Do not re-derive mode from
-		 * isp_dev->ss_mode_i0 (the xlnx,io_mode DT string) here - it's
-		 * the same unreliable string the comment above this block
-		 * already warns about. A node correctly bound as LILO via
-		 * compatible but with a stale io_mode string would silently
-		 * skip OBA init here even though set_out_format just
-		 * succeeded, leaving OBA uninitialized.
+		 * OBA (FBWR output adapter) is only for live-out paths - a
+		 * mixed-mode memory-out path must NOT program OBA. Gated on
+		 * path_out_type[chn] (already correctly derived above for
+		 * both plain LILO and mixed mode), not re-derived from
+		 * isp_dev->ss_mode_i0 (the xlnx,io_mode DT string) - it's the
+		 * same unreliable string the comment above this block already
+		 * warns about. A node correctly bound as LILO via compatible
+		 * but with a stale io_mode string would silently skip OBA
+		 * init here even though set_out_format just succeeded,
+		 * leaving OBA uninitialized.
 		 */
-		oba_init_send_command(isp_dev, isp_port->cam_device_handle, chn);
+		if (isp_port->path_out_type[chn] == VISP_PATH_OUT_TYPE_STREAM)
+			oba_init_send_command(isp_dev, isp_port->cam_device_handle, chn);
 
 		return ret_val;
 
 ERR_TO_CAMERA_DISCONNECT_LILO:
-		if (isp_dev->isp_ports[port].camera_connect_ref_cnt)
-			media_isp_device_camera_dis_connect(isp_dev, port, chn);
-		if (isp_dev->isp_ports[port].cam_device_handle)
-			isp_destroy_pipeline(isp_dev, port, chn);
+		/*
+		 * Same deferred-teardown reasoning as media_isp_device_stream_
+		 * on()'s ERR_TO_DESTROY_BUFPOOL/_LILO labels, one step earlier
+		 * in the sequence: this LILO branch runs for both memory-out
+		 * and live-out mixed-mode chns (only path_out_type[chn]
+		 * differs above), and visp_pad_s_stream()'s mixed_on_err
+		 * already re-derives the real per-chn streaming state
+		 * (media_isp_mixed_mode_sibling_active()) once, after this
+		 * function returns ret_val to it, and decides there whether
+		 * the shared connection is safe to tear down - doing the same
+		 * decision again here would call camera_dis_connect()/
+		 * isp_destroy_pipeline() twice for the same failure (harmless
+		 * only because those calls happen to be idempotent, not by
+		 * design). Skip entirely and defer to that single decision
+		 * point. Always false for LIMO and plain LILO, which have no
+		 * such outer handler to defer to.
+		 */
+		if (!ISP_DEV_EXTENDED(isp_dev)->per_path_out_type) {
+			if (isp_dev->isp_ports[port].camera_connect_ref_cnt)
+				media_isp_device_camera_dis_connect(isp_dev, port, chn);
+			if (isp_dev->isp_ports[port].cam_device_handle)
+				isp_destroy_pipeline(isp_dev, port, chn);
+		}
 		return ret_val;
 	}
 

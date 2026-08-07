@@ -73,6 +73,10 @@ int media_isp_device_set_frame_rate(struct visp_dev *isp_dev, uint8_t port,
 				    uint32_t *frame_rate);
 int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 			       uint8_t chn);
+int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
+				uint8_t chn);
+bool media_isp_mixed_mode_sibling_active(struct visp_dev *isp_dev,
+					 uint8_t port, uint8_t exclude_chn);
 int isp_device_destroy(struct visp_dev *isp_dev, uint8_t port, uint8_t chn);
 int isp_destroy_cam_device(struct visp_dev *isp_dev, uint8_t port, uint8_t chn);
 int isp_destroy_pipeline(struct visp_dev *isp_dev, uint8_t port, uint8_t chn);

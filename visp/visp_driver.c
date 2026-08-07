@@ -2163,6 +2163,212 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 	int port = pad_stream->pad / MEDIA_ISP_PORT_PAD_COUNT;
 	int chn = (pad_stream->pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
 
+	/*
+	 * pad_stream->pad is fully userspace-controlled (VISP_PAD_S_STREAM is
+	 * a private ioctl on /dev/v4l-subdevX) - a sink pad (pad a multiple
+	 * of MEDIA_ISP_PORT_PAD_COUNT) yields chn == -1 here, which the
+	 * mixed-mode branch below dereferences directly as
+	 * output_type[port][chn] (an out-of-bounds read one element before
+	 * the row) and which media_isp_device_set_format()/_stream_on()
+	 * would use to index isp_chns[chn] (an out-of-bounds write) if
+	 * allowed through. Streaming a sink pad was never a valid request
+	 * for any isp_mode - reject it here once, for every branch below.
+	 */
+	if (chn < 0)
+		return -EINVAL;
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO && ext->per_path_out_type) {
+		/*
+		 * LILO mixed-mode: the live path (xilinx-vipp video.s_stream,
+		 * via visp_s_stream() below) and the memory path (visp_video's
+		 * VISP_PAD_S_STREAM) stream on/off independently but share one
+		 * sensor + ISP pipeline. port_stream_refcnt[port] (dedicated -
+		 * deliberately not LIMO's subdev_streamon_count[] above, which
+		 * tracks a different thing) does the shared bring-up once
+		 * (whichever path starts first) and the shared teardown once
+		 * the last path stops; only the triggering pad's own
+		 * format/stream-on is touched per call. Upstream subdev
+		 * enable/disable is routed through visp_shared_subdev_stream_
+		 * get()/_put() (see the plain-LILO branch below for why: the
+		 * same shared-refs table is used by every isp_dev in this
+		 * module, so a bare v4l2_subdev_call() here could kill another
+		 * instance's stream if this port's upstream subdev turns out
+		 * to be shared).
+		 *
+		 * Lock scope matches the plain-LILO/LIMO branches below: held
+		 * across the entire streamon-or-streamoff body, not just
+		 * around the initial visp_setup_isp_pipeline() call - the
+		 * boundary bring-up (set_frame_rate + shared_subdev_stream_
+		 * get) and every path's own format/stream-on must complete
+		 * before a concurrent caller on the other path can observe
+		 * this port as "already up" and start streaming against a
+		 * pipeline whose upstream isn't actually enabled yet.
+		 */
+		bool memory_path = (isp_dev->output_type[port][chn] ==
+				    VISP_PATH_OUT_TYPE_MEMORY);
+		bool boundary;
+		/*
+		 * Tracks whether visp_shared_subdev_stream_get() actually
+		 * succeeded for this call, so mixed_on_err below only calls
+		 * the matching put() when a get() truly happened.
+		 * visp_setup_isp_pipeline() and media_isp_device_set_frame_rate()
+		 * both run *before* stream_get() and can fail on their own -
+		 * without this flag, that failure would fall through to an
+		 * unconditional visp_shared_subdev_stream_put(), decrementing
+		 * (or forcing s_stream(0) on) a shared upstream subdev's
+		 * refcount without this call ever having taken a reference on
+		 * it. Since visp_shared_subdev_refs[] is one table shared by
+		 * every isp_dev instance, that could silently stream off
+		 * another ISP's still-active shared MIPI/broadcaster.
+		 */
+		bool got_subdev_ref = false;
+		struct v4l2_subdev *subdev;
+
+		mutex_lock(&isp_dev->port_lock[port]);
+
+		if (pad_stream->status == 1) {
+			isp_dev->pad_data[pad_stream->pad].stream = 1;
+
+			boundary = (ext->port_stream_refcnt[port]++ == 0);
+			if (boundary) {
+				ret = visp_setup_isp_pipeline(isp_dev,
+							      pad_stream->pad);
+				if (ret)
+					goto mixed_on_err;
+			}
+
+			spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock,
+					  flags);
+			isp_dev->pad_data[pad_stream->pad].sequence = 0;
+			spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock,
+					       flags);
+
+			if (boundary) {
+				ret = media_isp_device_set_frame_rate(
+				    isp_dev, port,
+				    &isp_dev->isp_ports[port].sensor_info.frame_rate);
+				if (ret != VSI_SUCCESS)
+					goto mixed_on_err;
+				subdev = visp_get_input_subdev(isp_dev, port);
+				if (subdev) {
+					ret = visp_shared_subdev_stream_get(subdev);
+					if (ret)
+						goto mixed_on_err;
+					got_subdev_ref = true;
+				}
+			}
+
+			if (memory_path) {
+				/* memory-out pad (visp_video): set up this pad */
+				ret = media_isp_device_set_format(isp_dev, port,
+								  chn);
+				if (ret)
+					goto mixed_on_err;
+				ret = media_isp_device_stream_on(isp_dev, port,
+								 chn);
+				if (ret)
+					goto mixed_on_err;
+				isp_dev->streamon[pad_stream->pad] = 1;
+			} else {
+				/* live-out pads: DT-graph walk */
+				ret = visp_stream_on(isp_dev);
+				if (ret) {
+					/*
+					 * visp_stream_on() walks every DT-graph
+					 * pad for this port and returns on the
+					 * first channel that fails - any earlier
+					 * channel that already succeeded is left
+					 * actively streaming. RPU must stop
+					 * before mixed_on_err's shared MIPI
+					 * disable (visp_shared_subdev_stream_put())
+					 * runs on the port_stream_refcnt boundary
+					 * below - same ordering, and same reason,
+					 * as the plain-LILO branch's
+					 * ERR_TO_CAMERA_DISCONNECT handling of
+					 * this identical failure: disabling MIPI
+					 * first can hang the RPU waiting on a
+					 * source that's already gone.
+					 * visp_stream_off() self-guards per-pad
+					 * internally, so this is a harmless no-op
+					 * for any channel that never got as far
+					 * as streaming.
+					 */
+					visp_stream_off(isp_dev);
+					goto mixed_on_err;
+				}
+			}
+			mutex_unlock(&isp_dev->port_lock[port]);
+			return 0;
+
+mixed_on_err:
+			isp_dev->streamon[pad_stream->pad] = 0;
+			isp_dev->pad_data[pad_stream->pad].stream = 0;
+			if (ext->port_stream_refcnt[port] > 0)
+				ext->port_stream_refcnt[port]--;
+			/*
+			 * Whether to actually tear the port's shared camera
+			 * connection down must be decided from the real per-chn
+			 * streaming state, not port_stream_refcnt[port]: the
+			 * live-path's visp_stream_on() (above) can stream on
+			 * more than one live chn in a single call, so a sibling
+			 * from that same call may already be up even though
+			 * port_stream_refcnt[port] was only incremented once
+			 * for this whole call - see
+			 * media_isp_mixed_mode_sibling_active()'s comment.
+			 */
+			if (!media_isp_mixed_mode_sibling_active(isp_dev, port, chn)) {
+				media_isp_device_camera_dis_connect(isp_dev,
+								    port, 0);
+				isp_destroy_pipeline(isp_dev, port, 0);
+				if (got_subdev_ref) {
+					subdev = visp_get_input_subdev(isp_dev, port);
+					if (subdev)
+						visp_shared_subdev_stream_put(subdev);
+				}
+			}
+			mutex_unlock(&isp_dev->port_lock[port]);
+			return ret;
+		}
+
+		/*
+		 * streamoff. Guard the memory path's own teardown against a
+		 * duplicate/erroneous call (media_isp_device_stream_off()
+		 * sends real RPU buf-pool teardown commands with no internal
+		 * streaming check of its own) - the live path's
+		 * visp_stream_off() already self-guards per-pad internally.
+		 */
+		if (memory_path) {
+			if (isp_dev->streamon[pad_stream->pad])
+				media_isp_device_stream_off(isp_dev, port, chn);
+		} else {
+			visp_stream_off(isp_dev);
+		}
+
+		isp_dev->streamon[pad_stream->pad] = 0;
+		isp_dev->pad_data[pad_stream->pad].stream = 0;
+
+		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
+		isp_dev->pad_data[pad_stream->pad].sequence = 0;
+		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock,
+				       flags);
+
+		if (ext->port_stream_refcnt[port] > 0)
+			ext->port_stream_refcnt[port]--;
+		/* See mixed_on_err's comment on why this checks the real
+		 * per-chn streaming state instead of port_stream_refcnt[port].
+		 */
+		if (!media_isp_mixed_mode_sibling_active(isp_dev, port, chn)) {
+			media_isp_device_camera_dis_connect(isp_dev, port, 0);
+			isp_destroy_pipeline(isp_dev, port, 0);
+			subdev = visp_get_input_subdev(isp_dev, port);
+			if (subdev)
+				visp_shared_subdev_stream_put(subdev);
+		}
+		mutex_unlock(&isp_dev->port_lock[port]);
+		return 0;
+	}
+
 	if (isp_dev->isp_mode == ISP_MODE_LILO) {
 		/*
 		 * LILO's own single-upstream-subdev streaming sequence
@@ -2422,12 +2628,42 @@ static int visp_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
 	struct visp_pad_stream_status pad_stream = {1, enable};
+	int ret;
 
 	if (isp_dev->isp_mode != ISP_MODE_LILO)
 		return 0;
 
-	visp_pad_s_stream(sd, &pad_stream);
-	return 0;
+	/*
+	 * xilinx-vipp drives the LIVE path via this subdev-global
+	 * video.s_stream. In mixed mode the live path isn't necessarily MP -
+	 * target the first path this port actually configured as
+	 * VISP_PATH_OUT_TYPE_STREAM instead of assuming pad 1.
+	 */
+	if (ISP_DEV_EXTENDED(isp_dev)->per_path_out_type) {
+		int c;
+
+		for (c = 0; c < VISP_PORT_PAD_NR - 1; c++) {
+			if (isp_dev->output_type[0][c] == VISP_PATH_OUT_TYPE_STREAM) {
+				pad_stream.pad = c + 1;
+				break;
+			}
+		}
+	}
+
+	/*
+	 * Propagate the real result instead of always returning 0 - a
+	 * caller (xilinx-vipp) that gets a false "success" here has no way
+	 * to know its stream-on actually failed underneath it. Coerce a
+	 * positive result to a negative errno first: visp_pad_s_stream()'s
+	 * failure paths can bubble up a raw VSI_ERR_* code (isp_device_create()
+	 * returning VSI_ERR_TIMEOUT etc., all positive per visp_common.h) via
+	 * visp_setup_isp_pipeline() - the standard .s_stream() contract checks
+	 * "ret < 0" for failure, so an uncoerced positive value would be
+	 * silently read as success by the v4l2/xilinx-vipp core, defeating
+	 * the point of returning the real result at all.
+	 */
+	ret = visp_pad_s_stream(sd, &pad_stream);
+	return ret > 0 ? -EIO : ret;
 }
 
 int visp_buf_done(struct v4l2_subdev *sd, void *arg)
@@ -2979,7 +3215,23 @@ static long visp_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd,
 		ret = visp_pad_buf_queue(sd, arg);
 		break;
 	case VISP_PAD_S_STREAM:
+		/*
+		 * visp_pad_s_stream()'s mixed-mode branch can bubble up a raw
+		 * positive VSI_ERR_ or RET_ code on failure (isp_device_create(),
+		 * media_fmt_to_isp_fmt(), vsi_cam_device_set_out_format(), etc.
+		 * are all positive-only error domains). This ioctl is reached
+		 * from visp_video_vb2_start_streaming() (VIDIOC_STREAMON on the
+		 * mixed-mode memory-out video node), whose own return value
+		 * flows unclamped up through vb2 core to the ioctl() syscall's
+		 * return code - a positive value there is not "< 0" and would
+		 * be silently read as success by standard V4L2 client code.
+		 * Coerce here, once, at this shared ioctl dispatch point,
+		 * rather than at each individual caller (visp_s_stream() has
+		 * its own equivalent coercion for the same reason).
+		 */
 		ret = visp_pad_s_stream(sd, arg);
+		if (ret > 0)
+			ret = -EIO;
 		break;
 	case VISP_IOC_BUFDONE:
 		ret = visp_buf_done(sd, arg);
@@ -4216,6 +4468,24 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 	}
 
 	for (pad = 0; pad < num_pads; pad++) {
+		int mp_pad_port = pad / VISP_PORT_PAD_NR;
+		int mp_pad_chn = (pad % VISP_PORT_PAD_NR) - 1;
+		/*
+		 * A LILO mixed-mode memory-out chn is consumed via vb2/
+		 * visp_video, exactly like a LIMO chn - not via OBA/FBWR like
+		 * every other LILO chn. Its fourcc<->mbus table and the
+		 * downstream CAMDEV_PIX_FMT mapping (media_fmt_to_isp_fmt())
+		 * must therefore follow LIMO's convention, not LILO's
+		 * OBA-oriented one (e.g. LILO's RBG888_1X24 vs LIMO's
+		 * RGB888_1X24 mbus code for RGB) - using LILO's own table for
+		 * a memory-out chn resolves to the wrong CAMDEV_PIX_FMT and
+		 * produces a garbled/tiled memory-out image.
+		 */
+		bool mp_pad_is_memory = ISP_DEV_EXTENDED(isp_dev)->per_path_out_type &&
+					mp_pad_chn >= 0 && mp_pad_chn < VISP_PORT_PAD_NR - 1 &&
+					isp_dev->output_type[mp_pad_port][mp_pad_chn] ==
+						VISP_PATH_OUT_TYPE_MEMORY;
+
 		if ((pad % VISP_PORT_PAD_NR) == VISP_PORT_PAD_SINK)
 			isp_dev->pads[pad].flags = MEDIA_PAD_FL_SINK;
 		else
@@ -4225,7 +4495,7 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 		case VISP_PORT_PAD_SINK:
 			break;
 		case VISP_PORT_PAD_SOURCE_MP:
-			if (isp_dev->isp_mode == ISP_MODE_LILO) {
+			if (isp_dev->isp_mode == ISP_MODE_LILO && !mp_pad_is_memory) {
 				isp_dev->pad_data[pad].num_formats =
 				    ARRAY_SIZE(visp_lilo_mp_fmts);
 				isp_dev->pad_data[pad].fmts = visp_lilo_mp_fmts;
@@ -4236,7 +4506,7 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 			}
 			break;
 		case VISP_PORT_PAD_SOURCE_SP1:
-			if (isp_dev->isp_mode == ISP_MODE_LILO) {
+			if (isp_dev->isp_mode == ISP_MODE_LILO && !mp_pad_is_memory) {
 				isp_dev->pad_data[pad].num_formats =
 				    ARRAY_SIZE(visp_lilo_sp_fmts);
 				isp_dev->pad_data[pad].fmts = visp_lilo_sp_fmts;
@@ -4247,7 +4517,7 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 			}
 			break;
 		case VISP_PORT_PAD_SOURCE_SP2:
-			if (isp_dev->isp_mode == ISP_MODE_LILO) {
+			if (isp_dev->isp_mode == ISP_MODE_LILO && !mp_pad_is_memory) {
 				isp_dev->pad_data[pad].num_formats =
 				    ARRAY_SIZE(visp_lilo_sp_fmts);
 				isp_dev->pad_data[pad].fmts = visp_lilo_sp_fmts;
@@ -4567,6 +4837,49 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 			dev_warn(&pdev->dev,
 				 "xlnx,io_mode='%s' does not match the compatible this node bound with; using the compatible (isp_mode=%u). Fix the DT.\n",
 				 isp_dev->ss_mode_i0, isp_dev->isp_mode);
+		}
+	}
+
+	/*
+	 * LILO mixed-mode: per-path live/memory output routing.
+	 * "xlnx,path_out_type" is a u32 array indexed by output path
+	 * (0=MP, 1=SP1, ...): 1 = live-out (FBWR via xilinx-vipp), 0 =
+	 * memory-out (buffers from visp_video). Absent => legacy behavior
+	 * (every LILO path is live).
+	 */
+	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+		int n = of_property_count_u32_elems(node, "xlnx,path_out_type");
+
+		if (n > 0) {
+			u32 vals[VISP_PORT_PAD_NR - 1] = { 0 };
+			int p, c, live = 0;
+
+			if (n > VISP_PORT_PAD_NR - 1)
+				n = VISP_PORT_PAD_NR - 1;
+
+			if (of_property_read_u32_array(node, "xlnx,path_out_type",
+						       vals, n) == 0) {
+				for (p = 0; p < VISP_PORT_NR; p++)
+					for (c = 0; c < n; c++)
+						isp_dev->output_type[p][c] =
+							vals[c] ? VISP_PATH_OUT_TYPE_STREAM :
+								  VISP_PATH_OUT_TYPE_MEMORY;
+
+				for (c = 0; c < n; c++)
+					if (vals[c])
+						live++;
+				if (live == 0) {
+					dev_warn(&pdev->dev,
+						 "xlnx,path_out_type all-memory invalid for LILO; forcing path0 live\n");
+					for (p = 0; p < VISP_PORT_NR; p++)
+						isp_dev->output_type[p][0] =
+							VISP_PATH_OUT_TYPE_STREAM;
+				}
+				ISP_DEV_EXTENDED(isp_dev)->per_path_out_type = true;
+				dev_info(&pdev->dev,
+					 "mixed-mode: per-path out_type from DT (%d paths)\n",
+					 n);
+			}
 		}
 	}
 
@@ -4974,13 +5287,20 @@ static int visp_probe(struct platform_device *pdev)
 
 	if (isp_dev->isp_mode == ISP_MODE_LILO) {
 		/*
-		 * LILO's OBA/live-out path has no APU-managed vb2 buffer
+		 * Plain LILO's OBA/live-out path has no APU-managed vb2 buffer
 		 * completion to notify (v-frmbuf-wr's own IRQ/vb2 completion
-		 * handles it), so no frameout_cb is registered here.
+		 * handles it), so it stays frameout_cb = NULL as before. A
+		 * LILO mixed-mode instance (per_path_out_type set) has at
+		 * least one memory-out chn whose vb2 buffer completion IS
+		 * driven by the RPU's DISPLAY_BUFFER notification (mbox_cmd.c),
+		 * same as LIMO - without the callback registered there, that
+		 * notification hits mbox_cmd.c's "CALLBACK IS NULL" path and
+		 * the completed frame is dropped.
 		 * yuv_420_format_index[] must be resolved after visp_pads_init()
 		 * has populated pad_data[].fmts[], which it has by this point.
 		 */
-		isp_dev->frameout_cb = NULL;
+		isp_dev->frameout_cb = ISP_DEV_EXTENDED(isp_dev)->per_path_out_type ?
+					handle_frameout_buffer : NULL;
 		get_yuv_420_format_index(isp_dev, CAMDEV_BUFCHAIN_MP);
 		get_yuv_420_format_index(isp_dev, CAMDEV_BUFCHAIN_SP1);
 	} else {
