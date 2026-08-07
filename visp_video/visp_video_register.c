@@ -224,6 +224,20 @@ static const struct visp_video_fmt_info visp_formats_info[] = {
 		.fourcc = V4L2_PIX_FMT_RGB24DWA,
 		.mbus = MEDIA_BUS_FMT_RGB888_1X24,
 	},
+	/*
+	 * visp_lilo reports RBG888_1X24 (0x100e) on its RGB output pad (LIMO's
+	 * visp reports RGB888_1X24 / 0x100a). Both OBA paths treat RBG888_1X24
+	 * as RGB888, so map it to the same V4L2 RGB pixel formats. Additive:
+	 * LIMO keeps using the RGB888_1X24 rows above.
+	 */
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24,
+		.mbus = MEDIA_BUS_FMT_RBG888_1X24,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB24DWA,
+		.mbus = MEDIA_BUS_FMT_RBG888_1X24,
+	},
 	{
 		.fourcc = V4L2_PIX_FMT_RGB24P,
 		.mbus = MEDIA_BUS_FMT_RGB888_3X8,
@@ -378,13 +392,45 @@ static int visp_video_mbus_to_fourcc(uint32_t mbus, uint32_t *fourcc,
 				     uint32_t fmt)
 {
 	int i;
+	int first = -1;
+	bool fmt_known = false;
 
 	for (i = 0; i < ARRAY_SIZE(visp_formats_info); i++) {
-		if ((visp_formats_info[i].mbus == mbus) &&
-		    (visp_formats_info[i].fourcc == fmt)) {
-			*fourcc = visp_formats_info[i].fourcc;
-			return 0;
+		if (fmt && visp_formats_info[i].fourcc == fmt)
+			fmt_known = true;	/* fmt hint is a known fourcc */
+		if (visp_formats_info[i].mbus != mbus)
+			continue;
+		if (first < 0)
+			first = i;		/* remember first mbus match */
+		if (visp_formats_info[i].fourcc == fmt) {
+			*fourcc = fmt;
+			return 0;		/* exact (mbus,fourcc) match */
 		}
+	}
+
+	/*
+	 * The subdev's per-pad list (visp_mp_fmts/visp_lilo_mp_fmts/etc.) can
+	 * pair a fourcc with a different media-bus code than visp_formats_info
+	 * uses here (e.g. RGB is RBG888_1X24 in the LILO subdev vs
+	 * RGB888_1X24 in this table's LIMO rows). When the caller supplies a
+	 * fourcc hint that we recognise, trust it - it comes from the
+	 * subdev's get_fmt.reserved / enum_mbus_code and is authoritative for
+	 * what the subdev is offering. This is what makes VIDIOC_ENUM_FMT
+	 * succeed.
+	 */
+	if (fmt && fmt_known) {
+		*fourcc = fmt;
+		return 0;
+	}
+
+	/*
+	 * No usable fourcc hint (e.g. the default pad format before any
+	 * SET_FMT left format.reserved == 0). Fall back to the first V4L2
+	 * format defined for this media-bus code.
+	 */
+	if (first >= 0) {
+		*fourcc = visp_formats_info[first].fourcc;
+		return 0;
 	}
 
 	return -EINVAL;
@@ -2928,9 +2974,44 @@ static int visp_video_link_setup(struct media_entity *entity,
 	return 0;
 }
 
+/*
+ * link_validate for the visp_video node.
+ *
+ * This entity is a video_device (the SINK of the ISP-subdev -> visp_video
+ * link), NOT a subdev. v4l2_subdev_link_validate() must not be used here for
+ * a LILO mixed-mode (phandle_mode) link: it is validated "in the context of
+ * the sink entity" and WARN_ON_ONCE()s + returns -EINVAL when the sink isn't
+ * a subdev.
+ *
+ * In LILO mixed mode the in-kernel xilinx-vipp media_pipeline_start()
+ * (started by the LIVE /dev/videoN path) walks the whole connected graph,
+ * which includes this ISP-subdev -> visp_video link, and validates it here.
+ * The memory path negotiates its own format via VISP_PAD_S_STREAM/
+ * set_format, so no subdev-style format check is needed at pipeline start -
+ * accept the link unconditionally for a phandle_mode link.
+ *
+ * Scoped to phandle_mode specifically (not a blanket no-op for every
+ * visp_video link): a legacy (LIMO, or non-mixed-mode LILO) link still gets
+ * the standard subdev link validation. In practice media_pipeline_start()
+ * is never invoked for a legacy link anyway (no vcap/xilinx-vipp entity ever
+ * shares that graph), but scoping this explicitly avoids relying on that as
+ * an implicit invariant.
+ */
+static int visp_video_link_validate(struct media_link *link)
+{
+	struct video_device *vdev =
+		container_of(link->sink->entity, struct video_device, entity);
+	struct visp_video_dev *visp_vdev = video_get_drvdata(vdev);
+
+	if (visp_vdev && visp_vdev->visp_mdev && visp_vdev->visp_mdev->phandle_mode)
+		return 0;
+
+	return v4l2_subdev_link_validate(link);
+}
+
 static const struct media_entity_operations visp_video_entity_ops = {
 	.link_setup = visp_video_link_setup,
-	.link_validate = v4l2_subdev_link_validate,
+	.link_validate = visp_video_link_validate,
 };
 
 int visp_video_register(struct visp_media_dev *visp_mdev, int port)

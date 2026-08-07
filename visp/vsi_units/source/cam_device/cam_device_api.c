@@ -270,8 +270,16 @@ RESULT vsi_cam_device_set_out_format(struct visp_dev *isp_dev,
 	    packet->payload_size + payload_extra_size, isp_dev->isp_rpu,
 	    MBOX_CORE_APU);
 	if (result != RET_SUCCESS) {
+		/*
+		 * Return the real RPU result code instead of flattening to
+		 * RET_FAILURE - flattening hid the true error (e.g.
+		 * RET_WRONG_STATE), making "set format failed, ret is N"
+		 * unactionable.
+		 */
+		dev_err(isp_dev->dev,
+			"%s: RPU SET_OUT_FORMAT ret=%d\n", __func__, result);
 		kfree(packet);
-		return RET_FAILURE;
+		return result;
 	}
 
 	kfree(packet);

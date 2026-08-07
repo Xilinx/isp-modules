@@ -3461,16 +3461,57 @@ static void set_default_pad_config(struct visp_dev *isp_dev)
 				 * relies on the normal lazy S_FMT flow instead.
 				 */
 				uint8_t out_path = (pad % VISP_PORT_PAD_NR) - 1;
+				int out_port = pad / VISP_PORT_PAD_NR;
 				media_fmt format_media = {0};
+				uint32_t def_fourcc;
+				/*
+				 * RBG888_1X24 vs RGB888_1X24 is a software
+				 * labeling convention, not a real channel-order
+				 * difference in the pixel data - a memory-out
+				 * chn is consumed like a LIMO chn (see
+				 * visp_pads_init()'s fmts[] table selection for
+				 * this same pad), so it must report the same
+				 * mbus code LIMO's table pairs with RGB24
+				 * (RGB888_1X24), or visp_mbus_to_fourcc()'s
+				 * table-only code match silently fails to
+				 * resolve a fourcc for this pad.
+				 */
+				bool out_is_memory =
+					ISP_DEV_EXTENDED(isp_dev)->per_path_out_type &&
+					out_path < VISP_PORT_PAD_NR - 1 &&
+					isp_dev->output_type[out_port][out_path] ==
+						VISP_PATH_OUT_TYPE_MEMORY;
 
 				if (ISP_DEV_EXTENDED(isp_dev)->is_oba_yuv_420[out_path]) {
 					pad_data->format.code = MEDIA_BUS_FMT_VYYUYY8_1X24;
 					format_media.pixel_format = MEDIA_PIX_FMT_NV12;
+					def_fourcc = V4L2_PIX_FMT_NV12;
 				} else {
-					pad_data->format.code = MEDIA_BUS_FMT_RBG888_1X24;
+					pad_data->format.code = out_is_memory ?
+						MEDIA_BUS_FMT_RGB888_1X24 :
+						MEDIA_BUS_FMT_RBG888_1X24;
 					format_media.pixel_format = V4L2_PIX_FMT_RGB24;
+					def_fourcc = V4L2_PIX_FMT_RGB24;
 				}
 				pad_data->format.colorspace = V4L2_COLORSPACE_SRGB;
+				/*
+				 * Carry the V4L2 fourcc in reserved, matching what
+				 * enum_mbus_code/set_fmt already do (struct
+				 * format_reserved{fourcc,stride}, not a bare
+				 * fourcc) - without this the default pad format
+				 * has no fourcc hint, so a mixed-mode memory-out
+				 * path's visp_video ENUM_FMT (before any SET_FMT)
+				 * can't resolve a pixel format. stride is left 0:
+				 * it isn't known until a real SET_FMT computes it.
+				 */
+				{
+					struct format_reserved def_res = {
+						.fourcc = def_fourcc,
+						.stride = 0,
+					};
+					memcpy(pad_data->format.reserved, &def_res,
+					       sizeof(def_res));
+				}
 
 				format_media.width = pad_data->format.width;
 				format_media.height = pad_data->format.height;
@@ -3563,8 +3604,22 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 
 		w = ALIGN(format->format.width, VISP_WIDTH_ALIGN);
 		h = ALIGN(format->format.height, VISP_HEIGHT_ALIGN);
-		w = clamp_t(uint32_t, w, VISP_WIDTH_MIN, sink_pad->format.width);
-		h = clamp_t(uint32_t, h, VISP_HEIGHT_MIN, sink_pad->format.height);
+		/*
+		 * Clamp the source-pad size to the sink (sensor input) size
+		 * only when the sink pad has actually been sized. In LILO
+		 * mixed-mode the memory path (visp_video) sets the source-pad
+		 * format directly without the sink pad having been configured
+		 * first, leaving sink_pad width/height 0 - clamping to 0 would
+		 * collapse the format to 0x0 and userspace rejects it.
+		 */
+		if (sink_pad->format.width)
+			w = clamp_t(uint32_t, w, VISP_WIDTH_MIN, sink_pad->format.width);
+		else
+			w = max_t(uint32_t, w, VISP_WIDTH_MIN);
+		if (sink_pad->format.height)
+			h = clamp_t(uint32_t, h, VISP_HEIGHT_MIN, sink_pad->format.height);
+		else
+			h = max_t(uint32_t, h, VISP_HEIGHT_MIN);
 
 		format->format.width = w;
 		format->format.height = h;
@@ -3703,8 +3758,25 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 
 	w = ALIGN(format->format.width, VISP_WIDTH_ALIGN);
 	h = ALIGN(format->format.height, VISP_HEIGHT_ALIGN);
-	w = clamp_t(uint32_t, w, VISP_WIDTH_MIN, sink_pad->format.width);
-	h = clamp_t(uint32_t, h, VISP_HEIGHT_MIN, sink_pad->format.height);
+	/*
+	 * Clamp the source-pad size to the sink (sensor input) size only when
+	 * the sink pad has actually been sized. This tail of visp_set_fmt()
+	 * only runs for LIMO (the isp_mode == ISP_MODE_LILO branch above
+	 * always returns before reaching here), not the LILO mixed-mode
+	 * memory path this same guard was added for near the top of this
+	 * function - kept here too since a LIMO source pad set before its
+	 * sink is sized has the identical width/height-collapses-to-0 failure
+	 * mode, and this is a strict improvement over the old unconditional
+	 * clamp either way.
+	 */
+	if (sink_pad->format.width)
+		w = clamp_t(uint32_t, w, VISP_WIDTH_MIN, sink_pad->format.width);
+	else
+		w = max_t(uint32_t, w, VISP_WIDTH_MIN);
+	if (sink_pad->format.height)
+		h = clamp_t(uint32_t, h, VISP_HEIGHT_MIN, sink_pad->format.height);
+	else
+		h = max_t(uint32_t, h, VISP_HEIGHT_MIN);
 
 	format->format.width = w;
 	format->format.height = h;
