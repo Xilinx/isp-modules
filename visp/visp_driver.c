@@ -3565,11 +3565,36 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	struct v4l2_mbus_framefmt *MBusFormat;
 	struct media_pad *mediapad_t;
 	struct format_reserved fmt_res;
+	bool fmt_pad_is_memory;
 
 	sink_pad_index = format->pad - (format->pad % VISP_PORT_PAD_NR);
 	sink_pad = &isp_dev->pad_data[sink_pad_index];
 
-	if (isp_dev->isp_mode == ISP_MODE_LILO) {
+	/*
+	 * The is_oba_yuv_420[]/yuv_420_format_index[] matching below (and its
+	 * "not supported on design" fallback-to-index-0/yuv_420_index
+	 * behavior) is OBA/live-out-specific design machinery with no LIMO
+	 * equivalent - a memory-out chn must instead go through LIMO's own,
+	 * simpler exact-match loop further down, same as every other
+	 * mixed-mode format decision this chn needs (fmts[] table, mbus
+	 * code, media_fmt_to_isp_fmt() mode - see visp_pads_init(),
+	 * set_default_pad_config(), and media_isp_device_set_format()).
+	 * Using this branch for a memory-out chn is what previously
+	 * resolved a requested RGB/UYVY format down to whatever index 0 or
+	 * yuv_420_index happened to be in the LILO table, regardless of
+	 * what was actually requested.
+	 */
+	{
+		int fmt_pad_port = format->pad / VISP_PORT_PAD_NR;
+		int fmt_pad_chn = (format->pad % VISP_PORT_PAD_NR) - 1;
+
+		fmt_pad_is_memory = ISP_DEV_EXTENDED(isp_dev)->per_path_out_type &&
+				    fmt_pad_chn >= 0 && fmt_pad_chn < VISP_PORT_PAD_NR - 1 &&
+				    isp_dev->output_type[fmt_pad_port][fmt_pad_chn] ==
+					    VISP_PATH_OUT_TYPE_MEMORY;
+	}
+
+	if (isp_dev->isp_mode == ISP_MODE_LILO && !fmt_pad_is_memory) {
 		/*
 		 * LILO's format table matching must special-case the
 		 * OBA/YUV420 output type (is_oba_yuv_420[]/
@@ -3761,13 +3786,13 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	/*
 	 * Clamp the source-pad size to the sink (sensor input) size only when
 	 * the sink pad has actually been sized. This tail of visp_set_fmt()
-	 * only runs for LIMO (the isp_mode == ISP_MODE_LILO branch above
-	 * always returns before reaching here), not the LILO mixed-mode
-	 * memory path this same guard was added for near the top of this
-	 * function - kept here too since a LIMO source pad set before its
-	 * sink is sized has the identical width/height-collapses-to-0 failure
-	 * mode, and this is a strict improvement over the old unconditional
-	 * clamp either way.
+	 * runs for LIMO (the isp_mode == ISP_MODE_LILO branch above always
+	 * returns before reaching here) and, since fmt_pad_is_memory now
+	 * excludes a mixed-mode memory-out chn from that same branch's
+	 * condition, for a LILO mixed-mode memory-out chn as well - both have
+	 * the identical width/height-collapses-to-0 failure mode when the
+	 * source pad is set before its sink is sized, and this is a strict
+	 * improvement over the old unconditional clamp either way.
 	 */
 	if (sink_pad->format.width)
 		w = clamp_t(uint32_t, w, VISP_WIDTH_MIN, sink_pad->format.width);
@@ -3809,9 +3834,16 @@ static int visp_set_fmt(struct v4l2_subdev *sd,
 	Format_media.quantization = MBusFormat->quantization;
 	Format_media.stride = fmt_res.stride;
 
+	/*
+	 * This tail is reached for LIMO, and now also for a mixed-mode
+	 * memory-out chn (see fmt_pad_is_memory above) - pass the effective
+	 * mode so a memory-out chn's roundtrip_check inside this call uses
+	 * LIMO's mbus<->fourcc mapping consistently with everything else in
+	 * this tail, not isp_dev->isp_mode's real (LILO) value.
+	 */
 	ret = media_isp_hal_mbus_fmt_to_media_fmt(
 		&MBusFormat->code, &Format_media.pixel_format, fmt_res.fourcc,
-		isp_dev->isp_mode);
+		fmt_pad_is_memory ? ISP_MODE_LIMO : isp_dev->isp_mode);
 	if (ret)
 		return ret;
 
