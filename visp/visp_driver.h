@@ -272,6 +272,17 @@ struct visp_isp_dev_extended {
 	int yuv_420_format_index[VISP_PORT_PAD_NR];
 	struct buf_instance buf_list[VISP_PORT_PAD_NR];
 	bool fps_initialized;
+	/*
+	 * --- LILO: per-path (per-chn) live vs memory-out mixed mode ---
+	 * True when "xlnx,path_out_type" was present in the DT node, i.e. this
+	 * port's paths are not uniformly live (OBA) or uniformly memory-out.
+	 * port_stream_refcnt is a dedicated per-port streamer count for this
+	 * mode, deliberately separate from subdev_streamon_count[] above (that
+	 * one is LIMO's cross-ISP shared-upstream count and is indexed/updated
+	 * on a different lifecycle).
+	 */
+	bool per_path_out_type;
+	int port_stream_refcnt[VISP_PORT_NR];
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)

@@ -1775,6 +1775,49 @@ static struct v4l2_subdev *visp_find_subdev_any(struct device_node *np)
 }
 
 /**
+ * visp_get_subdev - Find a registered ISP subdev by its own DT node.
+ * @np: device_node of the ISP subdev itself (not one of its upstream/downstream
+ *      peers, unlike visp_find_subdev_any()).
+ *
+ * Lets visp_video locate and bind to an ISP subdev's memory-out pad by phandle
+ * (LILO mixed mode) without requiring an OF-graph endpoint on that pad - see
+ * struct visp_media_dev's phandle_mode comment in visp_video_driver.h.
+ *
+ * The mdev-readiness check (sd->v4l2_dev && sd->v4l2_dev->mdev) is done here,
+ * under visp_dev_global_mutex, rather than left to the caller after this
+ * function returns: peer is only guaranteed live while the mutex is held - a
+ * concurrent unbind of that specific peer (e.g. a device_release_driver()/
+ * device_attach() rebind cycle) could otherwise free it in the window between
+ * this function's mutex_unlock() and the caller dereferencing sd->v4l2_dev.
+ *
+ * Returns the matching v4l2_subdev only once it's actually bound into a media
+ * graph, or NULL otherwise (not found, or found but not yet ready) - caller
+ * should treat NULL as -EPROBE_DEFER: the owning visp instance may not have
+ * probed (far enough) yet.
+ */
+struct v4l2_subdev *visp_get_subdev(struct device_node *np)
+{
+	struct visp_dev *peer;
+	struct v4l2_subdev *sd = NULL;
+
+	if (!np)
+		return NULL;
+
+	mutex_lock(&visp_dev_global_mutex);
+	list_for_each_entry(peer, &visp_dev_global_list, global_entry) {
+		if (peer->dev->of_node == np) {
+			if (peer->sd.v4l2_dev && peer->sd.v4l2_dev->mdev)
+				sd = &peer->sd;
+			break;
+		}
+	}
+	mutex_unlock(&visp_dev_global_mutex);
+
+	return sd;
+}
+EXPORT_SYMBOL_GPL(visp_get_subdev);
+
+/**
  * visp_discover_pipeline_subdevs - Discover all subdevices in the pipeline
  * @isp_dev: ISP device
  * @port: ISP port number

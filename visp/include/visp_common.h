@@ -55,6 +55,12 @@
 #ifndef __VISP_COMMON_H__
 #define __VISP_COMMON_H__
 
+/* Cross-module: visp_video looks up an ISP subdev by its own DT node for
+ * LILO mixed-mode phandle binding (visp,source-subdev). See visp_get_subdev()
+ * in visp_driver.c.
+ */
+struct v4l2_subdev *visp_get_subdev(struct device_node *np);
+
 int visp_buf_done(struct v4l2_subdev *sd, void *arg);
 int visp_set_frame_interval_public(struct visp_dev *isp_dev,
 				   struct v4l2_subdev_frame_interval *fi);
