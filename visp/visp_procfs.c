@@ -237,9 +237,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 	char *val = NULL, *kv_cur = NULL, *end = NULL;
 	char *const delim = " ";
 	char *const kv_delim = "=";
-	char *const com_delim = ",";
 	int port = 0;
-	int path = 0;
 	int32_t ret = 0;
 
 	isp_dev = isp_proc->isp_dev;
@@ -355,21 +353,6 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 						isp_dev->isp_ports[port].sensor_info.one_json,
 						sizeof(isp_dev->isp_ports[port].sensor_info.one_json)))
 						ret = -ENOENT;
-				}
-			} else if (strcmp(val, "output_type") == 0) {
-				val = strsep(&kv_cur, kv_delim);
-				if (val) {
-					while (
-					    (token = strsep(&val, com_delim))) {
-						if (path <
-							VISP_PORT_PAD_NR - 1 &&
-						    isdigit(*token)) {
-							isp_dev->output_type
-							    [port][path] =
-							    *token - '0';
-							path++;
-						}
-					}
 				}
 			} else if (strcmp(val, "vc_id") == 0) {
 				val = strsep(&kv_cur, kv_delim);
