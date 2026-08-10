@@ -2568,6 +2568,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	struct device_node *mem_np;
 	char node_name[50];
 	u32 port = 0;
+	int mem_idx, num_mems;
 
 	strscpy(isp_dev->isp_ports[port].sensor_info.manu_json,
 		VISP_DEFAULT_SENSOR_MANU_JSON,
@@ -2636,16 +2637,39 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		dev_dbg(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
 	}
 
+	/*
+	 * memory-region may list more than one phandle (e.g. an RPU
+	 * calib-load region alongside this ISP's own pool). Bind by
+	 * matching the node named isp<id>_reserve_memory, instead of
+	 * assuming it is always at index 0 - of_reserved_mem_device_init()
+	 * only ever binds index 0, which silently binds the wrong region
+	 * (and, since it lacks compatible = "shared-dma-pool", fails
+	 * outright) if some other reserved-memory phandle is listed first.
+	 */
 	snprintf(node_name, sizeof(node_name), "isp%d_reserve_memory",
 		 isp_dev->id);
 
-	mem_np = of_find_node_by_name(NULL, node_name);
-
-	if (mem_np) {
+	num_mems = of_count_phandle_with_args(pdev->dev.of_node,
+					      "memory-region", NULL);
+	for (mem_idx = 0; mem_idx < num_mems; mem_idx++) {
+		mem_np = of_parse_phandle(pdev->dev.of_node, "memory-region",
+					  mem_idx);
+		if (!mem_np)
+			continue;
+		if (of_node_name_eq(mem_np, node_name)) {
+			of_node_put(mem_np);
+			break;
+		}
 		of_node_put(mem_np);
-		ret = of_reserved_mem_device_init(&pdev->dev);
+	}
+
+	if (mem_idx < num_mems) {
+		ret = of_reserved_mem_device_init_by_idx(&pdev->dev,
+							 pdev->dev.of_node,
+							 mem_idx);
 		if (ret) {
-			dev_err(&pdev->dev, "of_reserved_mem_device_init: %d\n",
+			dev_err(&pdev->dev,
+				"of_reserved_mem_device_init_by_idx: %d\n",
 				ret);
 			return ret;
 		}
@@ -2698,6 +2722,8 @@ int visp_mimo_probe(struct platform_device *pdev)
 	struct v4l2_device *v4l2_dev;
 	int ret = 0;
 	int num_mems = 0, i;
+	char reserve_mem_name[50];
+	bool reserve_mem_found = false;
 
 	if (probe_cnt >= MAX_SUPPORTED_DEVICE_COUNT)
 		return 0;
@@ -2840,6 +2866,9 @@ int visp_mimo_probe(struct platform_device *pdev)
 
 	device->isp_dev->frameout_cb = handle_frameout_buffer_mimo;
 
+	snprintf(reserve_mem_name, sizeof(reserve_mem_name),
+		 "isp%d_reserve_memory", device->isp_dev->id);
+
 	for (i = 0; i < num_mems; i++) {
 		struct device_node *node;
 		struct reserved_mem *rmem;
@@ -2858,9 +2887,33 @@ int visp_mimo_probe(struct platform_device *pdev)
 		}
 		pr_debug("reserve name:%s base:%llx size:%llx\n", rmem->name,
 			 rmem->base, rmem->size);
+
+		/*
+		 * memory-region may list this ISP's own buffer-allocation
+		 * pool (isp<id>_reserve_memory - bound separately, as this
+		 * device's DMA pool, in visp_parse_params()) alongside the
+		 * pre-existing RPU calib-load region. device->reserve_mem
+		 * feeds the VISP_EVENT_LOAD_CALIB mailbox event (see
+		 * visp_l_calib_event() in visp_video_event.c) and must keep
+		 * pointing at the calib-load region, so skip the isp buffer
+		 * pool entry here rather than let it overwrite calib data.
+		 */
+		if (of_node_name_eq(node, reserve_mem_name)) {
+			of_node_put(node);
+			continue;
+		}
+
 		device->reserve_mem.pa = rmem->base;
 		device->reserve_mem.size = rmem->size;
+		reserve_mem_found = true;
 		of_node_put(node);
+	}
+
+	if (num_mems && !reserve_mem_found) {
+		dev_err(dev, "memory-region has no calib-load entry (only %s?)\n",
+			reserve_mem_name);
+		ret = -EINVAL;
+		goto err_m2m;
 	}
 	ret = video_register_device(vfd, VFL_TYPE_VIDEO, 0);
 	if (ret) {
