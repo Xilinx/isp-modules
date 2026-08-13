@@ -949,6 +949,14 @@ ERR_TO_DESTROY_BUFPOOL:
 int visp_stream_on(struct visp_dev *isp_dev)
 {
 	int pad = 0;
+	/*
+	 * A LILO isp_dev instance is always a single hardware port - unlike
+	 * LIMO/MCM, this driver never puts more than one port under one
+	 * instance, so port is always 0 here regardless of how many pads
+	 * (chn) this DT walk enumerates under "ports". If a future LILO
+	 * variant ever needs multiple ports per instance, this must be
+	 * derived from the port node instead of hardcoded.
+	 */
 	int port = 0;
 	struct device *dev = isp_dev->dev;
 	struct fwnode_handle *ep = NULL;
@@ -983,6 +991,13 @@ int visp_stream_on(struct visp_dev *isp_dev)
 
 				int chn = pad - 1;
 
+				if (chn < 0 || chn >= MEDIA_ISP_CHN_MAX) {
+					dev_warn(dev,
+						 "pad=%u yields out-of-range chn=%d, skipping\n",
+						 pad, chn);
+					continue;
+				}
+
 				ret = media_isp_device_set_format(isp_dev, port, chn);
 				if (ret != 0) {
 					dev_err(isp_dev->dev,
@@ -1010,6 +1025,7 @@ int visp_stream_on(struct visp_dev *isp_dev)
 void visp_stream_off(struct visp_dev *isp_dev)
 {
 	int pad = 0;
+	/* Single-port assumption: see the matching comment in visp_stream_on(). */
 	int port = 0;
 	struct device *dev = isp_dev->dev;
 	struct fwnode_handle *ep = NULL;
@@ -1040,6 +1056,13 @@ void visp_stream_off(struct visp_dev *isp_dev)
 				fwnode_handle_put(remote);
 				/* obtain chn by offsetting pad*/
 				int chn = pad - 1;
+
+				if (chn < 0 || chn >= MEDIA_ISP_CHN_MAX) {
+					dev_warn(dev,
+						 "pad=%u yields out-of-range chn=%d, skipping\n",
+						 pad, chn);
+					continue;
+				}
 
 				if (isp_dev->streamon[pad] == 1) {
 					/*stream off on chn*/
