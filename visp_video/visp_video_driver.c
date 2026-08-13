@@ -880,7 +880,7 @@ static int visp_video_probe(struct platform_device *pdev)
 				if (pinned)
 					symbol_put(visp_get_subdev);
 				dev_dbg(dev,
-					"mixed: source subdev not ready (visp.ko not loaded yet, or subdev not bound), deferring\n");
+					"mixed: source subdev not ready, deferring\n");
 				visp_video_put_src_subdevs(visp_mdev);
 				return -EPROBE_DEFER;
 			}

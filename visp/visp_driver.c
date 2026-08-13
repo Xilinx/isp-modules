@@ -4977,7 +4977,8 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 						live++;
 				if (live == 0) {
 					dev_warn(&pdev->dev,
-						 "xlnx,path_out_type all-memory invalid for LILO; forcing path0 live\n");
+						 "xlnx,path_out_type all-memory invalid for LILO; "
+						 "forcing path0 live\n");
 					for (p = 0; p < VISP_PORT_NR; p++)
 						isp_dev->output_type[p][0] =
 							VISP_PATH_OUT_TYPE_STREAM;

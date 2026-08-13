@@ -2443,7 +2443,7 @@ int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 				}
 			} else {
 				dev_warn(isp_dev->dev,
-					 "%s: port %d chn %d stride calc failed for fourcc=0x%x - buf_stride left at 0, RPU DMA may misplace output lines\n",
+					 "%s: port %d chn %d stride calc failed, fourcc=0x%x\n",
 					 __func__, port, chn, fourcc);
 			}
 		}
