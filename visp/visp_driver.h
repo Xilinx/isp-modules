@@ -283,6 +283,17 @@ struct visp_isp_dev_extended {
 	 */
 	bool per_path_out_type;
 	int port_stream_refcnt[VISP_PORT_NR];
+	/*
+	 * Upstream subdev captured at this port's boundary
+	 * visp_shared_subdev_stream_get() (visp_pad_s_stream()'s mixed-mode
+	 * branch), reused by that same branch's teardown (mixed_on_err /
+	 * normal streamoff) instead of re-resolving via
+	 * visp_get_input_subdev() at teardown time - teardown can run in a
+	 * different call than the one that did the get(), so re-deriving
+	 * from current topology state each time was an avoidable assumption.
+	 * Cleared once the matching stream_put() has been issued.
+	 */
+	struct v4l2_subdev *upstream_subdev[VISP_PORT_NR];
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)

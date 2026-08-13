@@ -2255,6 +2255,7 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 					if (ret)
 						goto mixed_on_err;
 					got_subdev_ref = true;
+					ext->upstream_subdev[port] = subdev;
 				}
 			}
 
@@ -2321,9 +2322,10 @@ mixed_on_err:
 								    port, 0);
 				isp_destroy_pipeline(isp_dev, port, 0);
 				if (got_subdev_ref) {
-					subdev = visp_get_input_subdev(isp_dev, port);
+					subdev = ext->upstream_subdev[port];
 					if (subdev)
 						visp_shared_subdev_stream_put(subdev);
+					ext->upstream_subdev[port] = NULL;
 				}
 			}
 			mutex_unlock(&isp_dev->port_lock[port]);
@@ -2361,9 +2363,10 @@ mixed_on_err:
 		if (!media_isp_mixed_mode_sibling_active(isp_dev, port, chn)) {
 			media_isp_device_camera_dis_connect(isp_dev, port, 0);
 			isp_destroy_pipeline(isp_dev, port, 0);
-			subdev = visp_get_input_subdev(isp_dev, port);
+			subdev = ext->upstream_subdev[port];
 			if (subdev)
 				visp_shared_subdev_stream_put(subdev);
+			ext->upstream_subdev[port] = NULL;
 		}
 		mutex_unlock(&isp_dev->port_lock[port]);
 		return 0;
