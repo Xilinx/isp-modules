@@ -183,6 +183,11 @@ struct rpu_dev {
 	struct mbox_client rx_mc;
 	struct mbox_chan *tx_chan;
 	struct mbox_chan *rx_chan;
+	/*
+	 * Teardown handshake with visp_mbox_rx_cb(), RCU-protected rather than
+	 * lock-protected (rx_cb runs on every IPI; teardown is rare) - see
+	 * visp_mbox_rx_cb()/visp_mbox_rpu_remove() for the paired sides.
+	 */
 	bool removing;
 	struct work_struct mbox_work;
 	struct workqueue_struct *rpu_wq;

@@ -56,6 +56,7 @@
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/kernel.h>
+#include <linux/rcupdate.h>
 #include <linux/workqueue.h>
 #include <linux/remoteproc.h>
 #include "visp_mbox_driver.h"
@@ -248,15 +249,31 @@ static void visp_mbox_rx_cb(struct mbox_client *cl, void *msg)
 {
 	/* Get RPU id from the received message */
 	struct rpu_dev *rpu = dev_get_drvdata(cl->dev);
-	if (rpu) {
-		/* Skip scheduling when shared IPI fired with empty FIFO */
-		if (!vpi_mbox_is_empty(rpu->apu_rx_ctrl, rpu->core_id, MBOX_CORE_APU))
-			queue_work(rpu->rpu_wq, &rpu->mbox_work);
-		/* Always ACK the IPI so firmware does not stall */
-		(void)mbox_send_message(rpu->rx_chan, NULL);
-	} else {
+
+	if (!rpu) {
 		pr_info("%s: Invalid RPU Device structure\n", __func__);
+		return;
 	}
+
+	/*
+	 * RCU-protected against visp_mbox_rpu_remove()'s teardown handshake
+	 * rather than a lock: this runs on every IPI (hot path) while teardown
+	 * is rare. remove() sets ->removing and clears the callback, then calls
+	 * synchronize_rcu() before destroying rpu_wq / freeing rx_chan - which
+	 * blocks until every read-side section already in progress here (incl.
+	 * one that read removing==false and is about to use them) has exited.
+	 */
+	rcu_read_lock();
+	if (READ_ONCE(rpu->removing)) {
+		rcu_read_unlock();
+		return;
+	}
+	/* Skip scheduling when shared IPI fired with empty FIFO */
+	if (!vpi_mbox_is_empty(rpu->apu_rx_ctrl, rpu->core_id, MBOX_CORE_APU))
+		queue_work(rpu->rpu_wq, &rpu->mbox_work);
+	/* Always ACK the IPI so firmware does not stall */
+	(void)mbox_send_message(rpu->rx_chan, NULL);
+	rcu_read_unlock();
 }
 
 static int visp_mbox_setup(struct rpu_dev *rpu, struct device_node *node)
@@ -1899,15 +1916,23 @@ static int visp_mbox_rpu_remove(struct rpu_dev *rpu)
 
 	/* Check if the device is safe to remove */
 	if (ref_count == 1) {
+		/*
+		 * Quiesce the RX source before destroying the consumer: mark
+		 * removing and clear the callback, then synchronize_rcu() before
+		 * touching rpu_wq/rx_chan below. It blocks until every RCU read
+		 * section already in progress in visp_mbox_rx_cb() (including one
+		 * that read removing==false and is about to use rpu_wq/rx_chan)
+		 * has exited - see that function for the reader side.
+		 */
 		WRITE_ONCE(rpu->removing, true);
+		rpu->rx_mc.rx_callback = NULL;
+		synchronize_rcu();
 
 		if (rpu->rpu_wq) {
 			cancel_work_sync(&rpu->mbox_work);
 			destroy_workqueue(rpu->rpu_wq);
 			rpu->rpu_wq = NULL;
 		}
-
-		rpu->rx_mc.rx_callback = NULL;
 
 		if (rpu->tx_chan) {
 			if (visp_mbox_pair_peer_active(rpu)) {
