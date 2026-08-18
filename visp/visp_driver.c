@@ -58,6 +58,7 @@
 #include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/version.h>
@@ -129,10 +130,57 @@ static uint32_t sensor_dev_id[VISP_PORT_NR] = {2, 6, 5, 10};
 struct visp_shared_subdev_ref {
 	struct v4l2_subdev *sd;
 	u32 refcnt;
+	/*
+	 * Set while s_stream(0) is in flight for this slot, i.e. between
+	 * refcnt dropping to 0 (lock held) and the slot actually being freed
+	 * (lock re-acquired after s_stream(0) returns). sd is deliberately
+	 * NOT cleared until then, so visp_shared_subdev_find_free_slot()
+	 * cannot hand this slot to a concurrent get() while the hardware is
+	 * still mid-disable - closing the window where a racing get() could
+	 * issue an overlapping s_stream(1) on the same physical subdev while
+	 * this put()'s s_stream(0) is still running. See stream_get()/
+	 * stream_put() below.
+	 */
+	bool disabling;
+	struct completion disable_done;
+	/*
+	 * Symmetric counterpart to disabling/disable_done: set while
+	 * s_stream(1) is in flight for this slot, i.e. between refcnt being
+	 * published as 1 (lock held) and the actual s_stream(1) call
+	 * returning (lock re-acquired afterward). A concurrent get() for the
+	 * same sd that lands in this window must not just bump refcnt and
+	 * return success - it has to wait for the real result, the same way
+	 * a concurrent get() waits out an in-flight disable. See
+	 * stream_get() below.
+	 */
+	bool enabling;
+	struct completion enable_done;
 };
 
 static DEFINE_MUTEX(visp_shared_subdev_lock);
 static struct visp_shared_subdev_ref visp_shared_subdev_refs[VISP_MAX_SHARED_SUBDEVS];
+static bool visp_shared_subdev_refs_init_done;
+
+/*
+ * struct completion has no static zero-initializer that also satisfies
+ * lockdep's init tracking the way DEFINE_MUTEX() does for the mutex above,
+ * so each slot's disable_done is initialized lazily, once, under the same
+ * lock that already serializes every other access to this table.
+ */
+static void visp_shared_subdev_refs_ensure_init(void)
+{
+	int i;
+
+	if (visp_shared_subdev_refs_init_done)
+		return;
+
+	for (i = 0; i < VISP_MAX_SHARED_SUBDEVS; i++) {
+		init_completion(&visp_shared_subdev_refs[i].disable_done);
+		init_completion(&visp_shared_subdev_refs[i].enable_done);
+	}
+
+	visp_shared_subdev_refs_init_done = true;
+}
 
 struct visp_format visp_mp_fmts[] = {
 	{
@@ -1172,6 +1220,7 @@ static int visp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
 	struct visp_pad_data *cur_pad;
 	int i = 0;
 	media_buf buf;
+	bool stream_on;
 
 	if (pad_buf->pad >= VISP_PAD_NR)
 		return -EINVAL;
@@ -1195,7 +1244,19 @@ static int visp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
 		buf.planes[i].dma_addr = pad_buf->buf->planes[i].dma_addr;
 		buf.planes[i].dma_size = pad_buf->buf->planes[i].size;
 	}
-	if (/*IspChn->ThreadStatus == MEDIA_THREAD_STOPPED*/ isp_dev->streamon[pad_buf->pad] == 0) {
+
+	/*
+	 * Serialize the streamon read against port_lock (held by
+	 * media_isp_force_stream_off()/visp_pad_s_stream() while flipping it)
+	 * so this never dispatches an ENQ off a torn/stale read; the lock is
+	 * released before the actual ENQ send/dispatch below so the mailbox
+	 * wait never blocks a concurrent stream-off.
+	 */
+	mutex_lock(&isp_dev->port_lock[port]);
+	stream_on = isp_dev->streamon[pad_buf->pad] != 0;
+	mutex_unlock(&isp_dev->port_lock[port]);
+
+	if (/*IspChn->ThreadStatus == MEDIA_THREAD_STOPPED*/ !stream_on) {
 		memcpy(&IspChn->bufs[buf.index], &buf, sizeof(media_buf));
 	} else {
 		output_buffer_t *p_media_buffer = VSI_NULL;
@@ -1416,7 +1477,7 @@ static int visp_shared_subdev_find_free_slot(void)
 	int i;
 
 	for (i = 0; i < VISP_MAX_SHARED_SUBDEVS; i++) {
-		if (!visp_shared_subdev_refs[i].sd)
+		if (!visp_shared_subdev_refs[i].sd && !visp_shared_subdev_refs[i].disabling)
 			return i;
 	}
 
@@ -1433,10 +1494,50 @@ static int visp_shared_subdev_stream_get(struct v4l2_subdev *sd)
 	if (!sd || !sd->ops || !sd->ops->video || !sd->ops->video->s_stream)
 		return 0;
 
+retry:
 	mutex_lock(&visp_shared_subdev_lock);
+	visp_shared_subdev_refs_ensure_init();
 
 	slot = visp_shared_subdev_find_slot(sd);
 	if (slot >= 0) {
+		if (visp_shared_subdev_refs[slot].disabling) {
+			/*
+			 * A put() for this same subdev has dropped refcnt to 0
+			 * and is mid s_stream(0); the slot is still "sd == this
+			 * sd" so it isn't free, but it also isn't safe to just
+			 * bump refcnt and treat the subdev as already streaming.
+			 * Wait for that disable to finish, then re-run the
+			 * whole lookup - by then the slot is genuinely free and
+			 * this call does its own fresh s_stream(1).
+			 */
+			mutex_unlock(&visp_shared_subdev_lock);
+			if (sd->dev)
+				dev_dbg(sd->dev,
+					"Upstream subdev '%s': stream_get waiting for in-flight s_stream(0) on slot=%d\n",
+					sd->name, slot);
+			wait_for_completion(&visp_shared_subdev_refs[slot].disable_done);
+			goto retry;
+		}
+		if (visp_shared_subdev_refs[slot].enabling) {
+			/*
+			 * A get() for this same subdev already published
+			 * sd/refcnt=1 and is mid s_stream(1); it isn't safe to
+			 * just bump refcnt and return success without knowing
+			 * whether that s_stream(1) actually succeeds. Wait for
+			 * it to finish, then re-run the whole lookup: if it
+			 * succeeded, this call will see a normal occupied slot
+			 * and just bump refcnt below; if it failed, that
+			 * call's own cleanup will have freed the slot by then
+			 * and this call does its own fresh s_stream(1).
+			 */
+			mutex_unlock(&visp_shared_subdev_lock);
+			if (sd->dev)
+				dev_dbg(sd->dev,
+					"Upstream subdev '%s': stream_get waiting for in-flight s_stream(1) on slot=%d\n",
+					sd->name, slot);
+			wait_for_completion(&visp_shared_subdev_refs[slot].enable_done);
+			goto retry;
+		}
 		visp_shared_subdev_refs[slot].refcnt++;
 		refcnt = visp_shared_subdev_refs[slot].refcnt;
 		mutex_unlock(&visp_shared_subdev_lock);
@@ -1455,6 +1556,16 @@ static int visp_shared_subdev_stream_get(struct v4l2_subdev *sd)
 
 	visp_shared_subdev_refs[slot].sd = sd;
 	visp_shared_subdev_refs[slot].refcnt = 1;
+	/*
+	 * Mark the slot as enabling rather than leaving it look like an
+	 * already-streaming occupied slot: sd/refcnt are published so
+	 * find_free_slot() cannot hand this slot to anyone else, but a
+	 * concurrent get() for this same sd must wait on enable_done instead
+	 * of racing an overlapping s_stream(1) or trusting an unfinished one -
+	 * see the "enabling" branch above.
+	 */
+	visp_shared_subdev_refs[slot].enabling = true;
+	reinit_completion(&visp_shared_subdev_refs[slot].enable_done);
 	need_stream_on = true;
 	mutex_unlock(&visp_shared_subdev_lock);
 
@@ -1470,16 +1581,27 @@ static int visp_shared_subdev_stream_get(struct v4l2_subdev *sd)
 					"Upstream subdev '%s': s_stream(1) failed: %d\n",
 					sd->name, ret);
 			mutex_lock(&visp_shared_subdev_lock);
-			if (visp_shared_subdev_refs[slot].sd == sd &&
-			    visp_shared_subdev_refs[slot].refcnt == 1) {
-				visp_shared_subdev_refs[slot].sd = NULL;
-				visp_shared_subdev_refs[slot].refcnt = 0;
-			}
+			/*
+			 * Only this get() call ever sets enabling=true for a
+			 * given occupancy of the slot (any concurrent get()
+			 * for the same sd waits above instead of racing in),
+			 * so refcnt is still guaranteed to be exactly 1 here -
+			 * always safe to clear unconditionally on failure.
+			 */
+			visp_shared_subdev_refs[slot].sd = NULL;
+			visp_shared_subdev_refs[slot].refcnt = 0;
+			visp_shared_subdev_refs[slot].enabling = false;
 			mutex_unlock(&visp_shared_subdev_lock);
-		} else if (sd->dev) {
-			dev_dbg(sd->dev,
-				 "Upstream subdev '%s': s_stream(1) success slot=%d\n",
-				 sd->name, slot);
+			complete_all(&visp_shared_subdev_refs[slot].enable_done);
+		} else {
+			if (sd->dev)
+				dev_dbg(sd->dev,
+					"Upstream subdev '%s': s_stream(1) success slot=%d\n",
+					sd->name, slot);
+			mutex_lock(&visp_shared_subdev_lock);
+			visp_shared_subdev_refs[slot].enabling = false;
+			mutex_unlock(&visp_shared_subdev_lock);
+			complete_all(&visp_shared_subdev_refs[slot].enable_done);
 		}
 	}
 
@@ -1497,6 +1619,7 @@ static int visp_shared_subdev_stream_put(struct v4l2_subdev *sd)
 		return 0;
 
 	mutex_lock(&visp_shared_subdev_lock);
+	visp_shared_subdev_refs_ensure_init();
 
 	slot = visp_shared_subdev_find_slot(sd);
 	if (slot < 0) {
@@ -1514,7 +1637,16 @@ static int visp_shared_subdev_stream_put(struct v4l2_subdev *sd)
 	refcnt = visp_shared_subdev_refs[slot].refcnt;
 
 	if (visp_shared_subdev_refs[slot].refcnt == 0) {
-		visp_shared_subdev_refs[slot].sd = NULL;
+		/*
+		 * Mark the slot as disabling rather than clearing sd here:
+		 * sd stays set (and disabling=true) for the whole s_stream(0)
+		 * call below, so find_free_slot() cannot hand this slot to a
+		 * concurrent get() - and a get() for this same sd waits on
+		 * disable_done instead of racing s_stream(1) against this
+		 * s_stream(0) - until the slot is actually freed further down.
+		 */
+		visp_shared_subdev_refs[slot].disabling = true;
+		reinit_completion(&visp_shared_subdev_refs[slot].disable_done);
 		need_stream_off = true;
 	}
 
@@ -1538,6 +1670,20 @@ static int visp_shared_subdev_stream_put(struct v4l2_subdev *sd)
 			dev_dbg(sd->dev,
 				 "Upstream subdev '%s': s_stream(0) success\n",
 				 sd->name);
+	}
+
+	if (need_stream_off) {
+		mutex_lock(&visp_shared_subdev_lock);
+		/*
+		 * Only this put() call ever sets disabling=true for a given
+		 * occupancy of the slot (refcnt can't leave 0 for a waiting
+		 * get() until the slot is freed here), so it's always safe to
+		 * clear both fields unconditionally at this point.
+		 */
+		visp_shared_subdev_refs[slot].sd = NULL;
+		visp_shared_subdev_refs[slot].disabling = false;
+		mutex_unlock(&visp_shared_subdev_lock);
+		complete_all(&visp_shared_subdev_refs[slot].disable_done);
 	}
 
 	return ret;
@@ -2128,6 +2274,47 @@ static int visp_stream_pipeline_subdevs(struct visp_dev *isp_dev, int port, int 
 	}
 
 	return 0;
+}
+
+void visp_wdt_release_port_upstream(struct visp_dev *isp_dev, int port)
+{
+	if (!isp_dev || port < 0 || port >= MAX_PORTS)
+		return;
+
+	visp_stream_pipeline_subdevs(isp_dev, port, 0);
+}
+
+void visp_wdt_release_lilo_upstream(struct visp_dev *isp_dev, int port, uint8_t chn)
+{
+	struct visp_isp_dev_extended *ext;
+	struct v4l2_subdev *subdev;
+
+	if (!isp_dev || port < 0 || port >= MAX_PORTS)
+		return;
+
+	/*
+	 * Mirror the normal streamoff path's gating: this port's shared
+	 * upstream subdev only gets exactly one get()/put() pair per
+	 * boundary, so only release it once every chn on this port is down,
+	 * not once per active chn in the force-teardown loop (that would
+	 * over-decrement visp_shared_subdev_refs[], a table shared by every
+	 * isp_dev instance, on behalf of a port that still has an active
+	 * sibling chn).
+	 */
+	if (media_isp_mixed_mode_sibling_active(isp_dev, port, chn))
+		return;
+
+	ext = ISP_DEV_EXTENDED(isp_dev);
+	/* Prefer the cached pointer captured at get() time; plain-LILO (no
+	 * per_path_out_type) never populates it, so fall back to a fresh
+	 * lookup for that case.
+	 */
+	subdev = ext->upstream_subdev[port];
+	if (!subdev)
+		subdev = visp_get_input_subdev(isp_dev, port);
+	if (subdev)
+		visp_shared_subdev_stream_put(subdev);
+	ext->upstream_subdev[port] = NULL;
 }
 
 static bool visp_port_has_active_stream(struct visp_dev *isp_dev, int port)
@@ -3939,6 +4126,9 @@ static int visp_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	mutex_lock(&isp_dev->mlock);
 
 	isp_dev->refcnt++;
+	/* Only the first opener (isp_media_server) is tracked for WDT kill. */
+	if (isp_dev->refcnt == 1)
+		isp_dev->event_client_pid = get_pid(task_pid(current));
 
 	mutex_unlock(&isp_dev->mlock);
 	return 0;
@@ -3955,6 +4145,8 @@ static int visp_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	isp_dev->refcnt--;
 
 	if (isp_dev->refcnt == 0) {
+		put_pid(isp_dev->event_client_pid);
+		isp_dev->event_client_pid = NULL;
 		for (port = 0; port < VISP_PORT_NR; port++) {
 			list_for_each_entry_safe(
 			    pos, next, &isp_dev->mcm_input[port], entry) {
@@ -3974,9 +4166,41 @@ static int visp_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	return 0;
 }
 
+static void visp_dev_release(struct kref *kref)
+{
+	struct visp_dev *isp_dev = container_of(kref, struct visp_dev, ref);
+
+	/*
+	 * pads/pad_data/extended_struct are kzalloc'd (not devm) precisely so
+	 * they share isp_dev's own kref lifetime: a still-open
+	 * /dev/v4l-subdevN fd can keep issuing ioctls that dereference them
+	 * right up until this release actually runs, the same UAF class the
+	 * isp_dev kref itself already exists to prevent - see visp_remove().
+	 * kfree(NULL) is a no-op, so this is safe even on early probe-error
+	 * paths where one or more of these was never allocated.
+	 */
+	kfree(isp_dev->pads);
+	kfree(isp_dev->pad_data);
+	kfree(isp_dev->extended_struct);
+	kfree(isp_dev);
+}
+
+/* Last /dev/v4l-subdevN close drops the devnode ref so isp_dev (which embeds
+ * ->sd) outlives the fd. Armed only on probe success so a probe-error
+ * unregister does not free here.
+ */
+static void visp_sd_release(struct v4l2_subdev *sd)
+{
+	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+
+	if (isp_dev && isp_dev->sd_release_armed)
+		kref_put(&isp_dev->ref, visp_dev_release);
+}
+
 static struct v4l2_subdev_internal_ops visp_internal_ops = {
 	.open = visp_open,
 	.close = visp_close,
+	.release = visp_sd_release,
 };
 
 static int visp_link_setup(struct media_entity *entity,
@@ -4562,13 +4786,18 @@ static int visp_pads_init(struct visp_dev *isp_dev)
 
 	/* Allocate pads dynamically based on num_streams */
 	isp_dev->num_pads = num_pads;
-	isp_dev->pads = devm_kzalloc(isp_dev->dev, sizeof(struct media_pad) * num_pads, GFP_KERNEL);
+	/*
+	 * kzalloc'd, not devm: freed by visp_dev_release() alongside isp_dev
+	 * itself, so a still-open /dev/v4l-subdevN fd can't outlive this
+	 * memory - see visp_remove() and visp_dev_release().
+	 */
+	isp_dev->pads = kcalloc(num_pads, sizeof(*isp_dev->pads), GFP_KERNEL);
 	if (!isp_dev->pads) {
 		dev_err(isp_dev->dev, "Failed to allocate pads\n");
 		return -ENOMEM;
 	}
 
-	isp_dev->pad_data = devm_kzalloc(isp_dev->dev, sizeof(struct visp_pad_data) * num_pads, GFP_KERNEL);
+	isp_dev->pad_data = kcalloc(num_pads, sizeof(*isp_dev->pad_data), GFP_KERNEL);
 	if (!isp_dev->pad_data) {
 		dev_err(isp_dev->dev, "Failed to allocate pad_data\n");
 		return -ENOMEM;
@@ -5193,6 +5422,7 @@ static int xlnx_link_mbox(struct visp_dev *isp_dev)
 	isp_dev->tx_chan = isp_dev->rpu->tx_chan;
 	isp_dev->rx_chan = isp_dev->rpu->rx_chan;
 	isp_dev->rpu->isp_dev[isp_dev->id] = isp_dev;
+	isp_dev->wdt_expiry_cb = visp_notify_wdt_expiry;
 	/*
 	 * Assigning isp_dev structure value to isp_dev present in
 	 * rpu_dev struct
@@ -5228,16 +5458,37 @@ static int visp_probe(struct platform_device *pdev)
 	int ret;
 	int port = 0;
 
-	isp_dev = devm_kzalloc(&pdev->dev, sizeof(struct visp_dev), GFP_KERNEL);
+	isp_dev = kzalloc(sizeof(struct visp_dev), GFP_KERNEL);
 	if (!isp_dev)
 		return -ENOMEM;
+	kref_init(&isp_dev->ref);
+	/* Arm the WDT-op kref hook: in-flight mailbox ops now pin isp_dev, so a
+	 * proceed-anyway teardown defers the free instead of racing a UAF.
+	 */
+	isp_dev->wdt_kref_release = visp_dev_release;
 
+	/*
+	 * kzalloc'd, not devm: freed by visp_dev_release() alongside isp_dev
+	 * itself (see that function) so it shares isp_dev's own kref lifetime
+	 * instead of being freed early at unbind while a subdev fd may still
+	 * be open.
+	 */
 	isp_dev->extended_struct =
-		devm_kzalloc(&pdev->dev, sizeof(struct visp_isp_dev_extended), GFP_KERNEL);
-	if (!isp_dev->extended_struct)
-		return -ENOMEM;
+		kzalloc(sizeof(struct visp_isp_dev_extended), GFP_KERNEL);
+	if (!isp_dev->extended_struct) {
+		ret = -ENOMEM;
+		goto err_free_dev;
+	}
 
 	mutex_init(&isp_dev->mlock);
+	mutex_init(&isp_dev->wdt_lifetime_lock);
+	atomic_set(&isp_dev->wdt_inflight, 0);
+	isp_dev->wdt_teardown = false;
+	init_completion(&isp_dev->wdt_inflight_zero);
+	/* visp_wdt_begin_teardown() wakes this unconditionally; must be valid
+	 * even for isp_mode/pipelines that never wait on it.
+	 */
+	init_waitqueue_head(&isp_dev->wq_frame_done_finished);
 	mutex_init(&isp_dev->calib_lock);
 	mutex_init(&isp_dev->ctrl_lock);
 	mutex_init(&ISP_DEV_EXTENDED(isp_dev)->device_create_lock);
@@ -5252,7 +5503,8 @@ static int visp_probe(struct platform_device *pdev)
 	ret = visp_parse_params(isp_dev, pdev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to parse params\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_del_free;
 	}
 
 	if (isp_dev->isp_mode != ISP_MODE_LILO) {
@@ -5268,7 +5520,8 @@ static int visp_probe(struct platform_device *pdev)
 	ret = xlnx_link_mbox(isp_dev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to init mbox\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_del_free;
 	}
 
 	for (int i = 0; i < VISP_INPUT_INSTANCES; i++)
@@ -5417,6 +5670,14 @@ static int visp_probe(struct platform_device *pdev)
 	}
 	/* sensor_pipeline_init(isp_dev); */
 
+	/*
+	 * Probe fully succeeded: take the subdev-node reference and arm the
+	 * release hook so isp_dev (embedding ->sd) outlives the last
+	 * /dev/v4l-subdevN close, which drops this ref via visp_sd_release().
+	 */
+	kref_get(&isp_dev->ref);
+	isp_dev->sd_release_armed = true;
+
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
 
 	return 0;
@@ -5455,6 +5716,12 @@ err_pads_init:
 		kfifo_free(&isp_dev->cmd_ack_fifo[port]);
 		kfifo_free(&isp_dev->data_fifo[port]);
 	}
+err_del_free:
+	mutex_lock(&visp_dev_global_mutex);
+	list_del(&isp_dev->global_entry);
+	mutex_unlock(&visp_dev_global_mutex);
+err_free_dev:
+	kref_put(&isp_dev->ref, visp_dev_release);
 	return ret;
 }
 
@@ -5491,17 +5758,42 @@ static void visp_remove(struct platform_device *pdev)
 		v4l2_async_notifier_unregister(&isp_dev->notifier);
 	v4l2_async_notifier_cleanup(&isp_dev->notifier);
 #endif
+	/*
+	 * isp_dev embeds ->sd, so it must outlive the last /dev/v4l-subdevN
+	 * close. It is kzalloc'd + kref'd (not devm): the driver ref is dropped
+	 * at the end of this function and the subdev-node ref is dropped by
+	 * visp_sd_release() on last close, whichever is later frees isp_dev.
+	 * ->pads/->pad_data/->extended_struct are kzalloc'd (not devm) too and
+	 * share that same kref lifetime (freed together in visp_dev_release()),
+	 * so a still-open subdev fd can safely keep issuing ioctls that touch
+	 * them right up until the last reference actually drops - this no
+	 * longer depends on the HAL closing its fd by any particular deadline
+	 * relative to this unbind.
+	 */
 	media_entity_cleanup(&isp_dev->sd.entity);
 
 	/* Free DMA coherent memory for event_shm */
 	if (isp_dev->event_shm.virt_addr) {
-		/* If dmabuf still exists (fds still open), release it first */
+		/*
+		 * dma_buf_fd() (in the ioctl path) installs dmabuf->file directly
+		 * into the caller's fd table without taking an extra reference -
+		 * that single export reference now belongs to whichever process
+		 * has the fd open, not to this driver. Calling dma_buf_put() here
+		 * would drop that reference out from under the still-open fd,
+		 * leaving its fdtable entry pointing at an already-zero-refcount
+		 * file; the process later crashes with "VFS: Close: file count is
+		 * 0" / "imbalanced put on file reference count" when it exits and
+		 * the kernel tries to close that fd itself.
+		 *
+		 * Just detach: null dmabuf->priv so visp_dmabuf_release() (which
+		 * fires whenever the real owner eventually closes the fd) safely
+		 * no-ops instead of touching isp_dev after it's gone.
+		 */
 		if (isp_dev->event_shm.dmabuf) {
 			dev_warn(isp_dev->event_shm.dev,
-				 "Dmabuf still active during remove - cleaning up\n");
-			dma_buf_put(isp_dev->event_shm.dmabuf);
+				 "Dmabuf still active during remove - detaching\n");
+			isp_dev->event_shm.dmabuf->priv = NULL;
 			isp_dev->event_shm.dmabuf = NULL;
-			/* visp_dmabuf_release() will be called, but it won't free memory anymore */
 		}
 		/* Free the underlying DMA memory */
 		dma_free_coherent(isp_dev->event_shm.dev, isp_dev->event_shm.size,
@@ -5524,6 +5816,8 @@ static void visp_remove(struct platform_device *pdev)
 
 	dev_info(&pdev->dev, "visp isp driver remove\n");
 
+	/* Drop the driver ref; frees isp_dev unless a subdev fd is still open. */
+	kref_put(&isp_dev->ref, visp_dev_release);
 }
 
 static const struct dev_pm_ops visp_pm_ops = {};

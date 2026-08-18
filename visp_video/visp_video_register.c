@@ -61,6 +61,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
+#include <linux/kref.h>
 #include <linux/spinlock.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
@@ -2858,10 +2859,15 @@ static void visp_video_vb2_buf_queue(struct vb2_buffer *vb)
 #else
 		pad = media_entity_remote_pad(&visp_vdev->pad);
 #endif
-		pad_buf.pad = pad->index;
-		pad_buf.buf = buf;
-		v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_BUF_QUEUE,
-				 &pad_buf);
+		/* Link may have been torn down (e.g. WDT unbind of the ISP subdev)
+		 * between the lookup above and here.
+		 */
+		if (pad) {
+			pad_buf.pad = pad->index;
+			pad_buf.buf = buf;
+			v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_BUF_QUEUE,
+					 &pad_buf);
+		}
 	}
 }
 
@@ -2882,10 +2888,15 @@ static int visp_video_vb2_start_streaming(struct vb2_queue *queue,
 #else
 		pad = media_entity_remote_pad(&visp_vdev->pad);
 #endif
-		stream_status.pad = pad->index;
-		stream_status.status = 1;
-		ret = v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_S_STREAM,
-				       &stream_status);
+		/* Link may have been torn down (e.g. WDT unbind of the ISP subdev)
+		 * between the lookup above and here.
+		 */
+		if (pad) {
+			stream_status.pad = pad->index;
+			stream_status.status = 1;
+			ret = v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_S_STREAM,
+					       &stream_status);
+		}
 	}
 
 	if (ret) {
@@ -2915,10 +2926,15 @@ static void visp_video_vb2_stop_streaming(struct vb2_queue *queue)
 #else
 		pad = media_entity_remote_pad(&visp_vdev->pad);
 #endif
-		stream_status.pad = pad->index;
-		stream_status.status = 0;
-		v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_S_STREAM,
-				 &stream_status);
+		/* Link may have been torn down (e.g. WDT unbind of the ISP subdev)
+		 * between the lookup above and here.
+		 */
+		if (pad) {
+			stream_status.pad = pad->index;
+			stream_status.status = 0;
+			v4l2_subdev_call(subdev, core, ioctl, VISP_PAD_S_STREAM,
+					 &stream_status);
+		}
 	}
 
 	for (i = 0; i < queue->max_num_buffers; i++) {
@@ -3014,13 +3030,29 @@ static const struct media_entity_operations visp_video_entity_ops = {
 	.link_validate = visp_video_link_validate,
 };
 
+static void visp_video_dev_release(struct video_device *vdev)
+{
+	struct visp_video_dev *visp_vdev = video_get_drvdata(vdev);
+	struct visp_media_dev *visp_mdev = visp_vdev->visp_mdev;
+
+	/*
+	 * Runs on last-close of the node: tear down the entity, free the
+	 * video_device and its container, and drop this node's ref on the
+	 * parent media_dev (freed once its last ref is gone).
+	 */
+	media_entity_cleanup(&vdev->entity);
+	mutex_destroy(&visp_vdev->video_lock);
+	kfree(vdev);
+	kfree(visp_vdev);
+	kref_put(&visp_mdev->ref, visp_media_dev_free);
+}
+
 int visp_video_register(struct visp_media_dev *visp_mdev, int port)
 {
 	int ret = 0;
 	struct visp_video_dev *visp_vdev;
 
-	visp_vdev = devm_kzalloc(visp_mdev->dev, sizeof(struct visp_video_dev),
-				 GFP_KERNEL);
+	visp_vdev = kzalloc(sizeof(struct visp_video_dev), GFP_KERNEL);
 	if (!visp_vdev)
 		return -ENOMEM;
 
@@ -3039,7 +3071,7 @@ int visp_video_register(struct visp_media_dev *visp_mdev, int port)
 
 	visp_vdev->video->fops = &visp_video_fops;
 	visp_vdev->video->ioctl_ops = &visp_video_ioctl_ops;
-	visp_vdev->video->release = video_device_release_empty;
+	visp_vdev->video->release = visp_video_dev_release;
 	/*
 	 * Phandle mode (LILO mixed-mode memory-out): shared_v4l2_dev is the
 	 * v4l2_device the ISP subdev's live-out owner (xilinx-vipp/vcap)
@@ -3072,9 +3104,15 @@ int visp_video_register(struct visp_media_dev *visp_mdev, int port)
 		goto err_media_entity_cleanup;
 	}
 
+	/*
+	 * Node owns a ref on the parent media_dev for its whole lifetime;
+	 * dropped in visp_video_dev_release() at last close.
+	 */
+	kref_get(&visp_mdev->ref);
 	ret = video_register_device(visp_vdev->video, VFL_TYPE_VIDEO, -1);
 	if (ret) {
 		dev_err(visp_mdev->dev, "video register device error\n");
+		kref_put(&visp_mdev->ref, visp_media_dev_free);
 		goto err_media_entity_cleanup;
 	}
 
@@ -3085,11 +3123,15 @@ err_media_entity_cleanup:
 	media_entity_cleanup(&visp_vdev->video->entity);
 
 error_video_device_release:
-	video_device_release(visp_vdev->video);
+	/* Not registered yet, so the release cb never runs; free the raw
+	 * video_device allocation directly.
+	 */
+	kfree(visp_vdev->video);
 	visp_vdev->video = NULL;
 
 error_free_visp_vdev:
-	devm_kfree(visp_mdev->dev, visp_vdev);
+	mutex_destroy(&visp_vdev->video_lock);
+	kfree(visp_vdev);
 
 	return ret;
 }
@@ -3106,10 +3148,12 @@ int visp_video_unregister(struct visp_media_dev *visp_mdev, int port)
 	if (visp_vdev == NULL)
 		return 0;
 
+	/*
+	 * Frees are deferred to visp_video_dev_release() (last close): it runs
+	 * media_entity_cleanup(), frees the video_device + container, and drops
+	 * this node's media_dev ref. Just unregister so open fds stay valid.
+	 */
 	video_unregister_device(visp_vdev->video);
-	media_entity_cleanup(&visp_vdev->video->entity);
-	video_device_release(visp_vdev->video);
-	devm_kfree(visp_mdev->dev, visp_vdev);
 	visp_mdev->video_devs[port] = NULL;
 
 	return 0;

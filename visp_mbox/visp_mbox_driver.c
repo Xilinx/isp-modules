@@ -61,6 +61,8 @@
 #include "visp_mbox_driver.h"
 #include "mbox_cmd.h"
 #include "mbox_api.h"
+#include "mbox_seq.h"
+#include "visp_mbox_wdt.h"
 #include <linux/delay.h>
 
 /*
@@ -82,6 +84,72 @@
 #define MAX_MESSAGES_PER_WORK 32
 
 struct class *mailbox_class;
+
+/*
+ * Writing 1 sends APU_2_RPU_MB_CMD_WDT_TEST to the associated RPU right
+ * away if it is already INIT_FIRMWARE-synced; otherwise it just arms the
+ * flag so the command goes out automatically once the ongoing/next
+ * INIT_FIRMWARE sync (e.g. during visp probe/init) completes (used to
+ * exercise the LPX_WWDT notifier path end-to-end, see visp_mbox_wdt.c).
+ * Writing 0 disarms it.
+ */
+static ssize_t wdt_test_store(struct device *dev, struct device_attribute *attr,
+			      const char *buf, size_t count)
+{
+	struct rpu_dev *rpu = dev_get_drvdata(dev);
+	unsigned long val;
+	int ret;
+
+	ret = kstrtoul(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	if (val != 0 && val != 1)
+		return -EINVAL;
+
+	if (!rpu)
+		return -ENODEV;
+
+	rpu->wdt_test_enabled = !!val;
+
+	if (val && rpu->init_fw_synced) {
+		ret = visp_mbox_wdt_send_test(rpu);
+		if (ret)
+			dev_warn(dev, "WDT_TEST send failed on toggle: %d\n", ret);
+	}
+
+	return count;
+}
+static DEVICE_ATTR_WO(wdt_test);
+
+static ssize_t wdt_selfheal_show(struct device *dev,
+				 struct device_attribute *attr, char *buf)
+{
+	return sysfs_emit(buf, "%u\n", visp_mbox_wdt_selfheal_get() ? 1 : 0);
+}
+
+static ssize_t wdt_selfheal_store(struct device *dev,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
+{
+	unsigned long val;
+	int ret;
+
+	ret = kstrtoul(buf, 0, &val);
+	if (ret)
+		return ret;
+
+	if (val != 0 && val != 1)
+		return -EINVAL;
+
+	ret = visp_mbox_wdt_selfheal_set(!!val);
+	if (ret)
+		return ret;
+
+	return count;
+}
+static DEVICE_ATTR_RW(wdt_selfheal);
+
 static DEFINE_MUTEX(rpu_list_lock);
 static LIST_HEAD(rpu_devices);
 static atomic_t ipi5_pair_flag = ATOMIC_INIT(0);
@@ -115,7 +183,7 @@ static void visp_mbox_mark_init_firmware_success(struct rpu_dev *rpu)
 	rpu->init_fw_synced = true;
 }
 
-static void visp_mbox_clear_init_firmware_success(struct rpu_dev *rpu)
+void visp_mbox_clear_init_firmware_success(struct rpu_dev *rpu)
 {
 	atomic_t *pair_flag;
 
@@ -607,9 +675,15 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	if (!isp_dev) {
 		pr_err("xlnx_mbox_apu_wait_for_data: Invalid ISP device (NULL "
 		       "pointer).\n");
-		ret = -EINVAL;
-		goto ERROR;
+		/*
+		 * Return before visp_wdt_operation_begin(): the ERROR path runs
+		 * visp_wdt_operation_end(isp_dev), which would deref this NULL
+		 * (and be unbalanced). Mirrors xlnx_mbox_apu_wait_for_ack().
+		 */
+		return -EINVAL;
 	}
+	if (!visp_wdt_operation_begin(isp_dev))
+		return -ESHUTDOWN;
 
 	/* Extract instance_id from payload (common to all commands) */
 	p_data = (uint8_t *)data;
@@ -651,6 +725,14 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 		goto ERROR;
 	}
 
+	/* Woken by visp_wdt_begin_teardown()'s complete_all(), not a real ACK -
+	 * data_fifo[] was never actually posted to for this wait.
+	 */
+	if (isp_dev->wdt_teardown) {
+		ret = -ESHUTDOWN;
+		goto ERROR;
+	}
+
 	mutex_lock(&isp_dev->data_fifo_lock[port]);
 	if (!kfifo_out(&isp_dev->data_fifo[port], &msg, 1)) {
 		mutex_unlock(&isp_dev->data_fifo_lock[port]);
@@ -668,14 +750,15 @@ uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 	mutex_unlock(&isp_dev->data_fifo_lock[port]);
 	visp_free_rx_buffer(rpu, msg);
 ERROR:
+	visp_wdt_operation_end(isp_dev);
 	/* Return the error code from the interrupt's response payload */
 	return ret;
 }
 EXPORT_SYMBOL(xlnx_mbox_apu_wait_for_data);
 
-int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
-			    void *data, uint32_t size, uint8_t dest_cpu,
-			    uint8_t src_cpu)
+static int __xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
+				     void *data, uint32_t size, uint8_t dest_cpu,
+				     uint8_t src_cpu)
 {
 	int result;
 	struct rpu_dev *rpu;
@@ -752,11 +835,37 @@ int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 unlock_and_exit:
 	return result;
 }
+
+/*
+ * Public entry point: admission-gate the whole send before
+ * __xlnx_send_mbox_data_cmd() dereferences any isp_dev field (port map,
+ * per-port completions). This keeps a thread caught mid-send during a WDT
+ * teardown visible to the wdt_inflight drain in visp_wdt_begin_teardown();
+ * previously the gate was taken only deep inside xlnx_mbox_apu_wait_for_data(),
+ * after the caller had already touched isp_dev.
+ */
+int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
+			    void *data, uint32_t size, uint8_t dest_cpu,
+			    uint8_t src_cpu)
+{
+	int result;
+
+	if (!isp_dev)
+		return -EINVAL;
+	if (!visp_wdt_operation_begin(isp_dev))
+		return -ESHUTDOWN;
+
+	result = __xlnx_send_mbox_data_cmd(isp_dev, cmd, data, size,
+					   dest_cpu, src_cpu);
+
+	visp_wdt_operation_end(isp_dev);
+	return result;
+}
 EXPORT_SYMBOL(xlnx_send_mbox_data_cmd);
 
-int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
-				   void *data, uint32_t size, uint8_t dest_cpu,
-				   uint8_t src_cpu)
+static int __xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
+					    void *data, uint32_t size, uint8_t dest_cpu,
+					    uint8_t src_cpu)
 {
 	int result;
 	struct rpu_dev *rpu;
@@ -787,11 +896,35 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 	}
 	return 0; // Success
 }
+
+/*
+ * Public entry point: admission-gate the fire-and-forget send before
+ * __xlnx_send_mbox_without_ack_cmd() dereferences isp_dev->rpu, so a thread
+ * caught mid-send during a WDT teardown is visible to the wdt_inflight drain
+ * in visp_wdt_begin_teardown().
+ */
+int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
+				   void *data, uint32_t size, uint8_t dest_cpu,
+				   uint8_t src_cpu)
+{
+	int result;
+
+	if (!isp_dev)
+		return -EINVAL;
+	if (!visp_wdt_operation_begin(isp_dev))
+		return -ESHUTDOWN;
+
+	result = __xlnx_send_mbox_without_ack_cmd(isp_dev, cmd, data, size,
+						  dest_cpu, src_cpu);
+
+	visp_wdt_operation_end(isp_dev);
+	return result;
+}
 EXPORT_SYMBOL(xlnx_send_mbox_without_ack_cmd);
 
-int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
-			     void *data, uint32_t size, uint8_t dest_cpu,
-			     uint8_t src_cpu)
+static int __xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
+				      void *data, uint32_t size, uint8_t dest_cpu,
+				      uint8_t src_cpu)
 {
 	int result;
 	struct rpu_dev *rpu;
@@ -925,6 +1058,41 @@ int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 	return result;
 }
+
+/*
+ * Public entry point: admission-gate the whole send before
+ * __xlnx_send_mbox_acked_cmd() dereferences any isp_dev field (port map,
+ * per-port completions). This keeps a thread caught mid-send during a WDT
+ * teardown visible to the wdt_inflight drain in visp_wdt_begin_teardown();
+ * previously the gate was taken only deep inside xlnx_mbox_apu_wait_for_ack(),
+ * after the caller had already touched isp_dev.
+ */
+int xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
+			     void *data, uint32_t size, uint8_t dest_cpu,
+			     uint8_t src_cpu)
+{
+	int result;
+
+	if (!isp_dev)
+		return -EINVAL;
+	if (!visp_wdt_operation_begin(isp_dev)) {
+		/*
+		 * Teardown in progress: mirror __xlnx_send_mbox_acked_cmd()'s
+		 * handling that maps a shutting-down transport to a benign no-op
+		 * for buffer enqueues, so a stream teardown doesn't surface as a
+		 * hard error on the ENQ path.
+		 */
+		if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER)
+			return RET_SUCCESS;
+		return -ESHUTDOWN;
+	}
+
+	result = __xlnx_send_mbox_acked_cmd(isp_dev, cmd, data, size,
+					    dest_cpu, src_cpu);
+
+	visp_wdt_operation_end(isp_dev);
+	return result;
+}
 EXPORT_SYMBOL(xlnx_send_mbox_acked_cmd);
 
 int xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
@@ -940,9 +1108,10 @@ int xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 
 	if (!isp_dev) {
 		pr_err("%s : Invalid ISP device (NULL pointer).\n", __func__);
-		ret = -EINVAL;
-		goto ERROR;
+		return -EINVAL;
 	}
+	if (!visp_wdt_operation_begin(isp_dev))
+		return -ESHUTDOWN;
 
 	/* Map instance_id to port: 4 instances per port (16 instances / 4 ports) */
 	port = isp_dev->instanceid_port_map[instance_id % INSTANCES_PER_ISP];
@@ -996,6 +1165,14 @@ int xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 			goto ERROR;
 		}
 
+		/* Woken by visp_wdt_begin_teardown()'s complete_all(), not a real ACK -
+		 * enq_ack_error[] was never actually written for this wait.
+		 */
+		if (isp_dev->wdt_teardown) {
+			ret = -ESHUTDOWN;
+			goto ERROR;
+		}
+
 		/* Success: read error code directly from storage */
 		ret = isp_dev->enq_ack_error[port][path_idx][buffer_index];
 
@@ -1026,6 +1203,14 @@ int xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 			goto ERROR;
 		}
 
+		/* Woken by visp_wdt_begin_teardown()'s complete_all(), not a real ACK -
+		 * cmd_ack_fifo[] was never actually posted to for this wait.
+		 */
+		if (isp_dev->wdt_teardown) {
+			ret = -ESHUTDOWN;
+			goto ERROR;
+		}
+
 		/* Success: dequeue message and extract error code */
 		mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
 		if (!kfifo_out(&isp_dev->cmd_ack_fifo[port], &msg, 1)) {
@@ -1049,8 +1234,10 @@ int xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev,
 		visp_free_rx_buffer(rpu, msg);
 	}
 
+	visp_wdt_operation_end(isp_dev);
 	return ret;
 ERROR:
+	visp_wdt_operation_end(isp_dev);
 	return ret;
 
 }
@@ -1068,7 +1255,7 @@ static int find_rproc_child(struct device *dev, void *data)
 	return 0; /* Continue searching */
 }
 
-static int visp_mbox_send_init_firmware(struct rpu_dev *rpu)
+int visp_mbox_send_init_firmware(struct rpu_dev *rpu)
 {
 	payload_packet *pkt = NULL;
 	int ret;
@@ -1122,6 +1309,15 @@ static int visp_mbox_send_init_firmware(struct rpu_dev *rpu)
 			}
 			visp_mbox_mark_init_firmware_success(rpu);
 			kfree(pkt);
+
+			if (rpu->wdt_test_enabled) {
+				ret = visp_mbox_wdt_send_test(rpu);
+				if (ret)
+					dev_warn(rpu->dev,
+						 "WDT_TEST send failed after INIT_FIRMWARE sync: %d\n",
+						 ret);
+			}
+
 			return 0;
 		}
 		dev_warn_ratelimited(rpu->dev,
@@ -1130,6 +1326,172 @@ static int visp_mbox_send_init_firmware(struct rpu_dev *rpu)
 
 	kfree(pkt);
 	return -ETIMEDOUT;
+}
+
+/*
+ * visp_mbox_drain_isp_dev_ack_fifos - free any RX buffers left sitting in an
+ * isp_dev's per-port cmd_ack_fifo/data_fifo across a WDT recovery reset.
+ *
+ * A genuine ACK/data response can be fully processed by the RX worker
+ * (fifo'd and completed) in the narrow window just before
+ * visp_wdt_begin_teardown() sets wdt_teardown - the waiter then wakes,
+ * observes wdt_teardown, and (per the comments at each wdt_teardown check in
+ * xlnx_mbox_apu_wait_for_ack()/_data()) assumes the wake was spurious rather
+ * than checking the fifo, so it never dequeues or frees that entry.
+ * visp_mbox_reset_fifo_state()'s free-list reseed does not look at fifo
+ * contents, so that buffer would otherwise sit referenced from here while
+ * also being freshly handed out to a post-restart transaction - a
+ * free-list double-add once some later stale-response check eventually
+ * drains this leftover entry. Called with the RPU already stopped and every
+ * isp_dev's teardown already complete, so no waiter can still be racing
+ * these fifos.
+ */
+static void visp_mbox_drain_isp_dev_ack_fifos(struct rpu_dev *rpu,
+					      struct visp_dev *isp_dev)
+{
+	mbox_post_msg *msg;
+	int port;
+
+	if (!isp_dev)
+		return;
+
+	for (port = 0; port < MAX_PORTS; port++) {
+		mutex_lock(&isp_dev->cmd_ack_fifo_lock[port]);
+		while (kfifo_out(&isp_dev->cmd_ack_fifo[port], &msg, 1))
+			visp_free_rx_buffer(rpu, msg);
+		mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
+
+		mutex_lock(&isp_dev->data_fifo_lock[port]);
+		while (kfifo_out(&isp_dev->data_fifo[port], &msg, 1))
+			visp_free_rx_buffer(rpu, msg);
+		mutex_unlock(&isp_dev->data_fifo_lock[port]);
+	}
+}
+
+/*
+ * visp_mbox_reset_fifo_state - clear stale mailbox state after an RPU crash.
+ *
+ * Re-seeds the TX/RX buffer free-lists, drains the pending-cmd kfifo, resets
+ * the outbound sequence counter, arms the existing inbound seq-resync path,
+ * and zeroes the shared-memory ring read/write indices - so a freshly
+ * rebooted RPU and the APU driver start from a clean, synced mailbox. Must
+ * be called only after the RPU side is stopped (before rproc_boot()).
+ *
+ * isp_devs/isp_dev_count: caller-supplied snapshot of the isp_dev pointers
+ * being recovered, taken *before* the caller unbinds them and clears
+ * rpu->isp_dev[] - by the time this runs, rpu->isp_dev[] itself may already
+ * be all-NULL, so it must not be read here (see visp_mbox_rpu_restart()).
+ */
+static void visp_mbox_reset_fifo_state(struct rpu_dev *rpu,
+				       struct visp_dev * const *isp_devs,
+				       int isp_dev_count)
+{
+	unsigned long flags;
+	int i;
+
+	if (!rpu)
+		return;
+
+	/*
+	 * Caller already stopped the RPU, but the RX workqueue may still be
+	 * consuming a buffer. Flush it before re-seeding so an in-flight buffer
+	 * can't be force-re-added here and later freed by the worker (free-list
+	 * double-add). Safe from self-deadlock: the expiry worker that reaches
+	 * here runs on its own workqueue, not rpu_wq.
+	 */
+	if (rpu->rpu_wq)
+		flush_workqueue(rpu->rpu_wq);
+
+	/*
+	 * Free any RX buffers stranded in a per-isp_dev ACK/data fifo (see
+	 * visp_mbox_drain_isp_dev_ack_fifos()) before the free-list reseed
+	 * below hands those same pool slots out again. Uses the caller's
+	 * pre-unbind snapshot, not rpu->isp_dev[] (already cleared by the
+	 * time a self-heal recovery reaches this point).
+	 */
+	if (isp_devs)
+		for (i = 0; i < isp_dev_count; i++)
+			visp_mbox_drain_isp_dev_ack_fifos(rpu, isp_devs[i]);
+
+	spin_lock_irqsave(&rpu->tx_free_lock, flags);
+	INIT_LIST_HEAD(&rpu->tx_free_list);
+	for (i = 0; i < MSG_BUFFER_POOL_SIZE; i++) {
+		INIT_LIST_HEAD(&rpu->tx_bufs[i].list);
+		list_add(&rpu->tx_bufs[i].list, &rpu->tx_free_list);
+	}
+	spin_unlock_irqrestore(&rpu->tx_free_lock, flags);
+
+	spin_lock_irqsave(&rpu->rx_free_lock, flags);
+	INIT_LIST_HEAD(&rpu->rx_free_list);
+	for (i = 0; i < MSG_BUFFER_POOL_SIZE; i++) {
+		INIT_LIST_HEAD(&rpu->rx_bufs[i].list);
+		list_add(&rpu->rx_bufs[i].list, &rpu->rx_free_list);
+	}
+	spin_unlock_irqrestore(&rpu->rx_free_lock, flags);
+
+	kfifo_reset(&rpu->app_fifo);
+
+	mutex_lock(&rpu->write_lock);
+	rpu->outbound_seq = 0;
+	mutex_unlock(&rpu->write_lock);
+
+	visp_mbox_mark_seq_resync(rpu);
+
+	if (rpu->apu_tx_ctrl)
+		vpi_mbox_reset(rpu->apu_tx_ctrl, MBOX_CORE_APU, rpu->core_id);
+	if (rpu->apu_rx_ctrl)
+		vpi_mbox_reset(rpu->apu_rx_ctrl, rpu->core_id, MBOX_CORE_APU);
+
+	dev_info(rpu->dev, "Mailbox FIFO/sequence state reset for RPU %d\n",
+		 rpu->rpu_id);
+}
+
+/*
+ * visp_mbox_rpu_restart - force a remoteproc shutdown+reboot cycle.
+ *
+ * A WWDT expiry means the R52 core is hung; rproc->state may still read
+ * RPROC_RUNNING since nothing reports the crash to the remoteproc core.
+ * Shut it down unconditionally (best-effort) and reboot so firmware is
+ * genuinely reloaded before the INIT_FIRMWARE handshake is retried.
+ *
+ * isp_devs/isp_dev_count: the isp_dev pointers being recovered, snapshotted
+ * by the caller *before* it unbinds them / clears rpu->isp_dev[] (may be
+ * NULL/0 for a caller with nothing to drain, e.g. a plain init failure
+ * path). Passed through to visp_mbox_reset_fifo_state() - see its comment
+ * for why rpu->isp_dev[] itself cannot be used here.
+ */
+int visp_mbox_rpu_restart(struct rpu_dev *rpu, struct visp_dev * const *isp_devs,
+			  int isp_dev_count)
+{
+	char fw_name[64];
+	int ret;
+
+	if (!rpu || !rpu->rproc)
+		return -ENODEV;
+
+	if (rpu->rproc->state == RPROC_RUNNING) {
+		ret = rproc_shutdown(rpu->rproc);
+		if (ret)
+			dev_warn(rpu->dev, "rproc_shutdown failed for RPU %d: %d, continuing\n",
+				 rpu->rpu_id, ret);
+	}
+
+	visp_mbox_reset_fifo_state(rpu, isp_devs, isp_dev_count);
+
+	snprintf(fw_name, sizeof(fw_name), "isp-r52-%d-firmware.elf",
+		 rpu->rpu_id);
+	ret = rproc_set_firmware(rpu->rproc, fw_name);
+	if (ret) {
+		dev_err(rpu->dev, "Failed to set firmware name: %d\n", ret);
+		return ret;
+	}
+
+	ret = rproc_boot(rpu->rproc);
+	if (ret)
+		dev_err(rpu->dev, "Failed to reboot remoteproc for RPU %d: %d\n",
+			rpu->rpu_id, ret);
+
+	return ret;
 }
 
 /**
@@ -1407,12 +1769,22 @@ static struct rpu_dev *visp_mbox_get_or_create_rpu(struct platform_device *pdev,
 	}
 
 	/* Create a device node only after successful mailbox initialization. */
-	mboxdev = device_create(mailbox_class, NULL, rpu->devno, NULL,
+	mboxdev = device_create(mailbox_class, NULL, rpu->devno, rpu,
 				dev_name);
 	if (!mboxdev) {
 		dev_err(&pdev->dev, "Failed to create device node\n");
 		goto cleanup;
 	}
+
+	ret = device_create_file(mboxdev, &dev_attr_wdt_test);
+	if (ret)
+		dev_warn(&pdev->dev,
+			 "Failed to create wdt_test sysfs attribute (error %d)\n", ret);
+
+	ret = device_create_file(mboxdev, &dev_attr_wdt_selfheal);
+	if (ret)
+		dev_warn(&pdev->dev,
+			 "Failed to create wdt_selfheal sysfs attribute (error %d)\n", ret);
 
 	kref_init(&rpu->refcount);
 
@@ -1708,6 +2080,12 @@ static int __init visp_mbox_init_module(void)
 	}
 
 	pr_info("AMD MBox driver registered successfully.\n");
+
+	/* WWDT notifier verification is best-effort; do not fail mbox load on error. */
+	ret = visp_mbox_wdt_init();
+	if (ret)
+		pr_warn("WDT notifier registration failed (non-fatal): %d\n", ret);
+
 	return 0;
 
 err_cleanup_reserved_mem:
@@ -1721,6 +2099,8 @@ err_cleanup_class:
 static void __exit visp_mbox_exit_module(void)
 {
 	pr_info("Exiting AMD MBox driver.\n");
+
+	visp_mbox_wdt_exit();
 
 	/* Unregister the platform driver */
 	platform_driver_unregister(&visp_mbox_driver);

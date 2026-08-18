@@ -52,105 +52,37 @@
  *
  *****************************************************************************/
 
-#ifndef __VISP_EVENT_H__
-#define __VISP_EVENT_H__
-#include <media/v4l2-device.h>
-#include <media/v4l2-event.h>
+#ifndef __VISP_MBOX_WDT_H__
+#define __VISP_MBOX_WDT_H__
 
-#define VISP_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 2000)
+struct rpu_dev;
 
-enum visp_vevent_id {
-	VISP_EVENT_SET_FMT,
-	VISP_EVENT_REQBUFS,
-	VISP_EVENT_QBUF,
-	VISP_EVENT_BUF_DONE,
-	VISP_EVENT_STREAMON,
-	VISP_EVENT_STREAMOFF,
-	VISP_EVENT_S_CTRL,
-	VISP_EVENT_G_CTRL,
-	VISP_EVENT_LOAD_CALIB,
-	VISP_EVENT_LOAD_JSON,
-	VISP_EVENT_S_INTERVAL,
-	VISP_EVENT_LOAD_FUSA,
-	VISP_EVENT_STOP_FUSA,
-	VISP_EVENT_WDT_EXPIRY,
-	VISP_EVENT_MAX,
-};
+/*
+ * APU Linux side of the LPD WWDT expiry notifier.
+ *
+ * Registers for the PLM PM_NOTIFY_CB event on VERSAL2_EVENT_ERROR_LPDSLCR_ERR3 /
+ * XPM_VERSAL2_EVENT_ERROR_MASK_LPX_WWDT0..WWDT3 (mapped to RPU cores 6..9)
+ * through the Xilinx Event Manager (xlnx_register_event()), replacing the
+ * bare-metal XPm_RegisterNotifier() + raw IPI receive path used by
+ * XilinxProcessorIPLib/drivers/visp_ss/src/wdt_notifier.c.
+ */
 
-struct visp_plane {
-	uint64_t dma_addr;
-	uint32_t size;
-};
+int visp_mbox_wdt_init(void);
+void visp_mbox_wdt_exit(void);
 
-struct visp_buf {
-	uint32_t pad;
-	uint32_t index;
-	uint32_t num_planes;
-	struct visp_plane planes[VIDEO_MAX_PLANES];
-};
+/*
+ * Global WWDT self-heal/logging toggle exposed via visp_mbox sysfs.
+ * Writing 1 enables notifier registration, writing 0 unregisters it.
+ */
+bool visp_mbox_wdt_selfheal_get(void);
+int visp_mbox_wdt_selfheal_set(bool enable);
 
-struct visp_ctrl {
-	uint32_t cid;
-	uint32_t size;
-#ifdef __KERNEL__
-	uint8_t data[0];
-#endif
-};
+/*
+ * Sends the APU_2_RPU_MB_CMD_WDT_TEST mailbox command to the given RPU,
+ * used to exercise the LPX_WWDT notifier path end-to-end. Dispatched
+ * automatically after a successful INIT_FIRMWARE sync when the sysfs
+ * "wdt_test" entry has been armed (written with 1).
+ */
+int visp_mbox_wdt_send_test(struct rpu_dev *rpu);
 
-struct visp_event_pkg_head {
-	uint32_t pad;
-	uint8_t dev;
-	uint32_t eid;
-	int32_t shm_fd;
-	uint32_t shm_size;
-	uint32_t data_size;
-};
-
-struct visp_event_pkg {
-	struct visp_event_pkg_head head;
-	uint8_t ack;
-	int32_t result;
-	uint32_t seq;
-	uint8_t data[2048];
-};
-
-struct visp_ext_buf_info {
-	uint8_t port;
-	struct visp_plane plane;
-};
-
-struct isp_rpu {
-	uint32_t rpu;
-	uint32_t isp;
-	uint32_t io_mode;
-};
-
-#define VISP_IOC_BUFDONE _IOWR('I', BASE_VIDIOC_PRIVATE + 0, struct visp_buf)
-#define VISP_IOC_BUFFER_ALLOC                                                  \
-	_IOWR('I', BASE_VIDIOC_PRIVATE + 1, struct visp_ext_buf_info)
-#define VISP_IOC_BUFFER_FREE                                                   \
-	_IOWR('I', BASE_VIDIOC_PRIVATE + 2, struct visp_ext_buf_info)
-
-#define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
-#define VISP_GET_EVENT_SHM_FD _IOR('I', BASE_VIDIOC_PRIVATE + 4, int)
-#define VISP_EVENT_ACK _IOW('I', BASE_VIDIOC_PRIVATE + 5, uint32_t)
-
-#ifdef __KERNEL__
-#include "visp_driver.h"
-
-int visp_s_stream_event(struct visp_dev *isp_dev, int pad, uint32_t status);
-int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
-		      struct v4l2_ctrl *ctrl);
-int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
-		      struct v4l2_ctrl *ctrl);
-int visp_l_calib_event(struct visp_dev *isp_dev, int pad);
-int visp_l_json_event(struct visp_dev *isp_dev, int pad);
-int visp_s_interval_event(struct visp_dev *isp_dev, int pad,
-			  struct v4l2_fract *timeperframe);
-int visp_l_fusa_event(struct visp_dev *isp_dev, int pad);
-int visp_stop_fusa_event(struct visp_dev *isp_dev, int pad);
-void visp_notify_wdt_expiry(struct visp_dev *isp_dev, int active_streams);
-
-#endif
-
-#endif
+#endif /* __VISP_MBOX_WDT_H__ */

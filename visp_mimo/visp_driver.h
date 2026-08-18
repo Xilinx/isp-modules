@@ -55,6 +55,7 @@
 #ifndef __VISP_DRIVER_H__
 #define __VISP_DRIVER_H__
 #include <linux/list.h>
+#include <linux/kref.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
@@ -244,6 +245,7 @@ struct visp_mimo_video_isp_dev_extended {
 struct visp_dev {
 	phys_addr_t paddr;
 	struct rpu_dev *rpu;
+	void (*wdt_expiry_cb)(struct visp_dev *isp_dev, int active_streams);
 	uint32_t regs_size;
 	void __iomem *base;
 	void __iomem *reset;
@@ -254,9 +256,14 @@ struct visp_dev {
 	int mi_irq;
 	struct device *dev;
 	struct mutex mlock;
+	struct mutex wdt_lifetime_lock;
+	atomic_t wdt_inflight;
+	bool wdt_teardown;
+	struct completion wdt_inflight_zero;
 	/* isp_dev level calib lock */
 	struct mutex calib_lock;
 	uint32_t refcnt;
+	struct pid *event_client_pid;
 	struct v4l2_subdev sd;
 	/* Dynamic pad allocation based on num_streams */
 	int num_pads;
@@ -356,7 +363,21 @@ struct visp_dev {
 	 * Placed last so it does not affect offsets of fields used by other modules.
 	 */
 	struct list_head global_entry;
-
+	/*
+	 * Field-offset compatibility: visp_mbox.ko is built only against
+	 * visp/visp_driver.h (Makefile -I.../visp/), so its static-inline
+	 * visp_wdt_operation_begin()/_end() dereference isp_dev->ref /
+	 * ->wdt_kref_release at the offset defined by THAT header, regardless
+	 * of which driver flavor's isp_dev pointer is actually passed in. This
+	 * copy of struct visp_dev must mirror those trailing fields at the
+	 * identical relative position or every MIMO mailbox call becomes an
+	 * out-of-bounds access. wdt_kref_release stays NULL (unarmed) here -
+	 * MIMO does not yet opt into kref-pinning a stuck op the way visp/
+	 * does - but the layout itself must still match.
+	 */
+	struct kref ref;
+	void (*wdt_kref_release)(struct kref *kref);
+	bool sd_release_armed;
 };
 
 /* Macro to access extended structure for visp_mimo_video */
@@ -369,4 +390,75 @@ static inline int visp_get_num_pads(struct visp_dev *isp_dev)
 }
 
 int handle_frameout_buffer(void *Enque_Buff_L, struct visp_dev *isp_dev);
+
+/*
+ * Mirrored from visp/visp_driver.h so visp_mimo_video (which compiles against
+ * this header, not visp/'s) can admission-gate its own blocking waits the
+ * same way visp_mbox_driver.c already does for xlnx_mbox_apu_wait_for_ack/
+ * data. Every per-module copy must keep the same field access pattern since
+ * visp_mbox.ko (compiled against visp/visp_driver.h) accesses the same
+ * struct layout directly.
+ */
+static inline bool visp_wdt_operation_begin(struct visp_dev *isp_dev)
+{
+	bool admitted = false;
+
+	if (!isp_dev)
+		return false;
+
+	mutex_lock(&isp_dev->wdt_lifetime_lock);
+	if (!isp_dev->wdt_teardown) {
+		atomic_inc(&isp_dev->wdt_inflight);
+		admitted = true;
+	}
+	mutex_unlock(&isp_dev->wdt_lifetime_lock);
+
+	return admitted;
+}
+
+static inline void visp_wdt_operation_end(struct visp_dev *isp_dev)
+{
+	if (atomic_dec_and_test(&isp_dev->wdt_inflight))
+		complete(&isp_dev->wdt_inflight_zero);
+}
+
+/* Interval between drain-progress warnings while awaiting full quiescence. */
+#define VISP_WDT_TEARDOWN_DRAIN_WARN_MS 5000U
+
+static inline void visp_wdt_begin_teardown(struct visp_dev *isp_dev)
+{
+	int port;
+
+	mutex_lock(&isp_dev->wdt_lifetime_lock);
+	isp_dev->wdt_teardown = true;
+	reinit_completion(&isp_dev->wdt_inflight_zero);
+	mutex_unlock(&isp_dev->wdt_lifetime_lock);
+
+	for (port = 0; port < isp_dev->num_streams; port++) {
+		complete_all(&isp_dev->apu_wait_for_cmd_ack[port]);
+		complete_all(&isp_dev->apu_wait_for_data[port]);
+	}
+	for (port = 0; port < isp_dev->num_streams; port++)
+		for (int chn = 0; chn < MEDIA_ISP_CHN_MAX; chn++)
+			for (int buf = 0; buf < MEDIA_ISP_BUF_FRAME_MAX; buf++) {
+				isp_dev->enq_ack_error[port][chn][buf] = -ESHUTDOWN;
+				complete_all(&isp_dev->apu_wait_for_enq_ack[port][chn][buf]);
+			}
+
+	isp_dev->apu_wait_for_isp_frame_done = 0;
+	wake_up(&isp_dev->wq_frame_done_finished);
+
+	/* Recovery unbinds and devm-frees the device, so it must not run while
+	 * any op still touches it: wait for full quiescence before returning.
+	 * Ops are force-woken above and bail on wdt_teardown; if the drain is
+	 * slow, log progress rather than proceed early (which would risk a UAF).
+	 */
+	while (atomic_read(&isp_dev->wdt_inflight))
+		if (!wait_for_completion_timeout(&isp_dev->wdt_inflight_zero,
+						 msecs_to_jiffies(VISP_WDT_TEARDOWN_DRAIN_WARN_MS)))
+			dev_warn(isp_dev->dev,
+				 "WDT teardown still draining, %d op(s) in flight\n",
+				 atomic_read(&isp_dev->wdt_inflight));
+}
+
 #endif

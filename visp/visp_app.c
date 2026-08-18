@@ -1315,6 +1315,141 @@ int media_isp_stream_off(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 	return 0;
 }
 
+/*
+ * Bound on how long media_isp_force_stream_off() will wait for port_lock
+ * before giving up and proceeding without it. Mirrors
+ * VISP_WDT_TEARDOWN_DRAIN_MAX_WARNINGS's give-up philosophy: port_lock can
+ * be held across operations visp_wdt_begin_teardown() does NOT force-wake -
+ * specifically the shared-subdev s_stream() call and the disable_done wait
+ * in visp_shared_subdev_stream_get()/_put() (visp_driver.c), neither of
+ * which is a mailbox wait. A peer stuck in either of those while holding
+ * port_lock would otherwise hang WDT recovery forever - the one thing this
+ * feature exists to avoid. Proceeding without the lock after this many
+ * warnings is the lesser risk, and is always logged loudly.
+ */
+#define VISP_WDT_PORT_LOCK_WARN_MS      1000U
+#define VISP_WDT_PORT_LOCK_MAX_WARNINGS 5U
+
+static bool visp_wdt_lock_port_bounded(struct visp_dev *isp_dev, uint8_t port)
+{
+	unsigned int warnings = 0;
+
+	while (!mutex_trylock(&isp_dev->port_lock[port])) {
+		warnings++;
+		if (warnings >= VISP_WDT_PORT_LOCK_MAX_WARNINGS) {
+			dev_err(isp_dev->dev,
+				"WDT teardown: port %u lock still held after %ums - proceeding WITHOUT it (peer likely stuck in a non-wdt-gated wait, e.g. shared-subdev s_stream())\n",
+				port, warnings * VISP_WDT_PORT_LOCK_WARN_MS);
+			return false;
+		}
+		dev_warn(isp_dev->dev,
+			 "WDT teardown: waiting for port %u lock (%ums so far)\n",
+			 port, warnings * VISP_WDT_PORT_LOCK_WARN_MS);
+		msleep(VISP_WDT_PORT_LOCK_WARN_MS);
+	}
+	return true;
+}
+
+/*
+ * WDT-recovery only: force one pad's streaming state to "off" purely in APU
+ * driver state. The RPU is presumed hung/unresponsive when this runs, so
+ * unlike media_isp_stream_off() this must NOT send any RPU/mailbox command
+ * (no path-streaming cfg, no buffer-pool/camera teardown) - those would each
+ * block on an ack that will never come.
+ */
+/* ISP-REVIEW WARNING: give-up path below (locked == false) mutates
+ * isp_dev->streamon[pad_index], pad_data[pad_index].stream,
+ * subdev_streamon_count[port] and calls visp_wdt_release_*_upstream()
+ * WITHOUT holding port_lock[port].
+ * Why: if a peer thread is genuinely still executing under port_lock[port]
+ * (e.g. mid shared-subdev s_stream()) when the bounded wait in
+ * visp_wdt_lock_port_bounded() gives up, this thread now writes the same
+ * port's streaming-state fields concurrently and without mutual exclusion
+ * against whatever that peer is doing under the lock it still holds - a
+ * real (if narrow/rare, since it only triggers after a peer has already
+ * been stuck >VISP_WDT_PORT_LOCK_MAX_WARNINGS*VISP_WDT_PORT_LOCK_WARN_MS)
+ * data race on port-scoped state that is otherwise documented as
+ * "port_lock[port]-protected only" per this module's own lock-ordering
+ * rules.
+ * Suggested fix: if the give-up path must exist to avoid hanging WDT
+ * recovery forever, narrow the unprotected mutation surface - e.g. only
+ * force-clear a minimal "this port is being torn down" flag without the
+ * lock, and defer the rest of the state mutation to a point where the lock
+ * is actually held (or is provably no longer needed, e.g. after the peer's
+ * own recovery-triggered unbind has run).
+ */
+static void media_isp_force_stream_off(struct visp_dev *isp_dev, uint8_t port,
+				       uint8_t chn)
+{
+	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
+	unsigned long flags;
+	int closing_seq;
+	bool locked;
+
+	/*
+	 * visp_wdt_begin_teardown() has already closed the WDT operation gate,
+	 * completed pending mailbox waits, and waited for admitted operations
+	 * to exit - covering every *mailbox* wait this lock can be held
+	 * across. It does NOT cover the shared-subdev s_stream() call or the
+	 * disable_done wait inside visp_shared_subdev_stream_get()/_put(), so
+	 * the wait here is bounded rather than unconditional - see
+	 * visp_wdt_lock_port_bounded()'s comment.
+	 */
+	locked = visp_wdt_lock_port_bounded(isp_dev, port);
+
+	if (isp_dev->streamon[pad_index] == 0)
+		goto out;
+
+	closing_seq = atomic_read(&ISP_DEV_EXTENDED(isp_dev)->stream_seq[port][chn]);
+
+	isp_dev->streamon[pad_index] = 0;
+	isp_dev->pad_data[pad_index].stream = 0;
+
+	/* Unblock any thread waiting on an ENQ ack that the dead RPU will never send. */
+	media_isp_complete_pending_enq(isp_dev, port, chn, closing_seq);
+	media_isp_clear_shutdown_markers(isp_dev, port, chn);
+	if (isp_dev->isp_mode == ISP_MODE_LILO)
+		visp_wdt_release_lilo_upstream(isp_dev, port, chn);
+
+	spin_lock_irqsave(&isp_dev->pad_data[pad_index].qlock, flags);
+	INIT_LIST_HEAD(&isp_dev->pad_data[pad_index].queue);
+	isp_dev->pad_data[pad_index].sequence = 0;
+	spin_unlock_irqrestore(&isp_dev->pad_data[pad_index].qlock, flags);
+
+	if (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] > 0)
+		ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port]--;
+	if (isp_dev->isp_mode != ISP_MODE_LILO &&
+	    ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] == 0)
+		visp_wdt_release_port_upstream(isp_dev, port);
+
+	/* vb2_queue_error() intentionally removed: calling it concurrently with
+	 * VISP_EVENT_WDT_EXPIRY causes dual pipeline teardown → glibc heap SIGABRT.
+	 * GStreamer will get -EIO naturally when device_release_driver() destroys
+	 * the video device node; the media server handles the WDT event independently.
+	 */
+
+out:
+	if (locked)
+		mutex_unlock(&isp_dev->port_lock[port]);
+}
+
+/*
+ * WDT-recovery only: force every active pad on this isp_dev to a stopped
+ * state without talking to the RPU. Called from visp_notify_wdt_expiry()
+ * before the daemon is notified, so the driver's own state is already safe
+ * (no thread left blocked on a dead RPU) regardless of whether the daemon
+ * acks in time. The isp_dev is then unbound/rebound by visp_mbox, which
+ * fully re-creates any RPU-side buffer/camera state via a fresh probe().L
+ */
+void visp_wdt_force_pipeline_teardown(struct visp_dev *isp_dev)
+{
+	int port, chn;
+
+	for (port = 0; port < MAX_PORTS; port++)
+		for (chn = 0; chn < MEDIA_ISP_CHN_MAX; chn++)
+			media_isp_force_stream_off(isp_dev, port, chn);
+}
+
 int media_isp_device_qbuf(struct visp_dev *isp_dev, uint8_t port, uint8_t chn,
 			  media_buf *buf)
 {

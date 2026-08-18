@@ -56,6 +56,8 @@
 #define __VISP_DRIVER_H__
 #include <linux/completion.h>
 #include <linux/list.h>
+#include <linux/kref.h>
+#include <linux/pid.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
@@ -323,6 +325,7 @@ static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
 struct visp_dev {
 	phys_addr_t paddr;
 	struct rpu_dev *rpu;
+	void (*wdt_expiry_cb)(struct visp_dev *isp_dev, int active_streams);
 	uint32_t regs_size;
 	void __iomem *base;
 	void __iomem *reset;
@@ -333,9 +336,14 @@ struct visp_dev {
 	int mi_irq;
 	struct device *dev;
 	struct mutex mlock;
+	struct mutex wdt_lifetime_lock;
+	atomic_t wdt_inflight;
+	bool wdt_teardown;
+	struct completion wdt_inflight_zero;
 	/* isp_dev level calib lock */
 	struct mutex calib_lock;
 	uint32_t refcnt;
+	struct pid *event_client_pid;
 	struct v4l2_subdev sd;
 	/* Dynamic pad allocation based on num_streams */
 	int num_pads;
@@ -434,6 +442,17 @@ struct visp_dev {
 	 * Placed last so it does not affect offsets of fields used by other modules.
 	 */
 	struct list_head global_entry;
+	/* Lifetime: isp_dev is kzalloc'd (not devm) and kref'd so the embedded
+	 * ->sd can outlive the last /dev/v4l-subdevN close (see visp_remove()).
+	 */
+	struct kref ref;
+	/* WDT hardening: when set, in-flight mailbox ops pin isp_dev via this
+	 * kref release hook so a proceed-anyway teardown that gives up while an
+	 * op is still running defers the free instead of racing a UAF. NULL for
+	 * devices not armed for it (keeps non-LIMO paths' behavior unchanged).
+	 */
+	void (*wdt_kref_release)(struct kref *kref);
+	bool sd_release_armed;
 };
 
 /* Pipeline management function declarations */
@@ -446,6 +465,114 @@ struct v4l2_subdev *visp_get_pipeline_subdev(struct visp_dev *isp_dev, int port,
 static inline int visp_get_num_pads(struct visp_dev *isp_dev)
 {
 	return isp_dev->num_streams * VISP_PORT_PAD_NR;
+}
+
+static inline bool visp_wdt_operation_begin(struct visp_dev *isp_dev)
+{
+	bool admitted = false;
+
+	if (!isp_dev)
+		return false;
+
+	mutex_lock(&isp_dev->wdt_lifetime_lock);
+	if (!isp_dev->wdt_teardown) {
+		atomic_inc(&isp_dev->wdt_inflight);
+		admitted = true;
+	}
+	mutex_unlock(&isp_dev->wdt_lifetime_lock);
+
+	/* Pin isp_dev for the op's duration so a proceed-anyway teardown that
+	 * gives up while this op is in flight defers the free (kref) rather than
+	 * freeing underneath it. NULL hook = device not armed (unchanged).
+	 */
+	if (admitted && isp_dev->wdt_kref_release)
+		kref_get(&isp_dev->ref);
+
+	return admitted;
+}
+
+static inline void visp_wdt_operation_end(struct visp_dev *isp_dev)
+{
+	/* Signal the drain waiter before the kref_put below, which may be the
+	 * last reference and free isp_dev (and its wdt_inflight_zero).
+	 */
+	if (atomic_dec_and_test(&isp_dev->wdt_inflight))
+		complete(&isp_dev->wdt_inflight_zero);
+	if (isp_dev->wdt_kref_release)
+		kref_put(&isp_dev->ref, isp_dev->wdt_kref_release);
+}
+
+/* Interval between drain-progress warnings while awaiting full quiescence. */
+#define VISP_WDT_TEARDOWN_DRAIN_WARN_MS 5000U
+/*
+ * Upper bound on how long visp_wdt_begin_teardown() will wait for admitted
+ * operations to drain before giving up and proceeding anyway. A stuck drain
+ * means either a leaked wdt_inflight admission (a bug: some caller took the
+ * gate and never reached its matching visp_wdt_operation_end()) or a
+ * genuinely wedged operation that isn't going to complete on its own either
+ * way. Continuing to wait forever would hang the WDT recovery worker (or a
+ * plain rmmod, which now also calls this) permanently; proceeding after this
+ * many warnings is the lesser risk - it is logged loudly so it is never
+ * silent, and it only ever fires under a condition that already indicates a
+ * bug elsewhere.
+ */
+#define VISP_WDT_TEARDOWN_DRAIN_MAX_WARNINGS 12U
+
+static inline void visp_wdt_begin_teardown(struct visp_dev *isp_dev)
+{
+	int port;
+	unsigned int warnings = 0;
+
+	mutex_lock(&isp_dev->wdt_lifetime_lock);
+	isp_dev->wdt_teardown = true;
+	reinit_completion(&isp_dev->wdt_inflight_zero);
+	mutex_unlock(&isp_dev->wdt_lifetime_lock);
+
+	for (port = 0; port < isp_dev->num_streams; port++) {
+		complete_all(&isp_dev->apu_wait_for_cmd_ack[port]);
+		complete_all(&isp_dev->apu_wait_for_data[port]);
+	}
+	/* Stamp -ESHUTDOWN before waking so a genuinely-blocked ENQ waiter never
+	 * reads a stale enq_ack_error value from a prior transaction.
+	 */
+	for (port = 0; port < isp_dev->num_streams; port++)
+		for (int chn = 0; chn < MEDIA_ISP_CHN_MAX; chn++)
+			for (int buf = 0; buf < MEDIA_ISP_BUF_FRAME_MAX; buf++) {
+				isp_dev->enq_ack_error[port][chn][buf] = -ESHUTDOWN;
+				complete_all(&isp_dev->apu_wait_for_enq_ack[port][chn][buf]);
+			}
+
+	/* Release visp_mimo_video's frame-done waiter (see visp_mimo_driver.c). */
+	isp_dev->apu_wait_for_isp_frame_done = 0;
+	wake_up(&isp_dev->wq_frame_done_finished);
+
+	/* Recovery unbinds and devm-frees the device, so it must not run while
+	 * any op still touches it: wait for full quiescence before returning.
+	 * Ops are force-woken above and bail on wdt_teardown; if the drain is
+	 * slow, log progress rather than proceed early (which would risk a UAF).
+	 * Bounded: after VISP_WDT_TEARDOWN_DRAIN_MAX_WARNINGS consecutive
+	 * timeouts, stop waiting and proceed anyway - see the comment on that
+	 * constant for why.
+	 */
+	while (atomic_read(&isp_dev->wdt_inflight)) {
+		if (wait_for_completion_timeout(&isp_dev->wdt_inflight_zero,
+						msecs_to_jiffies(VISP_WDT_TEARDOWN_DRAIN_WARN_MS)))
+			break;
+
+		warnings++;
+		if (warnings >= VISP_WDT_TEARDOWN_DRAIN_MAX_WARNINGS) {
+			dev_err(isp_dev->dev,
+				"WDT teardown drain gave up after %us with %d op(s) still in flight - proceeding anyway (likely a leaked wdt_inflight admission)\n",
+				warnings * (VISP_WDT_TEARDOWN_DRAIN_WARN_MS / 1000U),
+				atomic_read(&isp_dev->wdt_inflight));
+			/* Surface the underlying begin()/end() imbalance loudly in test. */
+			WARN_ONCE(1, "visp: wdt_inflight leaked - unbalanced visp_wdt_operation_begin()/_end()\n");
+			break;
+		}
+		dev_warn(isp_dev->dev,
+			 "WDT teardown still draining, %d op(s) in flight\n",
+			 atomic_read(&isp_dev->wdt_inflight));
+	}
 }
 
 #endif

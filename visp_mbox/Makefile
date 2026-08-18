@@ -12,6 +12,7 @@ $(TARGET)-objs += $(pwd)/mailbox/mbox_crc.o
 $(TARGET)-objs += $(pwd)/mailbox/mbox_seq.o
 $(TARGET)-objs += $(pwd)/mailbox/mbox_api.o
 $(TARGET)-objs += $(pwd)/mailbox/mbox_fifo.o
+$(TARGET)-objs += visp_mbox_wdt.o
 
 $(info PWD_PATH is $(PWD))
 
@@ -35,5 +36,9 @@ ccflags-y += -I$(PWD)/include/
 USER_INC:=$(PWD)/isp_ctrl/visp_ctrl.h
 
 ccflags-y += -DDEBUG -O2
+
+# Define to enable full RPU WWDT self-heal (rebind + remoteproc restart) on
+# expiry; otherwise the WWDT notifier only logs which RPU core expired.
+#ccflags-y += -DVISP_WDT_SELFHEAL
 
 PWD := $(shell pwd)

@@ -61,6 +61,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
+#include <linux/kref.h>
 #include <linux/spinlock.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
@@ -822,6 +823,22 @@ static int visp_video_parse_params(struct visp_media_dev *visp_mdev,
 	return 0;
 }
 
+void visp_media_dev_free(struct kref *kref)
+{
+	struct visp_media_dev *visp_mdev =
+		container_of(kref, struct visp_media_dev, ref);
+
+	/*
+	 * Only legacy mode owns the embedded media_device (mixed mode borrows
+	 * the source subdev owner's). mdev.dev is set right before
+	 * media_device_init() in the legacy probe path, so it also gates out
+	 * early probe failures where the media_device was never initialised.
+	 */
+	if (!visp_mdev->phandle_mode && visp_mdev->mdev.dev)
+		media_device_cleanup(&visp_mdev->mdev);
+	kfree(visp_mdev);
+}
+
 static int visp_video_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -829,18 +846,18 @@ static int visp_video_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct visp_media_dev *visp_mdev;
 
-	visp_mdev =
-	    devm_kzalloc(dev, sizeof(struct visp_media_dev), GFP_KERNEL);
+	visp_mdev = kzalloc(sizeof(struct visp_media_dev), GFP_KERNEL);
 	if (!visp_mdev)
 		return -ENOMEM;
 
+	kref_init(&visp_mdev->ref);
 	visp_mdev->dev = dev;
 	platform_set_drvdata(pdev, visp_mdev);
 
 	ret = visp_video_parse_params(visp_mdev, pdev);
 	if (ret) {
 		dev_err(dev, "parse device params error\n");
-		return ret;
+		goto err_free_mdev;
 	}
 
 	if (visp_mdev->phandle_mode) {
@@ -882,7 +899,8 @@ static int visp_video_probe(struct platform_device *pdev)
 				dev_dbg(dev,
 					"mixed: source subdev not ready, deferring\n");
 				visp_video_put_src_subdevs(visp_mdev);
-				return -EPROBE_DEFER;
+				ret = -EPROBE_DEFER;
+				goto err_free_mdev;
 			}
 			visp_mdev->src_sd[i] = sd;
 		}
@@ -931,7 +949,7 @@ err_unreg_ports:
 		visp_video_unregister_ports(visp_mdev);
 err_put:
 		visp_video_put_src_subdevs(visp_mdev);
-		return ret;
+		goto err_free_mdev;
 	}
 
 	mdev = &visp_mdev->mdev;
@@ -944,7 +962,7 @@ err_put:
 	ret = v4l2_device_register(dev, &visp_mdev->v4l2_dev);
 	if (ret) {
 		dev_err(dev, "register v4l2 device error\n");
-		return ret;
+		goto err_free_mdev;
 	}
 	visp_mdev->shared_v4l2_dev = &visp_mdev->v4l2_dev;
 
@@ -976,6 +994,8 @@ err_unregister_video_ports:
 err_unregister_v4l2_device:
 	v4l2_device_unregister(&visp_mdev->v4l2_dev);
 	visp_video_put_src_subdevs(visp_mdev);
+err_free_mdev:
+	kref_put(&visp_mdev->ref, visp_media_dev_free);
 
 	return ret;
 }
@@ -1001,6 +1021,10 @@ static void visp_video_remove(struct platform_device *pdev)
 		visp_video_put_src_subdevs(visp_mdev);
 	}
 	dev_info(&pdev->dev, "visp video driver remove\n");
+	/* Drop the driver's ref; the struct is freed once the last video/media
+	 * fd closes and releases its per-node ref.
+	 */
+	kref_put(&visp_mdev->ref, visp_media_dev_free);
 }
 
 static const struct of_device_id visp_video_of_match[] = {

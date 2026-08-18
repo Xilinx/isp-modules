@@ -56,6 +56,7 @@
 #define __VISP_VIDEO_DRIVER_H__
 
 #include <linux/list.h>
+#include <linux/kref.h>
 #include <linux/videodev2.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
@@ -120,6 +121,13 @@ struct visp_media_dev {
 	struct device *dev;
 	struct media_device mdev;
 	struct v4l2_device v4l2_dev;
+	/*
+	 * Keeps this struct (and the embedded media_device) alive until the
+	 * last video/media fd closes, so a runtime unbind (WDT recovery) can't
+	 * free it out from under an open fd. Held by the driver plus one ref
+	 * per registered video node.
+	 */
+	struct kref ref;
 	struct v4l2_async_notifier notifier;
 	int ports;
 	struct visp_video_reserve_mem reserve_mem;
@@ -165,6 +173,11 @@ struct visp_media_dev {
 	 */
 	struct v4l2_subdev *src_sd[VISP_VIDEO_PORT_MAX];
 };
+
+/* kref release for struct visp_media_dev; frees the struct once the last
+ * reference (driver + per-node) is dropped.
+ */
+void visp_media_dev_free(struct kref *kref);
 
 struct visp_video_fmt_info {
 	uint32_t fourcc;

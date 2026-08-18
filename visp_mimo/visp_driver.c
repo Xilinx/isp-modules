@@ -2170,6 +2170,29 @@ static int visp_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	mutex_init(&isp_dev->mlock);
+	mutex_init(&isp_dev->wdt_lifetime_lock);
+	atomic_set(&isp_dev->wdt_inflight, 0);
+	isp_dev->wdt_teardown = false;
+	init_completion(&isp_dev->wdt_inflight_zero);
+	/* visp_wdt_begin_teardown() wakes this unconditionally; must be valid
+	 * even for isp_mode/pipelines that never wait on it.
+	 */
+	init_waitqueue_head(&isp_dev->wq_frame_done_finished);
+	/* ISP-REVIEW WARNING: isp_dev->wdt_expiry_cb is never set here.
+	 * Why: struct visp_dev is shared across LIMO/LILO/MIMO/MIMO-video, and
+	 * a MIMO isp_dev sharing an RPU with a LIMO/LILO isp_dev that trips
+	 * the WWDT is still admission-gated and (in SELFHEAL builds)
+	 * unconditionally unbound/rebound by visp_mbox_wdt_expiry_worker()'s
+	 * per-isp_dev loop, exactly like the others - but since wdt_expiry_cb
+	 * stays NULL, MIMO gets no equivalent of visp_notify_wdt_expiry()'s
+	 * force pipeline teardown / userspace notify. Its own
+	 * frameout_cb/pending_frameout_msg[]/vb2 buffer state has no
+	 * force-teardown path before the forced unbind.
+	 * Suggested fix: wire isp_dev->wdt_expiry_cb to a MIMO-appropriate
+	 * equivalent (release pending vb2 buffers with VB2_BUF_STATE_ERROR,
+	 * post a MIMO userspace notification) before shipping self-heal on
+	 * any MIMO+LIMO/LILO shared-RPU configuration.
+	 */
 	mutex_init(&isp_dev->ctrl_lock);
 	isp_dev->dev = &pdev->dev;
 	platform_set_drvdata(pdev, isp_dev);

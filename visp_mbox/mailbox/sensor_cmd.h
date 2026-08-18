@@ -532,6 +532,9 @@ typedef enum {
 	MB_CMD_BUF_RET,
 	APU_2_RPU_MB_CMD_SWITCH_TO_LLP,
 
+	/* Sent after APU_2_RPU_MB_CMD_START_STREAMING to exercise the RPU WDT. */
+	APU_2_RPU_MB_CMD_WDT_TEST,
+
 	DUMMY_MB_CMD = 0xdeadfeed,
 } mb_cmd_id_e;
 

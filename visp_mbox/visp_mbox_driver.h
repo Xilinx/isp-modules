@@ -90,6 +90,10 @@
 #define VISP_MBOX_MAX_RPU_ID 9
 
 struct rpu_dev *visp_mbox_get_rpu_dev(int rpu_id);
+void visp_mbox_clear_init_firmware_success(struct rpu_dev *rpu);
+int visp_mbox_send_init_firmware(struct rpu_dev *rpu);
+int visp_mbox_rpu_restart(struct rpu_dev *rpu, struct visp_dev * const *isp_devs,
+			  int isp_dev_count);
 int xlnx_mbox_apu_wait_for_ack(struct visp_dev *isp_dev, uint32_t instance_id,
 			       uint32_t path, uint32_t buffer_index, mb_cmd_id_e cmd);
 int xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
@@ -198,6 +202,8 @@ struct rpu_dev {
 	bool seq_resync_pending;
 	/* Consecutive irrecoverable (stale/backward) sequence mismatches. */
 	u32 seq_mismatch_count;
+	/* Set via sysfs "wdt_test"; when true, WDT_TEST is sent after INIT_FIRMWARE sync. */
+	bool wdt_test_enabled;
 };
 
 /*

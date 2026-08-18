@@ -94,4 +94,11 @@ int inform_llp_config_to_rpu(struct visp_dev *isp_dev, uint8_t port,
 int visp_stream_on(struct visp_dev *isp_dev);
 void visp_stream_off(struct visp_dev *isp_dev);
 
+bool media_isp_mixed_mode_sibling_active(struct visp_dev *isp_dev,
+					 uint8_t port, uint8_t exclude_chn);
+void visp_wdt_force_pipeline_teardown(struct visp_dev *isp_dev);
+void visp_wdt_release_port_upstream(struct visp_dev *isp_dev, int port);
+void visp_wdt_release_lilo_upstream(struct visp_dev *isp_dev, int port, uint8_t chn);
+/* visp_wdt_operation_begin/end and visp_wdt_begin_teardown: see visp_driver.h (static inline). */
+
 #endif

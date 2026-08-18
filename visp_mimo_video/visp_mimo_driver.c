@@ -507,17 +507,32 @@ void visp_mimo_device_run(void *priv)
 		device->isp_dev->streamon[port] = 1;
 	}
 
+	/*
+	 * Admission-gate this wait the same way xlnx_mbox_apu_wait_for_ack()/
+	 * _data() already do: a WDT teardown in progress must not start a new
+	 * RPU-bound job, and visp_wdt_begin_teardown()'s drain-wait must
+	 * actually wait for this job before the isp_dev can be unbound/freed
+	 * out from under this still-running device_run() callback.
+	 */
+	if (!visp_wdt_operation_begin(device->isp_dev)) {
+		dev_err(device->isp_dev->dev,
+			"%s: WDT teardown in progress, aborting job\n", __func__);
+		goto stream_off;
+	}
+
 	device->isp_dev->apu_wait_for_isp_frame_done = 1;
 
 	ret = media_isp_device_deque(device->isp_dev, 0);
 	if (ret != 0) {
 		dev_err(device->isp_dev->dev, "media_isp_device_deque failed: %d\n", ret);
+		visp_wdt_operation_end(device->isp_dev);
 		goto stream_off;
 	}
 
 	result = wait_event_timeout(device->isp_dev->wq_frame_done_finished,
 				 !device->isp_dev->apu_wait_for_isp_frame_done,
 				 msecs_to_jiffies(5000));
+	visp_wdt_operation_end(device->isp_dev);
 	if (result == 0) {
 		dev_err(device->isp_dev->dev, "%s: Wait for frame done timed out\n", __func__);
 		goto stream_off;
@@ -2828,6 +2843,10 @@ int visp_mimo_probe(struct platform_device *pdev)
 
 	device->isp_dev->num_pads = 1;
 	mutex_init(&device->isp_dev->mlock);
+	mutex_init(&device->isp_dev->wdt_lifetime_lock);
+	atomic_set(&device->isp_dev->wdt_inflight, 0);
+	device->isp_dev->wdt_teardown = false;
+	init_completion(&device->isp_dev->wdt_inflight_zero);
 	mutex_init(&device->isp_dev->ctrl_lock);
 	device->isp_dev->dev = &pdev->dev;
 

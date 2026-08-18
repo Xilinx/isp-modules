@@ -56,8 +56,11 @@
 #include <media/v4l2-event.h>
 #include <linux/delay.h>
 #include <linux/namei.h>
+#include <linux/pid.h>
+#include <linux/sched/signal.h>
 #include "visp_event.h"
 #include "visp_driver.h"
+#include "visp_app.h"
 
 static bool visp_event_subscribed(struct v4l2_subdev *sd, uint32_t type,
 				  uint32_t id)
@@ -66,6 +69,10 @@ static bool visp_event_subscribed(struct v4l2_subdev *sd, uint32_t type,
 	unsigned long flags;
 	struct v4l2_subscribed_event *sev;
 	bool subscribed = false;
+
+	/* devnode isn't up yet if the video driver hasn't bound this subdev. */
+	if (!sd->devnode)
+		return false;
 
 	spin_lock_irqsave(&sd->devnode->fh_lock, flags);
 
@@ -293,6 +300,9 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	u8 *pdata = event_pkg->data;
 	int port;
 
+	if (!visp_wdt_operation_begin(isp_dev))
+		return -ESHUTDOWN;
+
 	if (isp_dev->isp_mode == ISP_MODE_LILO) {
 		/* vipp always reports pad 0 for ctrl events on LILO's
 		 * live-out path; force the first real pad (MP) so the
@@ -307,7 +317,8 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 	    (isp_dev->streamon[pad] != 1) :
 	    (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] < 1)) {
 		dev_info(isp_dev->dev, "unable to set control prior to streamon\n");
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
 	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
@@ -322,7 +333,8 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 			"%s: ctrl data size %zu exceeds shm buffer %u\n",
 			__func__, required_size, isp_dev->event_shm.size);
 		mutex_unlock(&isp_dev->event_shm.event_lock);
-		return -EOVERFLOW;
+		ret = -EOVERFLOW;
+		goto out;
 	}
 
 	event_pkg->head.data_size = 0;
@@ -356,6 +368,8 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 
 	mutex_unlock(&isp_dev->event_shm.event_lock);
 
+out:
+	visp_wdt_operation_end(isp_dev);
 	return ret;
 }
 
@@ -367,6 +381,9 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	struct visp_ctrl *isp_ctrl;
 	u8 *pdata = event_pkg->data;
 	int port;
+
+	if (!visp_wdt_operation_begin(isp_dev))
+		return -ESHUTDOWN;
 
 	if (isp_dev->isp_mode == ISP_MODE_LILO) {
 		/* vipp always reports pad 0 for ctrl events on LILO's
@@ -382,7 +399,7 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 	    (isp_dev->streamon[pad] != 1) :
 	    (ISP_DEV_EXTENDED(isp_dev)->subdev_streamon_count[port] < 1)) {
 		memset(ctrl->p_new.p_u8, 0, ctrl->elem_size * ctrl->elems);
-		return 0;
+		goto out;
 	}
 
 	mutex_lock(&isp_dev->event_shm.event_lock);
@@ -397,7 +414,8 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 			"%s: ctrl data size %zu exceeds shm buffer %u\n",
 			__func__, required_size, isp_dev->event_shm.size);
 		mutex_unlock(&isp_dev->event_shm.event_lock);
-		return -EOVERFLOW;
+		ret = -EOVERFLOW;
+		goto out;
 	}
 
 	event_pkg->head.data_size = 0;
@@ -443,6 +461,8 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 
 	mutex_unlock(&isp_dev->event_shm.event_lock);
 
+out:
+	visp_wdt_operation_end(isp_dev);
 	return ret;
 }
 
@@ -571,4 +591,96 @@ int visp_stop_fusa_event(struct visp_dev *isp_dev, int pad)
 
 	mutex_unlock(&isp_dev->event_shm.event_lock);
 	return ret;
+}
+
+/*
+ * WDT-recovery only: drops every event subscription still held by any open
+ * file handle on this subdev's devnode. Runs right before the driver
+ * instance is unbound, so a stale subscription from an fh that outlives the
+ * unbind/rebind cycle can't linger into the freshly re-probed instance.
+ * Mirrors v4l2_event_unsubscribe()'s own locking (sev->ops->del is called
+ * outside the spinlock) instead of reusing v4l2_event_unsubscribe_all()
+ * directly, since that helper re-takes devnode->fh_lock itself and cannot be
+ * called while we are already walking fh_list under it.
+ */
+static void visp_wdt_unsubscribe_all_events(struct v4l2_subdev *sd)
+{
+	struct v4l2_fh *fh;
+	struct v4l2_subscribed_event *sev, *tmp;
+	struct list_head removed;
+	unsigned long flags;
+
+	if (!sd->devnode)
+		return;
+
+	INIT_LIST_HEAD(&removed);
+
+	spin_lock_irqsave(&sd->devnode->fh_lock, flags);
+	list_for_each_entry(fh, &sd->devnode->fh_list, list) {
+		list_for_each_entry_safe(sev, tmp, &fh->subscribed, list)
+			list_move_tail(&sev->list, &removed);
+	}
+	spin_unlock_irqrestore(&sd->devnode->fh_lock, flags);
+
+	list_for_each_entry_safe(sev, tmp, &removed, list) {
+		if (sev->ops && sev->ops->del)
+			sev->ops->del(sev);
+		list_del(&sev->list);
+		kfree(sev);
+	}
+}
+
+/*
+ * Invoked (via isp_dev->wdt_expiry_cb) from visp_mbox's WWDT notifier once it
+ * has identified this isp_dev as owned by the expired RPU core and counted
+ * its currently-active streams. Tells the userspace daemon to tear down and
+ * clean up every running pipeline on this device.
+ */
+void visp_notify_wdt_expiry(struct visp_dev *isp_dev, int active_streams)
+{
+	struct v4l2_event event;
+	struct visp_event_pkg *event_pkg;
+	int ret;
+
+	/* RPU is presumed hung: stop all local pipeline state before anything else. */
+	visp_wdt_force_pipeline_teardown(isp_dev);
+
+	event.type = VISP_DEAMON_EVENT;
+	event.id = VISP_EVENT_WDT_EXPIRY;
+
+	if (!visp_event_subscribed(&isp_dev->sd, event.type, event.id)) {
+		dev_err(isp_dev->dev, "post event %d not subscribed\n", event.id);
+		goto unsubscribe;
+	}
+
+	event_pkg = isp_dev->event_shm.virt_addr;
+
+	mutex_lock(&isp_dev->event_shm.event_lock);
+	event_pkg->head.pad = 0;
+	event_pkg->head.dev = isp_dev->id;
+	event_pkg->head.eid = VISP_EVENT_WDT_EXPIRY;
+	event_pkg->head.shm_fd = isp_dev->event_shm.dmabuf_fd;
+	event_pkg->head.shm_size = isp_dev->event_shm.size;
+	event_pkg->head.data_size = sizeof(active_streams);
+	event_pkg->ack = 0;
+	event_pkg->result = 0;
+	memcpy(event_pkg->data, &active_streams, sizeof(active_streams));
+
+	ret = visp_post_event(&isp_dev->sd, event_pkg);
+	if (ret != 0)
+		dev_err(isp_dev->dev, "[EVENT_FAIL] %s %d\n", __func__, __LINE__);
+
+	mutex_unlock(&isp_dev->event_shm.event_lock);
+
+unsubscribe:
+	/*
+	 * isp_media_server is expected to release this subdev's fd/state on
+	 * its own after seeing VISP_EVENT_WDT_EXPIRY (it no longer gets
+	 * killed here, so other isp_dev instances it still serves are left
+	 * running). Whether or not it has finished by now, this instance is
+	 * about to be unbound: leave no subscriptions behind so a stale fh
+	 * outliving the unbind/rebind cycle can't linger into the freshly
+	 * re-probed instance.
+	 */
+	visp_wdt_unsubscribe_all_events(&isp_dev->sd);
 }
