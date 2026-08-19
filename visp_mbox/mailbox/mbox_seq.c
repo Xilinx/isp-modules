@@ -66,7 +66,7 @@
  * it repeats, so we escalate (force a resync) after a run of consecutive
  * irrecoverable mismatches instead of stalling forever on a single one.
  */
-#define MBOX_SEQ_FORWARD_GAP_MAX 1024U
+#define MBOX_SEQ_FORWARD_GAP_MAX 8U
 #define MBOX_SEQ_MISMATCH_ESCALATE 8U
 
 u32 visp_mbox_seq_increment(u32 seq)
