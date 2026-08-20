@@ -81,6 +81,8 @@ struct visp_vb2_buffer {
 	struct visp_video_plane planes[VIDEO_MAX_PLANES];
 	struct list_head list;
 	uint32_t sequence;
+	/* Streaming generation this buffer was queued under; see visp_pad_data.stream_gen */
+	uint32_t stream_gen;
 };
 
 struct visp_pad_reqbufs {

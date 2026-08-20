@@ -1233,6 +1233,8 @@ static int visp_pad_buf_queue(struct v4l2_subdev *sd, void *arg)
 
 	spin_lock_irqsave(&cur_pad->qlock, flags);
 
+	/* Stamp this buffer with the streaming session it belongs to. */
+	pad_buf->buf->stream_gen = cur_pad->stream_gen;
 	list_add_tail(&pad_buf->buf->list, &cur_pad->queue);
 
 	spin_unlock_irqrestore(&cur_pad->qlock, flags);
@@ -2491,6 +2493,25 @@ static int visp_pad_s_stream(struct v4l2_subdev *sd, void *arg)
 mixed_on_err:
 			isp_dev->streamon[pad_stream->pad] = 0;
 			isp_dev->pad_data[pad_stream->pad].stream = 0;
+
+			/*
+			 * Not currently reachable by any in-flight HW
+			 * completion (this streamon attempt never got far
+			 * enough to have a buffer in flight), but reset the
+			 * pad's queue/sequence/generation the same way every
+			 * real streamoff site does, so a failed streamon
+			 * leaves this pad in the same clean state a normal
+			 * stream-off would - matching invariant symmetry
+			 * rather than relying on this path staying
+			 * unreachable.
+			 */
+			spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+			INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
+			isp_dev->pad_data[pad_stream->pad].sequence = 0;
+			isp_dev->pad_data[pad_stream->pad].stream_gen++;
+			spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock,
+					       flags);
+
 			if (ext->port_stream_refcnt[port] > 0)
 				ext->port_stream_refcnt[port]--;
 			/*
@@ -2539,6 +2560,14 @@ mixed_on_err:
 		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 		isp_dev->pad_data[pad_stream->pad].sequence = 0;
+		/*
+		 * Bump the generation here too - this is the mixed-mode
+		 * memory-out chn's own streamoff, distinct from the
+		 * plain-LILO and LIMO branches' streamoff sites below, which
+		 * each already do this. See visp_driver.h's stream_gen
+		 * comment.
+		 */
+		isp_dev->pad_data[pad_stream->pad].stream_gen++;
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock,
 				       flags);
 
@@ -2669,6 +2698,13 @@ mixed_on_err:
 			INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 			/* Reset sequence counter on streamoff */
 			isp_dev->pad_data[pad_stream->pad].sequence = 0;
+			/*
+			 * Bump the generation so any buffer already queued
+			 * before the next streamon - and every buffer queued
+			 * after - is distinguishable from this now-closed
+			 * session. See visp_driver.h's stream_gen comment.
+			 */
+			isp_dev->pad_data[pad_stream->pad].stream_gen++;
 			spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 		}
 
@@ -2679,6 +2715,21 @@ ERR_TO_CAMERA_DISCONNECT:
 		visp_stream_off(isp_dev);
 		isp_dev->streamon[pad_stream->pad] = 0;
 		isp_dev->pad_data[pad_stream->pad].stream = 0;
+
+		/*
+		 * Same invariant-symmetry reset as mixed_on_err above and the
+		 * real streamoff sites below - not reachable by any in-flight
+		 * completion today (this streamon attempt never got far
+		 * enough), but keeps a failed streamon from leaving stale
+		 * queue/sequence/generation state behind.
+		 */
+		spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
+		isp_dev->pad_data[pad_stream->pad].sequence = 0;
+		isp_dev->pad_data[pad_stream->pad].stream_gen++;
+		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock,
+				       flags);
+
 		mutex_unlock(&isp_dev->port_lock[port]);
 		return ret;
 	}
@@ -2782,6 +2833,13 @@ ERR_TO_CAMERA_DISCONNECT:
 		INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
 		/* Reset sequence counter on streamoff */
 		isp_dev->pad_data[pad_stream->pad].sequence = 0;
+		/*
+		 * Bump the generation so any buffer already queued before the
+		 * next streamon - and every buffer queued after - is
+		 * distinguishable from this now-closed session. See
+		 * visp_driver.h's stream_gen comment.
+		 */
+		isp_dev->pad_data[pad_stream->pad].stream_gen++;
 		spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
 	}
 
@@ -2800,6 +2858,19 @@ ERR_TO_RPU_LOCK:
 				 "Failed to roll back pipeline streaming on port %d: %d\n",
 				 port, stop_ret);
 	}
+
+	/*
+	 * Same invariant-symmetry reset as mixed_on_err/ERR_TO_CAMERA_DISCONNECT
+	 * above and the real streamoff sites below - not reachable by any
+	 * in-flight completion today, but keeps a failed streamon from
+	 * leaving stale queue/sequence/generation state behind.
+	 */
+	spin_lock_irqsave(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+	INIT_LIST_HEAD(&isp_dev->pad_data[pad_stream->pad].queue);
+	isp_dev->pad_data[pad_stream->pad].sequence = 0;
+	isp_dev->pad_data[pad_stream->pad].stream_gen++;
+	spin_unlock_irqrestore(&isp_dev->pad_data[pad_stream->pad].qlock, flags);
+
 	mutex_unlock(&isp_dev->port_lock[port]);
 	return ret;
 }
@@ -2916,12 +2987,37 @@ int visp_buf_done(struct v4l2_subdev *sd, void *arg)
 		video = media_entity_to_video_device(pad->entity);
 		if (buf->sequence < video->queue->max_num_buffers) {
 			if (buf->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE) {
+				bool first_frame;
+
 				/* Set timestamp and sequence before marking done */
 				buf->vb.vb2_buf.timestamp = ktime_get_ns();
 
 				spin_lock_irqsave(&cur_pad->qlock, flags);
+				/*
+				 * Only trust cur_pad->sequence == 0 as "first
+				 * frame of THIS session" when the completing
+				 * buffer was actually queued under the
+				 * current generation - otherwise a late
+				 * completion for a prior, already-torn-down
+				 * session (whose queue got reinitialized by a
+				 * streamoff, then coincidentally reused the
+				 * same buffer index in a fresh streamon)
+				 * would be misreported as the new session's
+				 * first frame.
+				 */
+				first_frame = (cur_pad->sequence == 0 &&
+					       buf->stream_gen == cur_pad->stream_gen);
 				buf->vb.sequence = cur_pad->sequence++;
 				spin_unlock_irqrestore(&cur_pad->qlock, flags);
+
+				if (first_frame) {
+					int port = ubuf.pad / MEDIA_ISP_PORT_PAD_COUNT;
+					int chn = (ubuf.pad % MEDIA_ISP_PORT_PAD_COUNT) - 1;
+
+					dev_info(isp_dev->dev,
+						 "ISP : %d Port : %d Chn : %d First Frame Arrival ts=%llu ns\n",
+						 isp_dev->id, port, chn, buf->vb.vb2_buf.timestamp);
+				}
 
 				vb2_buffer_done(&buf->vb.vb2_buf,
 						VB2_BUF_STATE_DONE);

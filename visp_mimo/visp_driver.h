@@ -149,6 +149,13 @@ struct visp_pad_data {
 	uint32_t stream;
 	struct v4l2_fract timeperframe;
 	uint32_t sequence; /* Frame sequence counter for this pad */
+	/*
+	 * Kept in sync with visp/'s copy of this struct (field-for-field,
+	 * same size) even though this module's own visp_buf_done()/
+	 * visp_pad_s_stream() are dead code (frameout_cb never assigned
+	 * here) - see visp/visp_driver.h for why this field exists.
+	 */
+	uint32_t stream_gen;
 };
 
 struct visp_event_shm {

@@ -159,6 +159,16 @@ struct visp_pad_data {
 	uint32_t stream;
 	struct v4l2_fract timeperframe;
 	uint32_t sequence; /* Frame sequence counter for this pad */
+	/*
+	 * Incremented on stream-off (not stream-on) so any buffer already
+	 * queued before the next stream-on - and every buffer queued after -
+	 * carries the new generation. Lets visp_buf_done() tell a genuine
+	 * current-session completion apart from a late completion for a
+	 * prior, already-torn-down session that would otherwise be
+	 * misreported as the First Frame Arrival for a session that hasn't
+	 * started yet.
+	 */
+	uint32_t stream_gen;
 };
 
 struct visp_event_shm {
