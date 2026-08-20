@@ -565,7 +565,7 @@ struct visp_format visp_lilo_mp_fmts[] = {
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_RGB24,
-		.code = MEDIA_BUS_FMT_RBG888_1X24, /* RBG, see visp_lilo/visp_driver.c:234 */
+		.code = MEDIA_BUS_FMT_RBG888_1X24, /* RBG (not RGB) is intentional, not a typo */
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_RGB24DWA,
@@ -897,7 +897,7 @@ struct visp_format visp_lilo_sp_fmts[] = {
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_RGB24,
-		.code = MEDIA_BUS_FMT_RBG888_1X24, /* RBG, see visp_lilo/visp_driver.c:473 */
+		.code = MEDIA_BUS_FMT_RBG888_1X24, /* RBG (not RGB) is intentional, not a typo */
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_RGB24DWA,
