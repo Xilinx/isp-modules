@@ -53,6 +53,7 @@
  *****************************************************************************/
 
 #include <linux/build_bug.h>
+#include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/of_graph.h>
 #include <linux/of_reserved_mem.h>
@@ -5547,6 +5548,99 @@ static void visp_destroy_enq_wqs(struct visp_dev *isp_dev)
 		}
 	}
 }
+
+/*
+ * SSW-18136: quick (hardirq) handler for this ISP instance's FuSa
+ * interrupt line. There is no APU-visible register to clear the
+ * source, and the line is level-triggered, so mask it here to avoid
+ * an interrupt storm and hand off to the threaded handler, which can
+ * sleep. The line stays masked until this driver re-probes (i.e.
+ * after the target restart the story calls for) rather than being
+ * re-armed from within this driver.
+ */
+static irqreturn_t visp_fusa_irq_quick(int irq, void *dev_id)
+{
+	struct visp_dev *isp_dev = dev_id;
+
+	disable_irq_nosync(irq);
+	dev_crit(isp_dev->dev,
+		 "ISP FuSa monitoring disabled for isp_id %d (irq %d) after fault - stays masked until next probe/restart\n",
+		 isp_dev->id, irq);
+	return IRQ_WAKE_THREAD;
+}
+
+/*
+ * Threaded handler: detection and logging only for now, per SSW-18136 -
+ * it does not parse the interrupt or identify its exact cause. No
+ * userspace notification: there is currently no daemon-side handling of
+ * a FuSa restart trigger, so this driver does not post an event for
+ * one. (An earlier iteration posted a VISP_EVENT_INTERCONNECT_ERR event
+ * to the daemon here - dropped since there is nothing on the userspace
+ * side to consume it yet.)
+ */
+static irqreturn_t visp_fusa_irq_thread(int irq, void *dev_id)
+{
+	struct visp_dev *isp_dev = dev_id;
+
+	dev_alert(isp_dev->dev,
+		  "ISP FuSa error detected: isp_id %d, irq %d (fusa_irq)\n",
+		  isp_dev->id, irq);
+
+	return IRQ_HANDLED;
+}
+
+/*
+ * SSW-18136: register for this ISP instance's own FuSa interrupt line,
+ * if present. Unlike the isr_irq/xmpu_interrupt lines this driver used
+ * to also register (dropped: isr_irq/xmpu_interrupt are owned/enabled
+ * by RPU firmware's own hal_irq.c stub handlers on the same physical
+ * lines - a real ownership conflict, not ours to claim without
+ * firmware-side coordination), fusa_irq is named per ISP instance in
+ * DT ("tileN_ispM_fusa_irq", present on both isp0 and isp1 sub-nodes,
+ * not just isp0) - so this registers per isp_id, not per tile.
+ * platform_get_irq_byname_optional() returns -ENXIO silently if this
+ * instance's DT node lacks the property; presence in DT is the sole
+ * gate. Applies to both LIMO and LILO instances alike. Failure to
+ * register is logged but is not fatal to probe - FuSa-error reporting
+ * is best-effort auxiliary functionality, not required for the ISP to
+ * operate.
+ */
+static void visp_register_fusa_irq(struct visp_dev *isp_dev,
+				   struct platform_device *pdev)
+{
+	struct visp_isp_dev_extended *ext = ISP_DEV_EXTENDED(isp_dev);
+	struct device *dev = &pdev->dev;
+	int tile = isp_dev->id / 2;
+	int local_isp = isp_dev->id % 2;
+	char *fusa_name;
+	int irq, ret;
+
+	ext->fusa_irq = -1;
+
+	fusa_name = devm_kasprintf(dev, GFP_KERNEL, "tile%d_isp%d_fusa_irq",
+				   tile, local_isp);
+	if (!fusa_name) {
+		dev_warn(dev, "failed to allocate fusa irq name\n");
+		return;
+	}
+
+	irq = platform_get_irq_byname_optional(pdev, fusa_name);
+	if (irq >= 0) {
+		ret = devm_request_threaded_irq(dev, irq,
+						visp_fusa_irq_quick,
+						visp_fusa_irq_thread,
+						IRQF_ONESHOT, fusa_name, isp_dev);
+		if (ret)
+			dev_warn(dev, "failed to request %s (irq %d): %d\n",
+				 fusa_name, irq, ret);
+		else
+			ext->fusa_irq = irq;
+	} else {
+		dev_dbg(dev, "%s not present for isp_id %d (optional)\n",
+			fusa_name, isp_dev->id);
+	}
+}
+
 static int visp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -5774,6 +5868,8 @@ static int visp_probe(struct platform_device *pdev)
 	kref_get(&isp_dev->ref);
 	isp_dev->sd_release_armed = true;
 
+	visp_register_fusa_irq(isp_dev, pdev);
+
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
 
 	return 0;
@@ -5824,8 +5920,19 @@ err_free_dev:
 static void visp_remove(struct platform_device *pdev)
 {
 	struct visp_dev *isp_dev;
+	struct visp_isp_dev_extended *ext;
 
 	isp_dev = platform_get_drvdata(pdev);
+	ext = ISP_DEV_EXTENDED(isp_dev);
+
+	/*
+	 * Free the FuSa IRQ explicitly rather than relying on
+	 * devm_request_threaded_irq()'s automatic cleanup, which would only
+	 * run after this .remove() callback returns.
+	 */
+	if (ext->fusa_irq >= 0)
+		devm_free_irq(&pdev->dev, ext->fusa_irq, isp_dev);
+
 	visp_release_upstream_nodes_dt(isp_dev);
 
 	/* Unregister from the module-wide list */

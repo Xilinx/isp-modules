@@ -306,6 +306,18 @@ struct visp_isp_dev_extended {
 	 * Cleared once the matching stream_put() has been issued.
 	 */
 	struct v4l2_subdev *upstream_subdev[VISP_PORT_NR];
+
+	/*
+	 * --- Shared (LIMO + LILO): FuSa error IRQ ---
+	 * SSW-18136: this ISP instance's FuSa interrupt number, named per
+	 * isp_id in DT ("tileN_ispM_fusa_irq", present on both isp0 and
+	 * isp1 sub-nodes). Negative = not present in DT for this instance.
+	 * isr_irq/xmpu_interrupt are deliberately NOT handled here - RPU
+	 * firmware's own hal_irq.c already owns/enables handlers on those
+	 * physical lines (real ownership conflict, out of scope until
+	 * resolved with the firmware team).
+	 */
+	int fusa_irq;
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
