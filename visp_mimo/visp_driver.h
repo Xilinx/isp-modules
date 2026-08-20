@@ -249,6 +249,15 @@ struct visp_mimo_video_isp_dev_extended {
  * New: 64 frames = 2133ms buffer → absorbs RPU processing delays.
  */
 #define VISP_KFIFO_SIZE 64
+
+/* Matches enum isp_mode in the unified VISP driver's mailbox view. */
+enum isp_mode {
+	ISP_MODE_LIMO,
+	ISP_MODE_LILO,
+	ISP_MODE_MIMO,
+	ISP_MODE_UNKNOWN,
+};
+
 struct visp_dev {
 	phys_addr_t paddr;
 	struct rpu_dev *rpu;

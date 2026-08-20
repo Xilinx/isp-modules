@@ -1982,12 +1982,23 @@ static int parse_iba(struct visp_dev *isp_dev, struct device_node *np)
 }
 //
 static int visp_parse_params(struct visp_dev *isp_dev,
-				 struct platform_device *pdev)
+			     struct platform_device *pdev)
 {
+	const struct of_device_id *match;
 	int port = 0;
 	int ret = 0;
 	const char *formats;
 	struct device_node *node = pdev->dev.of_node;
+
+	if (!node) {
+		dev_err(&pdev->dev, "No device tree node found\n");
+		return -EINVAL;
+	}
+
+	match = of_match_device(pdev->dev.driver->of_match_table, &pdev->dev);
+	if (!match)
+		return -EINVAL;
+	isp_dev->isp_mode = ISP_MODE_MIMO;
 
 	for (port = 0; port < VISP_PORT_NR; port++) {
 		strscpy(isp_dev->isp_ports[port].sensor_info.name,
@@ -2012,22 +2023,28 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 			sizeof(isp_dev->isp_ports[port].sensor_info.auto_json));
 	}
 
-	fwnode_property_read_u32(of_fwnode_handle(node), "id", &isp_dev->id);
-	if (!node) {
-		dev_err(&pdev->dev, "No device tree node found\n");
-		return -EINVAL;
+	ret = fwnode_property_read_u32(of_fwnode_handle(node), "isp_id",
+				       &isp_dev->id);
+	if (ret) {
+		dev_warn(&pdev->dev, "isp_id missing; trying deprecated id property\n");
+		ret = fwnode_property_read_u32(of_fwnode_handle(node), "id", &isp_dev->id);
+		if (ret) {
+			dev_err(&pdev->dev, "Failed to read isp_id or id: %d\n", ret);
+			return ret;
+		}
 	}
-	if (isp_dev->id < 0 && isp_dev->id > 1) {
+	if (isp_dev->id < 0 || isp_dev->id > 1) {
 		dev_err(&pdev->dev, "Invalid ISP id %d\n", isp_dev->id);
 		return -EINVAL;
 	}
 	dev_dbg(&pdev->dev, "Found visp device in device tree.\n");
 
 	// Read string property for SS-MODE-i0 (LIMO, etc.)
-	ret =
-		of_property_read_string(node, "xlnx,io_mode", &isp_dev->ss_mode_i0);
+	ret = of_property_read_string(node, "xlnx,io_mode",
+				      &isp_dev->ss_mode_i0);
 	if (ret) {
-		dev_err(&pdev->dev, "Failed to read xlnx,io_mode\n");
+		dev_err(&pdev->dev, "Failed to read required xlnx,io_mode: %d\n",
+			ret);
 		return ret;
 	} else {
 		dev_info(&pdev->dev, "xlnx,io_mode: %s\n", isp_dev->ss_mode_i0);
@@ -2039,14 +2056,16 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 				   &isp_dev->num_streams);
 	if (ret) {
 		dev_err(&pdev->dev,
-			"Failed to read xlnx,num_streams property\n");
+			"Failed to read required xlnx,num_streams: %d\n", ret);
 		return ret;
 	} else {
 		dev_info(&pdev->dev, "xlnx,num_streams: %u\n",
 			 isp_dev->num_streams);
 	}
 
-	/* Force num_streams = 1 for MIMO mode */
+	/*
+	 * MIMO always has one stream, hence force num_streams to 1.
+	 */
 	if (isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0) {
 		isp_dev->num_streams = 1;
 		dev_info(&pdev->dev, "MIMO mode detected: forcing num_streams to 1\n");
@@ -2056,7 +2075,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 	ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
 	if (ret) {
 		dev_err(&pdev->dev,
-			"Failed to read xlnx,mem_inputs property\n");
+			"Failed to read required xlnx,mem_inputs: %d\n", ret);
 		return ret;
 	} else {
 		dev_dbg(&pdev->dev, "xlnx,mem_inputs: %u\n", isp_dev->isp_mem);
@@ -2064,7 +2083,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 
 	ret = of_property_read_u32(node, "xlnx,rpu", &isp_dev->isp_rpu);
 	if (ret) {
-		dev_err(&pdev->dev, "Failed to read xlnx,rpu property\n");
+		dev_err(&pdev->dev, "Failed to read required xlnx,rpu property\n");
 		return ret;
 	} else {
 		dev_dbg(&pdev->dev, "xlnx,rpu: %u\n", isp_dev->isp_rpu);
@@ -2085,8 +2104,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		dev_info(&pdev->dev, "xlnx,vid-formats: %s\n",
 			 isp_dev->vid_formats);
 	} else {
-		dev_dbg(&pdev->dev,
-			"Failed to read xlnx,vid-formats property\n");
+		dev_dbg(&pdev->dev, "xlnx,vid-formats not specified\n");
 	}
 
 	// Read boolean properties
