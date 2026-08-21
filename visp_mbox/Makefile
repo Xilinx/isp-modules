@@ -24,7 +24,6 @@ ccflags-y += -I$(PWD)/common/
 ccflags-y += -I$(PWD)/visp_mbox/
 ccflags-y += -I$(PWD)/visp_mbox/mailbox/
 #ccflags-y += -I$(PWD)/../visp/mailbox/
-#ccflags-y += -I$(PWD)/../visp/isp_ctrl/
 #ccflags-y += -I$(PWD)/../vvcma_isp/isp_ctrl/ae/aev2/
 
 ccflags-y += -I$(PWD)/visp_common/vsi_units/include/

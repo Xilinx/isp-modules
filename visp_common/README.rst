@@ -16,5 +16,5 @@ The unified ``visp`` module handles LIMO and LILO at runtime and uses the
 tree.  LIMO/LILO differences in shared code must use ``isp_mode`` rather than a
 compile-time LILO definition.
 
-Remove the compatibility copies after downstream builds no longer reference
-their legacy paths.
+The in-tree legacy copies have been removed.  Out-of-tree builds must use the
+canonical sources and wrappers under ``visp_common``.
