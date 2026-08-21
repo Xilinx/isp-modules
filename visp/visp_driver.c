@@ -53,8 +53,10 @@
  *****************************************************************************/
 
 #include <linux/build_bug.h>
+#include <linux/firmware.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
+#include <linux/of_address.h>
 #include <linux/of_graph.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
@@ -5641,6 +5643,243 @@ static void visp_register_fusa_irq(struct visp_dev *isp_dev,
 	}
 }
 
+/*
+ * One-time DDR flash of a design/sensor BIN for RPU. RPU firmware's own
+ * ldscript already assumes this BIN sits at a fixed, predefined DDR
+ * location - this driver's only job is to make sure the right bytes end
+ * up there. Fixed, board-wide: no per-ISP-instance lookup, no mailbox
+ * notification (RPU reads this autonomously), no runtime override.
+ *
+ * request_firmware() needs a struct device, which does not exist yet at
+ * module_init() time, so the flash happens from the first visp_probe()
+ * call instead. sensor_bin_mem/sensor_bin_flash_done are shared,
+ * board-wide state, not per-instance - sensor_bin_bind_count tracks how
+ * many of the (up to MAX_NO_ISP) ISP instances are currently bound and
+ * relying on it, so the region is only unmapped/reset once the *last*
+ * one unbinds (visp_unbind_sensor_bin()), not on every individual
+ * instance's visp_remove(). That distinction matters because
+ * visp_register_fusa_irq() (this same driver) can trigger a
+ * single-instance daemon-restart independent of its siblings - tearing
+ * the region down on that one instance's unbind would race any sibling
+ * instance still depending on it staying flashed.
+ */
+static struct visp_reserve_mem sensor_bin_mem;
+static bool sensor_bin_flash_done;
+static bool sensor_bin_flash_in_progress;
+static int sensor_bin_bind_count;
+static DEFINE_MUTEX(sensor_bin_flash_lock);
+static DECLARE_COMPLETION(sensor_bin_flash_attempt_done);
+
+#define SENSOR_BIN_DT_NODE_NAME "isp_sensor_bin"
+#define SENSOR_BIN_MEM_SIZE 0x1000
+#define SENSOR_BIN_FW_NAME "Fmcconfig.bin"
+
+static int visp_map_sensor_bin_mem(struct device *dev)
+{
+	struct device_node *np;
+	struct resource res;
+	resource_size_t res_size;
+	int ret = 0;
+
+	/*
+	 * Board-wide lookup by name, not per-ISP-instance: the DT binding
+	 * is expected to define exactly one such reserved-memory node for
+	 * the whole board. of_find_node_by_name() returns the first match
+	 * if more than one ever existed, silently ignoring the rest.
+	 */
+	np = of_find_node_by_name(NULL, SENSOR_BIN_DT_NODE_NAME);
+	if (!np) {
+		dev_err(dev, "visp: %s reserved-memory node not found\n",
+			SENSOR_BIN_DT_NODE_NAME);
+		return -ENODEV;
+	}
+
+	/*
+	 * Use the same resource-resolution of_iomap() itself uses
+	 * internally, so sensor_bin_mem.size reflects this node's actual
+	 * "reg" size rather than trusting SENSOR_BIN_MEM_SIZE to still
+	 * match it - a future DT edit shrinking the region must not let
+	 * visp_flash_sensor_bin() bounds-check against a stale, larger
+	 * hardcoded size and memcpy_toio() past the real mapping.
+	 */
+	if (of_address_to_resource(np, 0, &res)) {
+		dev_err(dev, "visp: %s has no usable reg property\n",
+			SENSOR_BIN_DT_NODE_NAME);
+		ret = -EINVAL;
+		goto out_put;
+	}
+
+	res_size = resource_size(&res);
+	if (res_size > U32_MAX) {
+		dev_err(dev, "visp: %s reg size (%llu bytes) exceeds u32 range\n",
+			SENSOR_BIN_DT_NODE_NAME, (unsigned long long)res_size);
+		ret = -EOVERFLOW;
+		goto out_put;
+	}
+
+	sensor_bin_mem.pa = res.start;
+	sensor_bin_mem.size = res_size;
+	if (sensor_bin_mem.size < SENSOR_BIN_MEM_SIZE) {
+		dev_warn(dev, "visp: %s reg size (%u bytes) is smaller than expected (%u bytes)\n",
+			 SENSOR_BIN_DT_NODE_NAME, sensor_bin_mem.size,
+			 SENSOR_BIN_MEM_SIZE);
+	}
+
+	sensor_bin_mem.va = of_iomap(np, 0);
+	if (!sensor_bin_mem.va) {
+		dev_err(dev, "visp: failed to map %s\n", SENSOR_BIN_DT_NODE_NAME);
+		ret = -ENOMEM;
+	}
+
+out_put:
+	of_node_put(np);
+	return ret;
+}
+
+static int visp_flash_sensor_bin(struct device *dev)
+{
+	const struct firmware *fw;
+	int ret;
+
+	ret = request_firmware(&fw, SENSOR_BIN_FW_NAME, dev);
+	if (ret) {
+		dev_err(dev, "visp: failed to request sensor bin '%s': %d\n",
+			SENSOR_BIN_FW_NAME, ret);
+		return ret;
+	}
+
+	if (fw->size > sensor_bin_mem.size) {
+		dev_err(dev, "visp: sensor bin '%s' (%zu bytes) exceeds reserved region (%u bytes)\n",
+			SENSOR_BIN_FW_NAME, fw->size, sensor_bin_mem.size);
+		release_firmware(fw);
+		return -EFBIG;
+	}
+
+	memcpy_toio(sensor_bin_mem.va, fw->data, fw->size);
+	/*
+	 * memcpy_toio() is a plain loop of __raw_write*() accessors with no
+	 * completion/ordering barrier of its own. The mapping itself is
+	 * non-cacheable Device memory (of_iomap() -> PROT_DEVICE_nGnRE on
+	 * arm64), so there is no dirty cache line to flush - but posted
+	 * writes can still be in flight through the interconnect when this
+	 * function returns. Force them to actually complete here rather
+	 * than leaving that to chance.
+	 */
+	wmb();
+
+	dev_info(dev, "visp: flashed sensor bin '%s' (%zu bytes) to reserved memory\n",
+		 SENSOR_BIN_FW_NAME, fw->size);
+	release_firmware(fw);
+	return 0;
+}
+
+/*
+ * Best-effort, attempted once per bind cycle (see sensor_bin_bind_count
+ * above): neither the isp_sensor_bin DT node (not yet ported into the
+ * real board DTS) nor the BIN file itself (rootfs integration not
+ * finalized) are guaranteed present at this stage. Warn and let probe
+ * continue on either gap rather than failing the ISP instance. Called
+ * from every visp_probe() - counts this instance in
+ * sensor_bin_bind_count regardless of outcome, so visp_unbind_sensor_bin()
+ * knows how many instances are relying on this shared region.
+ *
+ * Multiple instances typically probe close together at boot, so more
+ * than one can reach this function while an attempt is still in
+ * progress. sensor_bin_flash_in_progress marks that window: an
+ * instance arriving while it's set does not just give up - it waits on
+ * sensor_bin_flash_attempt_done for the in-progress attempt to finish,
+ * then rechecks. If that attempt failed, sensor_bin_flash_done is still
+ * false, so the newly-woken instance becomes the next attempter itself
+ * rather than the region silently going unflashed for the rest of the
+ * boot session just because the first attempt happened to fail. This
+ * naturally bounds to at most one attempt per currently-probing
+ * instance before everyone gives up together.
+ *
+ * The lock is only held for the state transitions themselves, not for
+ * the DT lookup/iomap or request_firmware() (real disk I/O) - the
+ * attempting instance's own sensor_bin_bind_count++ (done earlier,
+ * still under the lock) already keeps the region from being torn down
+ * by a sibling's concurrent visp_unbind_sensor_bin() for as long as
+ * this function is still running.
+ */
+static void visp_flash_sensor_bin_once(struct device *dev)
+{
+	bool do_flash = false;
+	int ret;
+
+	mutex_lock(&sensor_bin_flash_lock);
+	sensor_bin_bind_count++;
+
+	while (!sensor_bin_flash_done) {
+		if (!sensor_bin_flash_in_progress) {
+			sensor_bin_flash_in_progress = true;
+			reinit_completion(&sensor_bin_flash_attempt_done);
+			do_flash = true;
+			break;
+		}
+		mutex_unlock(&sensor_bin_flash_lock);
+		wait_for_completion(&sensor_bin_flash_attempt_done);
+		mutex_lock(&sensor_bin_flash_lock);
+	}
+	mutex_unlock(&sensor_bin_flash_lock);
+
+	if (!do_flash)
+		return;
+
+	ret = visp_map_sensor_bin_mem(dev);
+	if (ret) {
+		dev_warn(dev, "visp: sensor bin reserved-memory not available (%d) - proceeding without it\n",
+			 ret);
+		mutex_lock(&sensor_bin_flash_lock);
+		sensor_bin_flash_in_progress = false;
+		complete_all(&sensor_bin_flash_attempt_done);
+		mutex_unlock(&sensor_bin_flash_lock);
+		return;
+	}
+
+	ret = visp_flash_sensor_bin(dev);
+	mutex_lock(&sensor_bin_flash_lock);
+	if (ret) {
+		dev_warn(dev, "visp: failed to flash sensor bin (%d) - proceeding without it\n",
+			 ret);
+		iounmap(sensor_bin_mem.va);
+		sensor_bin_mem.va = NULL;
+	} else {
+		sensor_bin_flash_done = true;
+	}
+	sensor_bin_flash_in_progress = false;
+	complete_all(&sensor_bin_flash_attempt_done);
+	mutex_unlock(&sensor_bin_flash_lock);
+}
+
+/*
+ * Counterpart to visp_flash_sensor_bin_once(), called from every
+ * visp_remove(). sensor_bin_mem is one board-wide region shared by every
+ * ISP instance, not per-instance state, so it is only unmapped and its
+ * done flag cleared once sensor_bin_bind_count reaches zero - i.e. the
+ * *last* bound instance unbinding - rather than on every individual
+ * instance's removal, which would race a sibling instance (or RPU
+ * serving it) still depending on the region staying flashed. Once the
+ * last instance goes away, the next probe - of any instance, or after a
+ * fresh insmod - redoes the flash rather than relying on stale state;
+ * this also means a transient failure (e.g. the BIN not yet present
+ * under /lib/firmware at first boot) only blocks retry until that next
+ * full unbind/rebind cycle, not for the remaining lifetime of the
+ * module.
+ */
+static void visp_unbind_sensor_bin(void)
+{
+	mutex_lock(&sensor_bin_flash_lock);
+	if (--sensor_bin_bind_count == 0) {
+		if (sensor_bin_mem.va) {
+			iounmap(sensor_bin_mem.va);
+			sensor_bin_mem.va = NULL;
+		}
+		sensor_bin_flash_done = false;
+	}
+	mutex_unlock(&sensor_bin_flash_lock);
+}
+
 static int visp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -5870,6 +6109,16 @@ static int visp_probe(struct platform_device *pdev)
 
 	visp_register_fusa_irq(isp_dev, pdev);
 
+	/*
+	 * No failure path exists between this point and the success
+	 * return below - sensor_bin_bind_count must only ever be
+	 * incremented for an instance that actually completes probe,
+	 * since visp_unbind_sensor_bin() (the only place that decrements
+	 * it) is only ever called from visp_remove(), which the kernel
+	 * never calls for a probe that returned an error.
+	 */
+	visp_flash_sensor_bin_once(dev);
+
 	dev_info(&pdev->dev, "visp isp driver probe success\n");
 
 	return 0;
@@ -6017,6 +6266,8 @@ static void visp_remove(struct platform_device *pdev)
 		kfifo_free(&isp_dev->data_fifo[port]);
 	}
 
+	visp_unbind_sensor_bin();
+
 	dev_info(&pdev->dev, "visp isp driver remove\n");
 
 	/* Drop the driver ref; frees isp_dev unless a subdev fd is still open. */
@@ -6059,12 +6310,29 @@ static int __init visp_init_module(void)
 		return ret;
 	}
 
-	return ret;
+	return 0;
 }
 
 static void __exit visp_exit_module(void)
 {
 	platform_driver_unregister(&visp_driver);
+
+	/*
+	 * Every bound instance's visp_remove() already decrements
+	 * sensor_bin_bind_count to 0 and tears this down via
+	 * visp_unbind_sensor_bin() once the last one unbinds, above - this
+	 * is only a fallback for the case where no instance was ever
+	 * probed (sensor_bin_mem.va is already NULL, so a no-op). Doesn't
+	 * go through visp_unbind_sensor_bin() itself to avoid decrementing
+	 * sensor_bin_bind_count a second time.
+	 */
+	mutex_lock(&sensor_bin_flash_lock);
+	if (sensor_bin_mem.va) {
+		iounmap(sensor_bin_mem.va);
+		sensor_bin_mem.va = NULL;
+	}
+	sensor_bin_flash_done = false;
+	mutex_unlock(&sensor_bin_flash_lock);
 }
 
 module_init(visp_init_module);
