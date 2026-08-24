@@ -318,6 +318,15 @@ struct visp_isp_dev_extended {
 	 * resolved with the firmware team).
 	 */
 	int fusa_irq;
+
+	/*
+	 * --- MIMO: back-pointer to struct visp_mimo_device ---
+	 * Opaque to visp.ko (void *); set/read only via
+	 * visp_dev_extended_alloc()/visp_dev_extended_get_mimo_device() so
+	 * visp_mimo_video.ko never needs its own, independently-sized
+	 * mirror of this struct to stash it in.
+	 */
+	void *mimo_device;
 };
 
 static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)

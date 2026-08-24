@@ -3198,6 +3198,11 @@ static int visp_buffer_free(struct v4l2_subdev *sd, void *arg)
 {
 	int ret = 0;
 	struct visp_dev *isp_dev = v4l2_get_subdevdata(sd);
+
+	if (!isp_dev) {
+		pr_err("%s: isp_dev is NULL (subdevdata not set)\n", __func__);
+		return -ENODEV;
+	}
 	struct visp_ext_dma_buf *pos, *next;
 	struct visp_ext_dma_buf *ext_dma_buf = NULL;
 	struct visp_ext_buf_info *ext_buf_info =
@@ -3228,10 +3233,14 @@ static int visp_buffer_free(struct v4l2_subdev *sd, void *arg)
 	return ret;
 }
 
+int visp_buffer_free_public(struct visp_dev *isp_dev,
+			    struct visp_ext_buf_info *ext_buf_info);
+
 int visp_buffer_free_public_wrapper(struct visp_dev *isp_dev, void *arg);
 int visp_buffer_free_public_wrapper(struct visp_dev *isp_dev, void *arg)
 {
-	int ret = visp_buffer_free(&isp_dev->sd, arg);
+	int ret = visp_buffer_free_public(
+		isp_dev, (struct visp_ext_buf_info *)arg);
 	return ret;
 }
 
@@ -5879,6 +5888,26 @@ static void visp_unbind_sensor_bin(void)
 	}
 	mutex_unlock(&sensor_bin_flash_lock);
 }
+
+int visp_dev_extended_alloc(struct visp_dev *isp_dev, struct device *dev,
+			    void *mimo_device)
+{
+	isp_dev->extended_struct =
+		devm_kzalloc(dev, sizeof(struct visp_isp_dev_extended), GFP_KERNEL);
+	if (!isp_dev->extended_struct)
+		return -ENOMEM;
+
+	mutex_init(&ISP_DEV_EXTENDED(isp_dev)->device_create_lock);
+	ISP_DEV_EXTENDED(isp_dev)->mimo_device = mimo_device;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(visp_dev_extended_alloc);
+
+void *visp_dev_extended_get_mimo_device(struct visp_dev *isp_dev)
+{
+	return ISP_DEV_EXTENDED(isp_dev)->mimo_device;
+}
+EXPORT_SYMBOL_GPL(visp_dev_extended_get_mimo_device);
 
 static int visp_probe(struct platform_device *pdev)
 {

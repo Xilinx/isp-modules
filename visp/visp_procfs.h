@@ -58,4 +58,8 @@
 int visp_procfs_register(struct visp_dev *isp_dev, unsigned long *pde);
 void visp_procfs_unregister(unsigned long pde);
 
+/* Kept for visp_mimo_video.ko, which calls these exact symbol names. */
+int visp_mimo_procfs_register(struct visp_dev *isp_dev, unsigned long *pde);
+void visp_mimo_procfs_unregister(unsigned long pde);
+
 #endif

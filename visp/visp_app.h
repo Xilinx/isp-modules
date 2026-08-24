@@ -101,4 +101,15 @@ void visp_wdt_release_port_upstream(struct visp_dev *isp_dev, int port);
 void visp_wdt_release_lilo_upstream(struct visp_dev *isp_dev, int port, uint8_t chn);
 /* visp_wdt_operation_begin/end and visp_wdt_begin_teardown: see visp_driver.h (static inline). */
 
+int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev, uint8_t port,
+				      uint8_t chn);
+int media_isp_device_deque(struct visp_dev *isp_dev, uint8_t port);
+int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
+				void *packet_from_rpu,
+				media_buffer_t *p_media_buffer);
+int media_isp_device_mimo_camera_dis_connect(struct visp_dev *isp_dev,
+					     uint8_t port);
+int media_isp_device_stream_on_out(struct visp_dev *isp_dev, uint8_t port,
+				   uint8_t chn);
+
 #endif

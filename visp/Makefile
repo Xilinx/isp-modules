@@ -151,6 +151,7 @@ USER_INC += $(PWD)/visp_common/isp_ctrl/sensor/*.h
 $(TARGET)-objs += ../visp_common/isp_ctrl/base/visp_base.o
 USER_INC += $(PWD)/visp_common/isp_ctrl/base/*.h
 
-ccflags-y += -DDEBUG -O2
+# To enable dev_dbg() messages, add -DDEBUG to the ccflags-y line below.
+ccflags-y += -O2
 
 PWD := $(shell pwd)

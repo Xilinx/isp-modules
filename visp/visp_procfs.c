@@ -106,18 +106,26 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 		if (pad && (port != (pad_idx / VISP_PORT_PAD_NR))) {
 			port = pad_idx / VISP_PORT_PAD_NR;
 			seq_printf(sfile, "isp%d port%d:\n", isp_dev->id, port);
-			seq_printf(sfile, "output_type: %s %s %s %s\n",
-				   type2str(isp_dev->output_type[port][0]),
-				   type2str(isp_dev->output_type[port][1]),
-				   type2str(isp_dev->output_type[port][2]),
-				   type2str(isp_dev->output_type[port][3]));
-			seq_printf(sfile, "sensor      : %s\n",
-				   isp_dev->isp_ports[port].sensor_info.name);
-			seq_printf(sfile, "mode        : %u\n",
-				   isp_dev->isp_ports[port].sensor_info.mode);
-			seq_printf(
-			    sfile, "calib       : %s\n",
-			    isp_dev->isp_ports[port].sensor_info.calib);
+			/*
+			 * MIMO ("mem-input") devices have no real sensor
+			 * behind them, so the sensor/mode/calib/output_type
+			 * fields below don't apply - matches
+			 * visp_mimo_procfs_register()'s original gating.
+			 */
+			if (isp_dev->isp_mem != 1) {
+				seq_printf(sfile, "output_type: %s %s %s %s\n",
+					   type2str(isp_dev->output_type[port][0]),
+					   type2str(isp_dev->output_type[port][1]),
+					   type2str(isp_dev->output_type[port][2]),
+					   type2str(isp_dev->output_type[port][3]));
+				seq_printf(sfile, "sensor      : %s\n",
+					   isp_dev->isp_ports[port].sensor_info.name);
+				seq_printf(sfile, "mode        : %u\n",
+					   isp_dev->isp_ports[port].sensor_info.mode);
+				seq_printf(
+				    sfile, "calib       : %s\n",
+				    isp_dev->isp_ports[port].sensor_info.calib);
+			}
 			seq_printf(
 			    sfile, "manu_json   : %s\n",
 			    isp_dev->isp_ports[port].sensor_info.manu_json);
@@ -127,22 +135,24 @@ static int visp_procfs_info_show(struct seq_file *sfile, void *offset)
 			seq_printf(
 			    sfile, "one_json    : %s\n",
 			    isp_dev->isp_ports[port].sensor_info.one_json);
-			int iba_index = 0;
+			if (isp_dev->isp_mem != 1) {
+				int iba_index = 0;
 
-			if ((isp_dev->id % 2) == 0)
-				iba_index = port;
-			else if ((isp_dev->id % 2) == 1)
-				iba_index = (isp_dev->num_streams == 1) ? 4 : 4 - port;
+				if ((isp_dev->id % 2) == 0)
+					iba_index = port;
+				else if ((isp_dev->id % 2) == 1)
+					iba_index = (isp_dev->num_streams == 1) ? 4 : 4 - port;
 
-			seq_printf(sfile, "vc_id       : %u\n",
-				   isp_dev->iba[iba_index].vcid);
-			seq_printf(
-			    sfile, "sensor_id   : %u\n",
-			    isp_dev->isp_ports[port].sensor_info.sensor_id);
-			seq_printf(sfile, "i2c_id      : %u\n",
-				   isp_dev->isp_ports[port].sensor_info.i2c_id);
-			seq_printf(sfile, "buffer_type : %s\n",
-				   isp_dev->isp_ports[port].bufmode);
+				seq_printf(sfile, "vc_id       : %u\n",
+					   isp_dev->iba[iba_index].vcid);
+				seq_printf(
+				    sfile, "sensor_id   : %u\n",
+				    isp_dev->isp_ports[port].sensor_info.sensor_id);
+				seq_printf(sfile, "i2c_id      : %u\n",
+					   isp_dev->isp_ports[port].sensor_info.i2c_id);
+				seq_printf(sfile, "buffer_type : %s\n",
+					   isp_dev->isp_ports[port].bufmode);
+			}
 			if (isp_dev->isp_mode == ISP_MODE_LIMO)
 				seq_printf(sfile, "hw_mcm      : %s\n",
 						isp_dev->isp_ports[port].hw_mcm ? "1 / Enable" : "0 / Disable");
@@ -256,9 +266,15 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 		kv_cur = token;
 		val = strsep(&kv_cur, kv_delim);
 		if (val) {
+			/*
+			 * sensor/mode/calib/output_type/vc_id/sensor_id/
+			 * i2c_id/bufmode describe a real sensor input and
+			 * don't apply to MIMO mem-input ports - matches
+			 * visp_mimo_procfs_register()'s original gating.
+			 */
 			if (strcmp(val, "sensor") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val) {
+				if (val && isp_dev->isp_mem != 1) {
 					memset(isp_dev->isp_ports[port]
 						   .sensor_info.name,
 					       0,
@@ -272,7 +288,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 				}
 			} else if (strcmp(val, "mode") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val && isdigit(*val)) {
+				if (val && isdigit(*val) && isp_dev->isp_mem != 1) {
 					isp_dev->isp_ports[port]
 					    .sensor_info.mode =
 					    (uint32_t)simple_strtoul(val, &end,
@@ -280,7 +296,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 				}
 			} else if (strcmp(val, "calib") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val) {
+				if (val && isp_dev->isp_mem != 1) {
 					memset(
 					    isp_dev->isp_ports[port]
 						.sensor_info.calib,
@@ -296,6 +312,22 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 						isp_dev->isp_ports[port].sensor_info.calib,
 						sizeof(isp_dev->isp_ports[port].sensor_info.calib)))
 						ret = -ENOENT;
+				}
+			} else if (strcmp(val, "output_type") == 0) {
+				char *path_tok;
+				int path = 0;
+
+				val = strsep(&kv_cur, kv_delim);
+				if (!val || isp_dev->isp_mem == 1)
+					continue;
+
+				while (path < VISP_PORT_PAD_NR &&
+				       (path_tok = strsep(&val, ","))) {
+					if (isdigit(*path_tok)) {
+						isp_dev->output_type[port][path] =
+							*path_tok - '0';
+					}
+					path++;
 				}
 			} else if (strcmp(val, "manu_json") == 0) {
 				val = strsep(&kv_cur, kv_delim);
@@ -356,7 +388,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 				}
 			} else if (strcmp(val, "vc_id") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val && isdigit(*val)) {
+				if (val && isdigit(*val) && isp_dev->isp_mem != 1) {
 					int iba_index = 0;
 
 					if ((isp_dev->id % 2) == 0)
@@ -371,7 +403,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 				}
 			} else if (strcmp(val, "sensor_id") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val && isdigit(*val)) {
+				if (val && isdigit(*val) && isp_dev->isp_mem != 1) {
 					isp_dev->isp_ports[port]
 					    .sensor_info.sensor_id =
 					    (uint32_t)simple_strtoul(val, &end,
@@ -379,7 +411,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 				}
 			} else if (strcmp(val, "i2c_id") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val && isdigit(*val)) {
+				if (val && isdigit(*val) && isp_dev->isp_mem != 1) {
 					isp_dev->isp_ports[port]
 					    .sensor_info.i2c_id =
 					    (uint32_t)simple_strtoul(val, &end,
@@ -387,7 +419,7 @@ static int32_t visp_proc_process(struct seq_file *sfile,
 				}
 			} else if (strcmp(val, "bufmode") == 0) {
 				val = strsep(&kv_cur, kv_delim);
-				if (val) {
+				if (val && isp_dev->isp_mem != 1) {
 					memset(isp_dev->isp_ports[port].bufmode,
 					       0,
 					       sizeof(isp_dev->isp_ports[port]
@@ -670,3 +702,24 @@ void visp_procfs_unregister(unsigned long pde)
 		}
 	}
 }
+
+/*
+ * visp_mimo_video.ko (out-of-tree, unchanged by this merge) calls these
+ * two exact symbol names cross-module - keep the names and EXPORT_SYMBOL_GPL
+ * even though the logic is now identical to visp_procfs_register()/
+ * visp_procfs_unregister() above.
+ */
+int visp_mimo_procfs_register(struct visp_dev *isp_dev, unsigned long *pde)
+{
+	int ret;
+
+	ret = visp_procfs_register(isp_dev, pde);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(visp_mimo_procfs_register);
+
+void visp_mimo_procfs_unregister(unsigned long pde)
+{
+	visp_procfs_unregister(pde);
+}
+EXPORT_SYMBOL_GPL(visp_mimo_procfs_unregister);

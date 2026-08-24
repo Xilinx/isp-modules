@@ -146,8 +146,8 @@ static int media_isp_hal_free_buf(struct visp_dev *isp_dev, int port,
 	return VSI_SUCCESS;
 }
 
-static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
-					     uint8_t port, uint8_t chn)
+int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
+				      uint8_t port, uint8_t chn)
 {
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 	int ret_val = VSI_SUCCESS;
@@ -173,7 +173,8 @@ static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 				    0;
 			}
 		} else if (isp_port->mcm_attr.input_select ==
-			   MEDIA_ISP_MCM_INPUT_SELECT_APU) {
+			   MEDIA_ISP_MCM_INPUT_SELECT_APU &&
+			   isp_dev->isp_mode != ISP_MODE_MIMO) {
 			int i = 0;
 
 			for (i = 0; i < isp_port->mcm_attr.num_bufs; i++) {
@@ -198,6 +199,7 @@ static int media_isp_device_destroy_buf_pool(struct visp_dev *isp_dev,
 	}
 	return ret_val;
 }
+EXPORT_SYMBOL_GPL(media_isp_device_destroy_buf_pool);
 
 /*
  * media_isp_mixed_mode_sibling_active - is another chn on this port still
@@ -243,6 +245,21 @@ int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 	vsi_cam_device_get_path_streaming(isp_dev, isp_port->cam_device_handle,
 					  &PathStatus);
 	PathStatus.out_path_enable &= ~(1 << chn);
+
+	/*
+	 * MIMO has no per-chn mixed-mode concept: stream_off always tears
+	 * down every path plus both the input (RDMA) and output (MP) buf
+	 * pools, unlike LIMO/LILO's single-chn/single-pool teardown below.
+	 */
+	if (isp_dev->isp_mode == ISP_MODE_MIMO) {
+		PathStatus.out_path_enable = 0;
+		ret_val = vsi_cam_device_set_path_streaming(
+		    isp_dev, isp_port->cam_device_handle, &PathStatus);
+		media_isp_device_destroy_buf_pool(isp_dev, port, CAMDEV_BUFCHAIN_RDMA);
+		media_isp_device_destroy_buf_pool(isp_dev, port, CAMDEV_BUFCHAIN_MP);
+		return ret_val;
+	}
+
 	ret_val = vsi_cam_device_set_path_streaming(
 	    isp_dev, isp_port->cam_device_handle, &PathStatus);
 	/*
@@ -264,6 +281,7 @@ int media_isp_device_stream_off(struct visp_dev *isp_dev, uint8_t port,
 
 	return ret_val;
 }
+EXPORT_SYMBOL_GPL(media_isp_device_stream_off);
 
 RESULT vsi_cam_device_un_register_ae_lib(struct visp_dev *isp_dev,
 					 cam_device_handle_t h_cam_device);
@@ -406,6 +424,7 @@ static int isp_send_atm_prop_to_rpu(struct visp_dev *isp,
 	p_data += sizeof(int);
 	packet->payload_size += sizeof(int);
 
+
 	result =
 	    xlnx_send_mbox_acked_cmd(isp, APU_2_RPU_MB_CMD_SET_ATM, packet,
 				     packet->payload_size + payload_extra_size,
@@ -467,13 +486,30 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 	    kmalloc(num_bufs * sizeof(uint32_t), GFP_KERNEL);
 	BufPoolCfg.p_ipl_addr_list =
 	    kmalloc(num_bufs * sizeof(void *), GFP_KERNEL);
+	if (!BufPoolCfg.p_base_addr_list || !BufPoolCfg.p_ipl_addr_list) {
+		dev_err(isp_dev->dev, "%s: failed to allocate buf pool lists\n",
+			__func__);
+		ret_val = -ENOMEM;
+		goto ERR_TO_DEINIT_CHAIN;
+	}
 
 	if (chn < MEDIA_ISP_CHN_MAX) {
 		// create isp buf pool by user allocated dma memory
-		for (i = 0; i < isp_port->isp_chns[chn].bufs[0].num_planes;
-		     i++) {
-			buf_size +=
-			    isp_port->isp_chns[chn].bufs[0].planes[i].dma_size;
+		if (isp_dev->isp_mode == ISP_MODE_MIMO) {
+			/*
+			 * MIMO's vb2 output buffers don't populate
+			 * planes[i].dma_size per-plane (only dma_addr), so
+			 * summing them here always yields 0 - use the
+			 * device-level capture size instead, matching
+			 * visp_mimo's original create_buf_pool.
+			 */
+			buf_size = isp_dev->cap_sizeimage;
+		} else {
+			for (i = 0; i < isp_port->isp_chns[chn].bufs[0].num_planes;
+			     i++) {
+				buf_size +=
+				    isp_port->isp_chns[chn].bufs[0].planes[i].dma_size;
+			}
 		}
 		BufPoolCfg.buf_size = buf_size;
 
@@ -499,13 +535,10 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 			p_media_buffer->base_address =
 			    (isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr) & (0xFFFFFFFF);
 
-			dev_dbg(isp_dev->dev,
-				"%s %d ISP:%d, Port:%d, Chn:%d, buf_idx:%x RPU Add:0x%x Actual:0x%llx size:0x%x\n",
-				__func__, __LINE__, isp_dev->id, port, chn,
-				p_media_buffer->index,
-				p_media_buffer->base_address,
-				isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr,
-				buf_size);
+			dev_info(isp_dev->dev,
+				 "%s: isp:%d o/p buff:%d address : %llx ",
+				 __func__, isp_dev->id, i,
+				 isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr);
 
 			uint32_t high_mem = (isp_port->isp_chns[chn].bufs[i].planes[0].dma_addr) >> 32;
 			if(high_mem)
@@ -564,21 +597,60 @@ static int media_isp_device_create_buf_pool(struct visp_dev *isp_dev,
 				    &isp_port->mcm_attr.bufs[i];
 				BufInfo->planes[0].dma_size = buf_size;
 
-				ret_val = media_isp_hal_alloc_buf(isp_dev, port,
-								 BufInfo);
-				if (ret_val) {
-					dev_err(isp_dev->dev,
-						"%s: port %d alloc mcm "
-						"buffer[%d] from apu failed, "
-						"ret is %d\n",
-						__func__, port, i, ret_val);
-					goto ERR_TO_RELEASE_MEM;
+				if (isp_dev->isp_mode == ISP_MODE_MIMO) {
+					/*
+					 * The MIMO video queue owns this buffer and
+					 * populated its address with
+					 * vb2_dma_contig_plane_dma_addr().  Replacing it
+					 * here would make the RPU read a new, empty buffer
+					 * instead of the queued userspace image.
+					 */
+					if (!BufInfo->planes[0].dma_addr) {
+						dev_err(isp_dev->dev,
+							"MIMO input buffer %d has no DMA address\n",
+							i);
+						ret_val = -EINVAL;
+						goto ERR_TO_DEINIT_CHAIN;
+					}
+				} else {
+					ret_val = media_isp_hal_alloc_buf(isp_dev, port,
+									 BufInfo);
+					if (ret_val) {
+						dev_err(isp_dev->dev,
+							"MCM buffer %d allocation failed: %d\n",
+							i, ret_val);
+						goto ERR_TO_RELEASE_MEM;
+					}
 				}
 
 				phy_addr = BufInfo->planes[0].dma_addr;
 				BufPoolCfg.p_base_addr_list[i] = phy_addr;
 				BufPoolCfg.p_ipl_addr_list[i] =
 				    (void *)pIpl_addr;
+				dev_info(isp_dev->dev,
+					 "%s: ISP:%d input buff:%d  address : %llx ",
+					 __func__, isp_dev->id, i,
+					 BufInfo->planes[0].dma_addr);
+			}
+
+			/*
+			 * MIMO-only: the LIMO/LILO MCM path never needs this
+			 * (nothing in their MCM flow allocates buffers above
+			 * 4GB today), but MIMO's input buffers can, so push
+			 * the high-mem ATM property to the RPU right after
+			 * allocating them - matches visp_mimo's original
+			 * create_buf_pool behavior.
+			 */
+			if (isp_dev->isp_mode == ISP_MODE_MIMO && num_bufs > 0) {
+				uint32_t high_mem = isp_port->mcm_attr.bufs[num_bufs - 1]
+							.planes[0].dma_addr >> 32U;
+
+				if (high_mem) {
+					isp_dev->atm.high_mem_addr = high_mem;
+					isp_dev->atm.is_64bit = true;
+				}
+				isp_send_atm_prop_to_rpu(isp_dev,
+							 isp_port->cam_device_handle);
 			}
 		}
 	}
@@ -633,7 +705,8 @@ ERR_TO_RELEASE_MEM:
 				    0;
 			}
 		} else if (isp_port->mcm_attr.input_select ==
-			   MEDIA_ISP_MCM_INPUT_SELECT_APU) {
+			   MEDIA_ISP_MCM_INPUT_SELECT_APU &&
+			   isp_dev->isp_mode != ISP_MODE_MIMO) {
 			for (--i; i >= 0; --i) {
 				media_buf *BufInfo =
 				    &isp_port->mcm_attr.bufs[i];
@@ -718,6 +791,9 @@ int inform_llp_config_to_rpu(struct visp_dev *isp_dev, uint8_t port,
 
 }
 
+static int media_isp_device_mcm_set_format(struct visp_dev *isp_dev,
+					   uint8_t port);
+
 int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 			       uint8_t chn)
 {
@@ -725,6 +801,27 @@ int media_isp_device_stream_on(struct visp_dev *isp_dev, uint8_t port,
 	int ret_val = VSI_SUCCESS;
 	int pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
 	cam_device_path_streaming_cfg_t PathStatus;
+
+	/*
+	 * MIMO's stream_on is a v4l2_m2m input-path setup (format + input
+	 * buf pool + camera connect), unrelated to LIMO/LILO's per-chn
+	 * subdev pad_s_stream flow below - genuinely different control
+	 * flow under the same exported name, not a field-level variant.
+	 */
+	if (isp_dev->isp_mode == ISP_MODE_MIMO) {
+		media_isp_device_mcm_set_format(isp_dev, port);
+
+		ret_val = media_isp_device_create_buf_pool(isp_dev, port, 6);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev,
+				"%s: port %d chn %d create buf pool failed, ret is %d",
+				__func__, port, chn, ret_val);
+			return ret_val;
+		}
+		/* Try connecting the sensor - not required for MIMO*/
+		media_isp_device_camera_connect(isp_dev, 0);
+		return 0;
+	}
 
 	if (isp_dev->isp_mode == ISP_MODE_LILO &&
 	    (!ISP_DEV_EXTENDED(isp_dev)->per_path_out_type ||
@@ -939,6 +1036,7 @@ ERR_TO_DESTROY_BUFPOOL:
 
 	return ret_val;
 }
+EXPORT_SYMBOL_GPL(media_isp_device_stream_on);
 
 /*
  * LILO-only: walks the DT "ports" node directly and stream-on's every
@@ -1081,15 +1179,26 @@ int isp_device_destroy(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 
 	if (isp_port->cam_device_handle) {
-		ret_val = vsi_cam_device_sensor_drv_handle_un_register(
-		    isp_dev, isp_port->cam_device_handle);
-		if (ret_val != VSI_SUCCESS) {
-			dev_err(isp_dev->dev,
-				"CamDevice unregister sensor driver Failed, "
-				"ret is %d",
-				ret_val);
-			ret_val = VSI_ERR_TIMEOUT;
-			return ret_val;
+		/*
+		 * MIMO never registers a sensor driver handle in the first
+		 * place (no real sensor), so this always fails for it -
+		 * visp_mimo's own original isp_device_destroy() had this
+		 * call commented out for exactly that reason. The early
+		 * return below was skipping vsi_cam_device_destroy() (which
+		 * sends APU_2_RPU_MB_CMD_DESTORY) on every MIMO stream-off,
+		 * leaving the RPU's per-instance state never torn down and
+		 * colliding with the next connect on the same instance_id.
+		 */
+		if (isp_dev->isp_mode != ISP_MODE_MIMO) {
+			ret_val = vsi_cam_device_sensor_drv_handle_un_register(
+			    isp_dev, isp_port->cam_device_handle);
+			if (ret_val != VSI_SUCCESS) {
+				dev_err(isp_dev->dev,
+					"Sensor driver unregister failed: %d",
+					ret_val);
+				ret_val = VSI_ERR_TIMEOUT;
+				return ret_val;
+			}
 		}
 
 		mutex_lock(&ISP_DEV_EXTENDED(isp_dev)->device_create_lock);
@@ -1129,6 +1238,7 @@ int isp_destroy_pipeline(struct visp_dev *isp_dev, uint8_t port, uint8_t chn)
 
 	return VSI_SUCCESS;
 }
+EXPORT_SYMBOL_GPL(isp_destroy_pipeline);
 
 static void media_isp_complete_pending_enq(struct visp_dev *isp_dev,
 					   uint8_t port, uint8_t chn,
@@ -2482,6 +2592,38 @@ int media_isp_device_set_format(struct visp_dev *isp_dev, uint8_t port,
 	cam_device_pipe_out_fmt_t IspFormat;
 
 	memset(&IspFormat, 0, sizeof(IspFormat));
+
+	/*
+	 * MIMO has no per-chn isp_chns[chn].format populated (nothing sets
+	 * it - there's no S_FMT ioctl path for a memory-input port), so it
+	 * uses the ISP's own device-level cap_w/cap_h/cap_fmt instead, and
+	 * skips straight to CamDevice with none of LIMO/LILO's pad/stride/
+	 * OBA machinery below.
+	 */
+	if (isp_dev->isp_mode == ISP_MODE_MIMO) {
+		IspFormat.out_width = isp_dev->cap_w;
+		IspFormat.out_height = isp_dev->cap_h;
+		IspFormat.path_out_type = 0;
+
+		ret_val = media_fmt_to_isp_fmt(&isp_dev->cap_fmt, &IspFormat,
+					       isp_dev->isp_mode);
+		if (ret_val)
+			return ret_val;
+
+		ret_val = vsi_cam_device_set_out_format(
+			isp_dev, isp_port->cam_device_handle, chn, &IspFormat);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev,
+				"CamDevice set format failed, ret is %d",
+				ret_val);
+			dev_err(isp_dev->dev,
+				"port %d chn %d set format failed, ret is %d",
+				port, chn, ret_val);
+			ret_val = VSI_ERR_TIMEOUT;
+		}
+		return ret_val;
+	}
+
 	IspFormat.out_width = isp_dev->isp_ports[port]
 				  .isp_chns[chn]
 				  .format.width; // format->width;
@@ -2821,6 +2963,172 @@ int media_isp_device_sensor_open(struct visp_dev *isp_dev, uint8_t port)
 	return ret_val;
 }
 
+/*
+ * MIMO has no real sensor to query mode_info from, so it derives InFormat
+ * from the ISP's own configured out_w/out_h/out_fmt instead - a genuinely
+ * different derivation from the sensor-mode_info path below, not a small
+ * variant of it.
+ */
+static int media_isp_device_mcm_set_format_mimo(struct visp_dev *isp_dev,
+						uint8_t port)
+{
+	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
+	int ret_val = VSI_SUCCESS;
+	cam_device_pipe_in_fmt_t InFormat;
+	cam_device_sensor_mode_info_t mode_info;
+	cam_device_pipe_in_path_type_t InPath = CAMDEV_PIPE_INPATH_RDMA;
+
+	memset(&InFormat, 0, sizeof(cam_device_pipe_in_fmt_t));
+	memset(&mode_info, 0, sizeof(cam_device_sensor_mode_info_t));
+
+	ret_val = media_isp_calib_get_mode_info(isp_dev, port, &mode_info);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(isp_dev->dev,
+			"%s: port %d get sensor mode info failed, ret is %d",
+			__func__, port, ret_val);
+		return ret_val;
+	}
+	InFormat.in_width = isp_dev->out_w;
+	InFormat.in_height = isp_dev->out_h;
+	InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_RGGB;
+	InFormat.stitch_mode =
+		(cam_device_stitching_mode_t)CAMDEV_SENSOR_TYPE_LINEAR;
+
+	if (mode_info.sensor_type == CAMDEV_SENSOR_TYPE_STITCHING_HDR) {
+		// hardware limit, may cause accuracy loss for bitwidth
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
+	} else {
+		switch (mode_info.bit_width) {
+		case 8:
+			InFormat.in_format = CAMDEV_INPUT_FMT_RAW8;
+			break;
+		case 10:
+			InFormat.in_format = CAMDEV_INPUT_FMT_RAW10;
+			break;
+		case 12:
+			InFormat.in_format = CAMDEV_INPUT_FMT_RAW12;
+			break;
+		case 14:
+			InFormat.in_format = CAMDEV_INPUT_FMT_RAW14;
+			break;
+		case 16:
+			InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
+			break;
+		default:
+			InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
+			break;
+		}
+	}
+
+	if (isp_dev->out_fmt == V4L2_PIX_FMT_SRGGB10)
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW10_ALIGNED1;
+	else if (isp_dev->out_fmt == V4L2_PIX_FMT_SRGGB12)
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW12_ALIGNED1;
+	else if (isp_dev->out_fmt == V4L2_PIX_FMT_SRGGB8)
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW8;
+	else
+		InFormat.in_format = isp_dev->out_fmt;
+
+	switch (isp_dev->out_fmt) {
+	case V4L2_PIX_FMT_SRGGB8:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_RGGB;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW8;
+		break;
+	case V4L2_PIX_FMT_SRGGB10:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_RGGB;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW10_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SRGGB12:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_RGGB;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW12_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SRGGB14:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_RGGB;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW14_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SRGGB16:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_RGGB;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
+		break;
+	case V4L2_PIX_FMT_SBGGR8:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_BGGR;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW8;
+		break;
+	case V4L2_PIX_FMT_SBGGR10:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_BGGR;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW10_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SBGGR12:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_BGGR;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW12_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SBGGR14:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_BGGR;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW14_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SBGGR16:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_BGGR;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
+		break;
+	case V4L2_PIX_FMT_SGBRG8:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GBRG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW8;
+		break;
+	case V4L2_PIX_FMT_SGBRG10:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GBRG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW10_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SGBRG12:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GBRG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW12_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SGBRG14:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GBRG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW14_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SGBRG16:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GBRG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
+		break;
+	case V4L2_PIX_FMT_SGRBG8:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GRBG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW8;
+		break;
+	case V4L2_PIX_FMT_SGRBG10:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GRBG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW10_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SGRBG12:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GRBG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW12_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SGRBG14:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GRBG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW14_ALIGNED1;
+		break;
+	case V4L2_PIX_FMT_SGRBG16:
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_GRBG;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW16;
+		break;
+	default:
+		dev_err(isp_dev->dev, "unsupported in format");
+		InFormat.in_pattern = CAMDEV_RAW_RGB_PAT_RGGB;
+		InFormat.in_format = CAMDEV_INPUT_FMT_RAW12;
+		break;
+	}
+
+	ret_val = vsi_cam_device_set_in_format(
+		isp_dev, isp_port->cam_device_handle, InPath, &InFormat);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(isp_dev->dev,
+			"CamDevice set input path %d format failed, ret is %d",
+			InPath, ret_val);
+		ret_val = VSI_ERR_ILLEGAL_PARAM;
+	}
+
+	return ret_val;
+}
+
 static int media_isp_device_mcm_set_format(struct visp_dev *isp_dev,
 					   uint8_t port)
 {
@@ -2829,6 +3137,9 @@ static int media_isp_device_mcm_set_format(struct visp_dev *isp_dev,
 	cam_device_pipe_in_fmt_t InFormat;
 	cam_device_sensor_mode_info_t mode_info;
 	cam_device_pipe_in_path_type_t InPath = CAMDEV_PIPE_INPATH_RDMA;
+
+	if (isp_dev->isp_mode == ISP_MODE_MIMO)
+		return media_isp_device_mcm_set_format_mimo(isp_dev, port);
 
 	memset(&InFormat, 0, sizeof(cam_device_pipe_in_fmt_t));
 	memset(&mode_info, 0, sizeof(cam_device_sensor_mode_info_t));
@@ -2948,6 +3259,35 @@ int media_isp_device_camera_connect(struct visp_dev *isp_dev, uint8_t index)
 	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
 	int ret_val = VSI_SUCCESS;
 	cam_device_pipe_submodule_ctrl_u sub_module_init;
+
+	/*
+	 * MIMO has no sensor to open and no MCM chaining, and doesn't
+	 * increment camera_connect_ref_cnt here - media_isp_device_
+	 * mimo_camera_dis_connect() relies on it staying 0 so teardown
+	 * always runs (there's no multi-consumer ref-counting for MIMO).
+	 */
+	if (isp_dev->isp_mode == ISP_MODE_MIMO) {
+		memset(&sub_module_init, 0, sizeof(sub_module_init));
+
+		ret_val = media_isp_device_sub_module_init(isp_dev, port,
+							    &sub_module_init);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev,
+				" port %d chn %d init submodule failed, ret is %d",
+				port, chn, ret_val);
+			return ret_val;
+		}
+
+		ret_val = vsi_cam_device_connect_camera(
+			isp_dev, isp_port->cam_device_handle, &sub_module_init);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev,
+				"CamDevice camera connect failed, ret is %d",
+				ret_val);
+			ret_val = VSI_ERR_ILLEGAL_PARAM;
+		}
+		return ret_val;
+	}
 
 	ret_val = media_isp_device_sensor_open(isp_dev, port);
 	if (ret_val != VSI_SUCCESS) {
@@ -3994,3 +4334,231 @@ int visp_setup_isp_pipeline(struct visp_dev *isp_dev, uint32_t pad)
 	}
 	return 0;
 }
+
+/*
+ * MIMO-only entry points below, ported from visp_mimo/visp_app.c.
+ * visp_mimo_video.ko calls media_isp_device_deque, _dq_buf_out,
+ * _mimo_camera_dis_connect, and _stream_on_out cross-module via
+ * EXPORT_SYMBOL - names/signatures below must stay unchanged.
+ */
+
+/*
+ * MIMO's dequeue-info parser has a different wire layout/signature than
+ * the LIMO/LILO read_dq_buf_info() above it in this file, so it's kept as
+ * its own static helper rather than folded into that function.
+ */
+static int read_dq_buf_info_mimo(void *data, media_buffer_t *p_media_buffer,
+				 struct Chn_info *info, int *instance_id)
+{
+	uint8_t *p_data = NULL;
+	uint32_t hw_id_t = 100;
+	payload_packet *packet = data;
+
+	if (!packet) {
+		pr_err("%s:%d: NO data in DQ Payload\n", __func__, __LINE__);
+		return -ENOMEM;
+	}
+
+	p_data = packet->payload;
+
+	memcpy(&(hw_id_t), p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	*instance_id = hw_id_t;
+	memcpy(info, p_data, sizeof(struct Chn_info));
+	p_data += sizeof(struct Chn_info);
+	p_media_buffer->p_meta_data =
+		kzalloc(sizeof(pic_buf_meta_data_t), GFP_KERNEL);
+	if (!(p_media_buffer->p_meta_data)) {
+		pr_err("%s:%d: FAILED TO KZALLOC\n", __func__, __LINE__);
+		return -ENOMEM;
+	}
+
+	memcpy(p_media_buffer->p_meta_data, p_data, sizeof(pic_buf_meta_data_t));
+	p_data += sizeof(pic_buf_meta_data_t);
+
+	memcpy(&(p_media_buffer->base_address), p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	memcpy(&(p_media_buffer->base_size), p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	memcpy(&(p_media_buffer->lock_count), p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	memcpy(&(p_media_buffer->is_full), p_data, sizeof(bool_t));
+	p_data += sizeof(bool_t);
+
+	memcpy(&(p_media_buffer->index), p_data, sizeof(uint8_t));
+	p_data += sizeof(uint8_t);
+
+	memcpy(&(p_media_buffer->buf_mode), p_data, sizeof(buff_mode));
+	p_data += sizeof(buff_mode);
+
+	memcpy(&(p_media_buffer->p_ipl_address), p_data, sizeof(uint32_t));
+	p_data += sizeof(uint32_t);
+
+	memcpy(&(p_media_buffer->p_owner), p_data, sizeof(uint32_t));
+	return 0;
+}
+
+int media_isp_device_dq_buf_out(struct visp_dev *isp_dev, struct Chn_info *info,
+				void *packet_from_rpu,
+				media_buffer_t *p_media_buffer)
+{
+	int ret_val = VSI_SUCCESS;
+	int instance_id;
+
+	if (!packet_from_rpu) {
+		dev_err(isp_dev->dev, "Received Null data %s %d\n", __func__,
+			__LINE__);
+		return -ENOMEM;
+	}
+
+	ret_val = read_dq_buf_info_mimo(packet_from_rpu, p_media_buffer, info,
+					&instance_id);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(isp_dev->dev, "failed to read dq_buf info %d", ret_val);
+		return ret_val;
+	}
+
+	isp_dev->isp_dq_out_index = p_media_buffer->index;
+
+	cam_device_context_t p_cam_dev_ctx;
+
+	p_cam_dev_ctx.isp_hw_id = isp_dev->id;
+	p_cam_dev_ctx.isp_vt_id = 0;
+	p_cam_dev_ctx.instance_id = instance_id;
+	p_cam_dev_ctx.cookie = 99;
+
+	ret_val = vsi_cam_device_en_que_buffer(
+		isp_dev, &p_cam_dev_ctx, CAMDEV_BUFCHAIN_MP, p_media_buffer);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(isp_dev->dev, "VsiCamDeviceEnQueBuffer failed %d",
+			ret_val);
+		ret_val = VSI_ERR_TIMEOUT;
+		return ret_val;
+	}
+
+	return ret_val;
+}
+EXPORT_SYMBOL_GPL(media_isp_device_dq_buf_out);
+
+int media_isp_device_deque(struct visp_dev *isp_dev, uint8_t port)
+{
+	int ret_val = VSI_SUCCESS;
+	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
+	media_buffer_t *p_media_buf;
+
+	if (isp_port->cam_device_handle) {
+		ret_val = vsi_cam_device_de_que_buffer(
+			isp_dev, isp_port->cam_device_handle, CAMDEV_BUFCHAIN_RDMA,
+			&p_media_buf);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev,
+				"VsiCamDeviceDeQueBuffer failed %d", ret_val);
+			ret_val = VSI_ERR_TIMEOUT;
+			return ret_val;
+		}
+
+		ret_val = vsi_cam_device_en_que_buffer(
+			isp_dev, isp_port->cam_device_handle, CAMDEV_BUFCHAIN_RDMA,
+			p_media_buf);
+		if (ret_val != VSI_SUCCESS) {
+			dev_err(isp_dev->dev,
+				"VsiCamDeviceEnQueBuffer failed %d", ret_val);
+			ret_val = VSI_ERR_TIMEOUT;
+			kfree(p_media_buf->p_meta_data);
+			kfree(p_media_buf);
+			return ret_val;
+		}
+
+		kfree(p_media_buf->p_meta_data);
+		kfree(p_media_buf);
+	}
+	return ret_val;
+}
+EXPORT_SYMBOL_GPL(media_isp_device_deque);
+
+int media_isp_device_mimo_camera_dis_connect(struct visp_dev *isp_dev,
+					     uint8_t port)
+{
+	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
+
+	dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d\n", __func__, __LINE__);
+
+	if (isp_port->camera_connect_ref_cnt > 0)
+		isp_port->camera_connect_ref_cnt--;
+
+	dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d Camcnt=%d\n", __func__,
+		 __LINE__, isp_port->camera_connect_ref_cnt);
+
+	if (isp_port->camera_connect_ref_cnt == 0) {
+		dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d\n", __func__,
+			 __LINE__);
+		media_isp_device_un_register3a_lib(isp_dev, port, 0);
+		vsi_cam_device_disconnect_camera(isp_dev,
+						 isp_port->cam_device_handle);
+	}
+
+	dev_info(isp_dev->dev, "[VVCAM-CLEANUP]->%s %d\n", __func__, __LINE__);
+
+	return VSI_SUCCESS;
+}
+EXPORT_SYMBOL_GPL(media_isp_device_mimo_camera_dis_connect);
+
+int media_isp_device_stream_on_out(struct visp_dev *isp_dev, uint8_t port,
+				   uint8_t chn)
+{
+	media_isp_port_attr *isp_port = &isp_dev->isp_ports[port];
+	int ret_val = VSI_SUCCESS;
+	int pad_index = -1;
+	cam_device_path_streaming_cfg_t PathStatus;
+
+	chn = CAMDEV_BUFCHAIN_MP;
+	/* Set input format for the requested ISP port's main output path. */
+	ret_val = media_isp_device_set_format(isp_dev, port, chn);
+	if (ret_val != VSI_SUCCESS)
+		return ret_val;
+
+	/*Create Buffer pool for output*/
+	ret_val = media_isp_device_create_buf_pool(isp_dev, port, chn);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(isp_dev->dev,
+			"%s: port %d chn %d create buf pool failed, ret is %d",
+			__func__, port, chn, ret_val);
+		return ret_val;
+	}
+
+	ret_val = vsi_cam_device_get_path_streaming(
+		isp_dev, isp_port->cam_device_handle, &PathStatus);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(isp_dev->dev,
+			"Failed to get path streaming state: %d", ret_val);
+		goto ERR_TO_DESTROY_BUFPOOL;
+	}
+
+	PathStatus.out_path_enable |= (1U << chn);
+
+	/*Set streaming state*/
+	ret_val = vsi_cam_device_set_path_streaming(
+		isp_dev, isp_port->cam_device_handle, &PathStatus);
+	if (ret_val != VSI_SUCCESS) {
+		dev_err(
+			isp_dev->dev,
+			"port %d chn %d CamDevice start stream failed, ret is %d",
+			port, chn, ret_val);
+		ret_val = VSI_ERR_NOTREADY;
+		goto ERR_TO_DESTROY_BUFPOOL;
+	}
+
+	pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + chn + 1;
+	isp_dev->streamon[pad_index] = 1;
+	return ret_val;
+
+ERR_TO_DESTROY_BUFPOOL:
+	media_isp_device_destroy_buf_pool(isp_dev, port, chn);
+
+	return ret_val;
+}
+EXPORT_SYMBOL_GPL(media_isp_device_stream_on_out);
