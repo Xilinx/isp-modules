@@ -535,6 +535,12 @@ typedef enum {
 	/* Sent after APU_2_RPU_MB_CMD_START_STREAMING to exercise the RPU WDT. */
 	APU_2_RPU_MB_CMD_WDT_TEST,
 
+	/* Explicit wire values; keep outside automatic enum numbering. */
+	APU_2_RPU_MB_CMD_MBOX_SELFTEST_BEGIN	= 0xA001,
+	APU_2_RPU_MB_CMD_MBOX_SELFTEST		= 0xA002,
+	APU_2_RPU_MB_CMD_MBOX_SELFTEST_END	= 0xA003,
+	RPU_2_APU_MB_CMD_MBOX_SELFTEST_RESULT	= 0xA004,
+
 	DUMMY_MB_CMD = 0xdeadfeed,
 } mb_cmd_id_e;
 

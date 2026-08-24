@@ -59,11 +59,16 @@
 #include <linux/rcupdate.h>
 #include <linux/workqueue.h>
 #include <linux/remoteproc.h>
+#include <linux/proc_fs.h>
+#include <linux/uaccess.h>
 #include "visp_mbox_driver.h"
 #include "mbox_cmd.h"
 #include "mbox_api.h"
 #include "mbox_seq.h"
 #include "visp_mbox_wdt.h"
+#ifdef MBOX_ENABLE_SELFTEST
+#include "mailbox/mbox_selftest.h"
+#endif
 #include <linux/delay.h>
 
 /*
@@ -155,6 +160,86 @@ static DEFINE_MUTEX(rpu_list_lock);
 static LIST_HEAD(rpu_devices);
 static atomic_t ipi5_pair_flag = ATOMIC_INIT(0);
 static atomic_t ipi6_pair_flag = ATOMIC_INIT(0);
+
+static void visp_mbox_rpu_cleanup(struct kref *ref);
+
+#ifdef MBOX_ENABLE_SELFTEST
+static struct proc_dir_entry *visp_mbox_proc_dir;
+static struct proc_dir_entry *visp_mbox_selftest_proc;
+static DEFINE_MUTEX(visp_mbox_selftest_lock);
+
+/* The suite makes the RPU reset sequence/dedup state shared by every ISP
+ * bound to that RPU, so it must not run while any of them is streaming.
+ */
+static bool visp_mbox_selftest_rpu_busy(struct rpu_dev *rpu)
+{
+	int i, pad;
+
+	for (i = 0; i < MAX_NO_ISP; i++) {
+		struct visp_dev *isp_dev = rpu->isp_dev[i];
+
+		if (!isp_dev)
+			continue;
+		for (pad = 0; pad < VISP_PORT_PAD_NR * MAX_PORTS; pad++)
+			if (isp_dev->streamon[pad])
+				return true;
+	}
+
+	return false;
+}
+
+/* Write the target RPU id, e.g. "echo 6 > /proc/visp_mbox/selftest". */
+static ssize_t visp_mbox_selftest_proc_write(struct file *file,
+					     const char __user *buf,
+					     size_t count, loff_t *pos)
+{
+	struct rpu_dev *rpu = NULL;
+	struct rpu_dev *iter;
+	unsigned long value;
+	int ret;
+
+	ret = kstrtoul_from_user(buf, count, 0, &value);
+	if (ret)
+		return ret;
+	if (value < 6 || value > VISP_MBOX_MAX_RPU_ID)
+		return -EINVAL;
+
+	mutex_lock(&visp_mbox_selftest_lock);
+	mutex_lock(&rpu_list_lock);
+	list_for_each_entry(iter, &rpu_devices, node) {
+		if (iter->rpu_id == (int)value) {
+			rpu = iter;
+			kref_get(&rpu->refcount);
+			break;
+		}
+	}
+	mutex_unlock(&rpu_list_lock);
+
+	if (!rpu) {
+		mutex_unlock(&visp_mbox_selftest_lock);
+		return -ENODEV;
+	}
+
+	if (visp_mbox_selftest_rpu_busy(rpu)) {
+		dev_err(rpu->dev,
+			"MBOX_SELFTEST: RPU%d has streaming ISPs, refusing\n",
+			rpu->rpu_id);
+		kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
+		mutex_unlock(&visp_mbox_selftest_lock);
+		return -EBUSY;
+	}
+
+	ret = visp_mbox_selftest_run(rpu, rpu->core_id);
+	kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
+	mutex_unlock(&visp_mbox_selftest_lock);
+
+	return ret ? ret : count;
+}
+
+static const struct proc_ops visp_mbox_selftest_proc_ops = {
+	.proc_write = visp_mbox_selftest_proc_write,
+};
+#endif
 
 static atomic_t *visp_mbox_get_pair_flag(int rpu_id)
 {
@@ -2135,6 +2220,38 @@ static int visp_mbox_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
+#ifdef MBOX_ENABLE_SELFTEST
+	/* RPU intercepts these frames only while waiting for INIT_FIRMWARE.
+	 * The harness state is module-global, so serialise concurrent probes
+	 * of RPU6-9 against each other and against the procfs trigger.
+	 */
+	mutex_lock(&visp_mbox_selftest_lock);
+	if (visp_mbox_selftest_rpu_busy(rpu)) {
+		/* A re-probe can return a shared RPU that already has streaming
+		 * ISPs; injecting faults would corrupt their live mailbox state.
+		 * Skip the suite (as the procfs path refuses with -EBUSY) and
+		 * keep the bind rather than tearing down a working RPU.
+		 */
+		dev_warn(dev,
+			 "Mailbox self-test skipped: RPU%d has streaming ISPs\n",
+			 rpu_id);
+		mutex_unlock(&visp_mbox_selftest_lock);
+	} else {
+		ret = visp_mbox_selftest_run(rpu, rpu->core_id);
+		mutex_unlock(&visp_mbox_selftest_lock);
+		if (ret) {
+			dev_err(dev,
+				"Mailbox self-test failed before INIT_FIRMWARE: %d\n", ret);
+			platform_set_drvdata(pdev, NULL);
+			if (atomic_read(&rpu->refcount.refcount.refs) > 1)
+				kref_put(&rpu->refcount, visp_mbox_rpu_cleanup);
+			else
+				visp_mbox_rpu_remove(rpu);
+			return ret;
+		}
+	}
+#endif
+
 	ret = visp_mbox_send_init_firmware(rpu);
 	if (ret) {
 		dev_err(dev, "INIT_FIRMWARE sync failed for RPU id: %d\n",
@@ -2359,6 +2476,26 @@ static int __init visp_mbox_init_module(void)
 
 	pr_info("AMD MBox driver registered successfully.\n");
 
+#ifdef MBOX_ENABLE_SELFTEST
+	visp_mbox_proc_dir = proc_mkdir("visp_mbox", NULL);
+	if (!visp_mbox_proc_dir) {
+		pr_err("Failed to create /proc/visp_mbox\n");
+		ret = -ENOMEM;
+		goto err_unregister_driver;
+	}
+
+	visp_mbox_selftest_proc = proc_create("selftest", 0200,
+					      visp_mbox_proc_dir,
+					      &visp_mbox_selftest_proc_ops);
+	if (!visp_mbox_selftest_proc) {
+		pr_err("Failed to create /proc/visp_mbox/selftest\n");
+		proc_remove(visp_mbox_proc_dir);
+		visp_mbox_proc_dir = NULL;
+		ret = -ENOMEM;
+		goto err_unregister_driver;
+	}
+#endif
+
 	/* WWDT notifier verification is best-effort; do not fail mbox load on error. */
 	ret = visp_mbox_wdt_init();
 	if (ret)
@@ -2366,6 +2503,10 @@ static int __init visp_mbox_init_module(void)
 
 	return 0;
 
+#ifdef MBOX_ENABLE_SELFTEST
+err_unregister_driver:
+	platform_driver_unregister(&visp_mbox_driver);
+#endif
 err_cleanup_reserved_mem:
 	visp_mbox_reserved_memory_exit();
 err_cleanup_class:
@@ -2377,6 +2518,13 @@ err_cleanup_class:
 static void __exit visp_mbox_exit_module(void)
 {
 	pr_info("Exiting AMD MBox driver.\n");
+
+#ifdef MBOX_ENABLE_SELFTEST
+	proc_remove(visp_mbox_selftest_proc);
+	proc_remove(visp_mbox_proc_dir);
+	visp_mbox_selftest_proc = NULL;
+	visp_mbox_proc_dir = NULL;
+#endif
 
 	visp_mbox_wdt_exit();
 

@@ -70,6 +70,9 @@
 
 #include "visp_driver.h"
 #include "visp_mbox_driver.h"
+#ifdef MBOX_ENABLE_SELFTEST
+#include "mbox_selftest.h"
+#endif
 
 #define XPAR_PS_0_PSPMC_0_PSV_IPI_0_BIT_MASK 0x00000004U
 #define XPAR_PS_0_PSPMC_0_PSV_IPI_1_BIT_MASK 0x00000008U
@@ -278,6 +281,26 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 		visp_free_rx_buffer(rpu, msg_copy);
 		return ret;
 	}
+
+#ifdef MBOX_ENABLE_SELFTEST
+	/*
+	 * Self-test frames carry crafted seq/cookie and no ISP context, so hand
+	 * them to the harness before production integrity/seq validation and
+	 * ISP routing would reject them.
+	 */
+	if (visp_mbox_selftest_active()) {
+		uint32_t st_id = msg_copy->msg_id;
+
+		if (st_id == APU_2_RPU_MB_CMD_MBOX_SELFTEST_BEGIN ||
+		    st_id == APU_2_RPU_MB_CMD_MBOX_SELFTEST ||
+		    st_id == APU_2_RPU_MB_CMD_MBOX_SELFTEST_END ||
+		    st_id == RPU_2_APU_MB_CMD_MBOX_SELFTEST_RESULT) {
+			visp_mbox_selftest_rx_response(msg_copy);
+			visp_free_rx_buffer(rpu, msg_copy);
+			return 0;
+		}
+	}
+#endif
 
 	ret = visp_mbox_validate_integrity(rpu, msg_copy);
 	if (ret != VPI_SUCCESS) {
