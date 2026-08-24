@@ -150,13 +150,12 @@ RESULT vsi_cam_device_create(struct visp_dev *isp_dev,
 	isp_dev->instanceid_port_map[virtual_id] =
 		p_cam_config->work_cfg.mode_cfg.mcm.port_id - 1;
 
-#ifdef VISP_VARIANT_MIMO
-	dev_info(isp_dev->dev,
-		 "MIMO route: instance_id=%u virtual_id=%u configured_port=%u mapped_port=%u\n",
-		 instance_id, virtual_id,
-		 p_cam_config->work_cfg.mode_cfg.mcm.port_id,
-		 isp_dev->instanceid_port_map[virtual_id]);
-#endif
+	if (isp_dev->isp_mode == ISP_MODE_MIMO)
+		dev_info(isp_dev->dev,
+			 "MIMO route: instance_id=%u virtual_id=%u configured_port=%u mapped_port=%u\n",
+			 instance_id, virtual_id,
+			 p_cam_config->work_cfg.mode_cfg.mcm.port_id,
+			 isp_dev->instanceid_port_map[virtual_id]);
 
 	packet->cookie = 0;
 	packet->type = CMD;

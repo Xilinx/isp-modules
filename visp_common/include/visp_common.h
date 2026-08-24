@@ -60,6 +60,9 @@
 #endif
 
 int visp_buf_done(struct v4l2_subdev *sd, void *arg);
+int visp_dev_extended_alloc(struct visp_dev *isp_dev, struct device *dev,
+			    void *mimo_device);
+void *visp_dev_extended_get_mimo_device(struct visp_dev *isp_dev);
 int visp_set_frame_interval_public(struct visp_dev *isp_dev,
 				   struct v4l2_subdev_frame_interval *fi);
 int visp_set_fmt_public(struct visp_dev *isp_dev,

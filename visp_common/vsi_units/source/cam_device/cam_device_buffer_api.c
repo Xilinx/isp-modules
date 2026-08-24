@@ -79,18 +79,8 @@ static bool visp_is_mimo(const struct visp_dev *isp_dev)
 	if (!isp_dev)
 		return false;
 
-#ifdef VISP_VARIANT_MIMO
-	/* visp_mimo/Makefile builds this source exclusively for MIMO. */
-	return true;
-#else
-	/*
-	 * ss_mode_i0 is retained as a compatibility fallback while the MIMO
-	 * subdevice and shared mailbox code transition to the common isp_mode
-	 * layout.  Both values are populated from the same DT node.
-	 */
 	return isp_dev->isp_mode == ISP_MODE_MIMO ||
 	       (isp_dev->ss_mode_i0 && !strcmp(isp_dev->ss_mode_i0, "mimo"));
-#endif
 }
 
 /*
