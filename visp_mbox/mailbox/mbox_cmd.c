@@ -91,11 +91,15 @@ struct response_packet {
 	u32 error_subcode;
 };
 
-static bool visp_mbox_integrity_enable;
+static bool visp_mbox_integrity_enable = true;
 module_param_named(mbox_integrity, visp_mbox_integrity_enable, bool, 0644);
 MODULE_PARM_DESC(mbox_integrity,
-		 "Enable mailbox CRC-16 and sequence-counter "
-		 "integrity checks (default: disabled)");
+		 "Enable mailbox CRC-16 and sequence-counter integrity checks (default: enabled)");
+
+bool visp_mbox_integrity_active(void)
+{
+	return visp_mbox_integrity_enable;
+}
 
 /*
  * Checksum covers the header + seq_counter + payload, but everything before
@@ -322,7 +326,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 	 *   ISP_DEV 4: instance_id 64-79
 	 *   ISP_DEV 5: instance_id 80-95
 	 */
-	isp_id = instance_id / INSTANCES_PER_ISP;
+	isp_id = visp_mbox_isp_slot(instance_id);
 
 	/* Validate ISP instance ID range */
 	if (isp_id < 0 || isp_id >= MAX_ISP_INSTANCES) {
@@ -406,12 +410,6 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				uint32_t buffer_index = 0;
 				uint8_t *payload_ptr;
 
-				if (path >= 4 && path != 6) {
-					dev_err(rpu->dev,
-						"ENQUE_BUFFER ACK: unexpected path=%u "
-						"for port=%u (expected 0-3 or 6)\n",
-						path, port);
-				}
 				/* Extract buffer_index from payload */
 				payload_ptr = ((payload_packet *)
 					msg_copy->payload)->payload;
@@ -421,7 +419,7 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				memcpy(&buffer_index, payload_ptr,
 				       sizeof(uint8_t));
 				/* Validate buffer_index */
-				if (buffer_index >= 32) {
+				if (buffer_index >= MEDIA_ISP_BUF_FRAME_MAX) {
 					dev_err(rpu->dev,
 						"FATAL-ENQUE_BUFFER ACK:invalid"
 						" buffer_index=%u "
@@ -437,6 +435,49 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				if (path == 6 && isp_dev->ss_mode_i0 &&
 				    strcmp(isp_dev->ss_mode_i0, "mimo") == 0) {
 					path = 3; /* Map path 6 to 3 for array indexing */
+				}
+				/*
+				 * Validate path only after the MIMO path=6
+				 * remap above, so a legitimate MIMO ACK still
+				 * passes.  Anything left out of range would
+				 * index the [MEDIA_ISP_CHN_MAX] arrays below
+				 * out of bounds -- including a write via
+				 * enq_ack_pending[] and enq_ack_error[] -- so
+				 * reject it the same way buffer_index is.
+				 */
+				if (path >= MEDIA_ISP_CHN_MAX) {
+					dev_err(rpu->dev,
+						"FATAL-ENQUE_BUFFER ACK:invalid"
+						" path=%u for port=%u (max %d)."
+						" Array bounds violation!\n",
+						path, port,
+						MEDIA_ISP_CHN_MAX - 1);
+					visp_free_rx_buffer(rpu, msg_copy);
+					return -EINVAL;
+				}
+				/*
+				 * Correlate the ENQ ACK to the queued buffer by
+				 * echoed cookie and active-waiter flag (contract
+				 * §6): a missing waiter or mismatched cookie is a
+				 * stale/duplicate ACK, drop it without signaling.
+				 */
+				if (visp_mbox_integrity_active()) {
+					u32 enq_exp = READ_ONCE(rpu->enq_ack_cookie
+						[isp_id][port][path][buffer_index]);
+
+					if (!READ_ONCE(rpu->enq_ack_pending[isp_id]
+					    [port][path][buffer_index]) ||
+					    pkt->cookie != enq_exp) {
+						dev_warn_ratelimited(rpu->dev,
+								     "Dropping stale/duplicate ENQ ACK (isp=%u port=%u path=%u buf=%u exp=0x%08x got=0x%08x)\n",
+								     isp_id, port,
+								     path, buffer_index,
+								     enq_exp, pkt->cookie);
+						visp_free_rx_buffer(rpu, msg_copy);
+						goto DONE;
+					}
+					WRITE_ONCE(rpu->enq_ack_pending[isp_id]
+						   [port][path][buffer_index], false);
 				}
 				/* Extract error code from ACK and store before signaling */
 				int error_code = pkt->resp_field.error_subcode_t;
@@ -465,6 +506,29 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 				/* Free message immediately - no FIFO needed */
 				visp_free_rx_buffer(rpu, msg_copy);
 			} else {
+				/*
+				 * Correlate the waited ACK to the active waiter by
+				 * echoed cookie (contract §6). A missing waiter or
+				 * mismatched cookie means a stale/duplicate/orphan
+				 * response: log and drop, never wake a waiter.
+				 */
+				if (visp_mbox_integrity_active()) {
+					u32 exp = READ_ONCE(rpu->cmd_ack_cookie
+							    [isp_id][port]);
+
+					if (!READ_ONCE(rpu->cmd_ack_pending
+					    [isp_id][port]) ||
+					    pkt->cookie != exp) {
+						dev_warn_ratelimited(rpu->dev,
+								     "Dropping stale/duplicate cmd ACK (isp=%u port=%u exp=0x%08x got=0x%08x cmd=%u)\n",
+								     isp_id, port, exp,
+								     pkt->cookie, resp_cmd);
+						visp_free_rx_buffer(rpu, msg_copy);
+						goto DONE;
+					}
+					WRITE_ONCE(rpu->cmd_ack_pending[isp_id]
+						   [port], false);
+				}
 				if (kfifo_is_full(&isp_dev->cmd_ack_fifo[port])) {
 					dev_err_ratelimited(rpu->dev,
 						"cmd_ack_fifo[%u] FULL,"
@@ -495,6 +559,23 @@ int visp_mbox_apu_read(struct rpu_dev *rpu)
 
 		/* Handle data response - route to per-port FIFO/completion */
 		if (cmd == MB_CMD_GET_SUCCESS) {
+			/*
+			 * Correlate the data response to the active waiter by
+			 * echoed cookie (contract §6); drop stale/orphan ones.
+			 */
+			if (visp_mbox_integrity_active()) {
+				u32 exp = READ_ONCE(rpu->data_cookie[isp_id][port]);
+
+				if (!READ_ONCE(rpu->data_pending[isp_id][port]) ||
+				    pkt->cookie != exp) {
+					dev_warn_ratelimited(rpu->dev,
+							     "Dropping stale/duplicate data resp (isp=%u port=%u exp=0x%08x got=0x%08x)\n",
+							     isp_id, port, exp, pkt->cookie);
+					visp_free_rx_buffer(rpu, msg_copy);
+					goto DONE;
+				}
+				WRITE_ONCE(rpu->data_pending[isp_id][port], false);
+			}
 			mutex_lock(&isp_dev->data_fifo_lock[port]);
 			if (!kfifo_in(&isp_dev->data_fifo[port], &msg_copy, 1)) {
 				mutex_unlock(&isp_dev->data_fifo_lock[port]);

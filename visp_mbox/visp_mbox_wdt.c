@@ -255,7 +255,8 @@ static void visp_mbox_wdt_expiry_worker(struct work_struct *work)
 	struct visp_mbox_wdt_expiry_work *ew =
 		container_of(work, struct visp_mbox_wdt_expiry_work, work);
 	struct rpu_dev *rpu;
-	int wwdt_n = ew - visp_mbox_wdt_expiry_works;
+	/* Only read in the VISP_WDT_SELFHEAL re-arm path below. */
+	int __maybe_unused wwdt_n = ew - visp_mbox_wdt_expiry_works;
 	ktime_t now = ktime_get();
 
 	if (ew->last_expiry &&
@@ -370,9 +371,11 @@ static void visp_mbox_wdt_expiry_worker(struct work_struct *work)
 			       ew->rpu_id);
 
 		visp_mbox_clear_init_firmware_success(rpu);
-		if (visp_mbox_send_init_firmware(rpu))
-			pr_err("visp_mbox_wdt: INIT_FIRMWARE resync failed for RPU core %d\n",
+		if (visp_mbox_send_init_firmware(rpu)) {
+			pr_err("visp_mbox_wdt: INIT_FIRMWARE resync failed for RPU core %d - leaving devices unbound rather than exposing a non-functional device\n",
 			       ew->rpu_id);
+			goto rearm;
+		}
 
 		for (i = 0; i < MAX_NO_ISP; i++) {
 			if (!recover[i])
@@ -388,6 +391,7 @@ static void visp_mbox_wdt_expiry_worker(struct work_struct *work)
 		 * which physically clears the WWDT-expired condition, so it is now
 		 * legitimate to re-arm and detect a fresh expiry for this core.
 		 */
+rearm:
 		atomic_set(&wdt_event_handled[wwdt_n], 0);
 #else
 		/*
@@ -511,7 +515,8 @@ int visp_mbox_wdt_send_test(struct rpu_dev *rpu)
 	if (!packet)
 		return -ENOMEM;
 	packet->type = CMD;
-	packet->cookie = 0;
+	/* Fire-and-forget: bypass RPU cookie dedup so it isn't replayed. */
+	packet->cookie = MBOX_COOKIE_NOT_USED;
 
 	/* Payload layout mirrors INIT_FIRMWARE: instance_id first, then the
 	 * command-specific data (here, how many seconds to pet the WWDT for).

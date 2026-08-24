@@ -122,5 +122,6 @@ uint32_t parse_command(mb_cmd_id_e cmd, void *data, uint32_t size, mbox_core_id 
 void mailbox_close(struct rpu_dev *rpu);
 int send_response(mb_cmd_id_e res, payload_packet *data, uint32_t size,
 		  uint8_t dest_cpu, uint8_t src_cpu);
+bool visp_mbox_integrity_active(void);
 
 #endif

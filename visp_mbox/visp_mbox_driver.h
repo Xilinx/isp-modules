@@ -89,6 +89,21 @@
 #define MAX_PATH_ID 3
 #define VISP_MBOX_MAX_RPU_ID 9
 
+/* Reserved cookie sentinel for RPU-originated fire-and-forget (contract §7). */
+#define MBOX_COOKIE_NOT_USED 0xFFFFFFFFu
+
+/*
+ * Derive the ISP slot used to key the per-(ISP, port) cookie and SAFE-STATE
+ * arrays.  instance_id is masked to its low 8 bits first: the upper bits carry
+ * unrelated context, and dividing an unmasked value would make the send and
+ * receive sides index different slots.  Every site that needs a slot must use
+ * this helper so the two sides cannot drift apart again.
+ */
+static inline u32 visp_mbox_isp_slot(u32 instance_id)
+{
+	return (instance_id & 0xFF) / INSTANCES_PER_ISP;
+}
+
 struct rpu_dev *visp_mbox_get_rpu_dev(int rpu_id);
 void visp_mbox_clear_init_firmware_success(struct rpu_dev *rpu);
 int visp_mbox_send_init_firmware(struct rpu_dev *rpu);
@@ -109,7 +124,9 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 
 void mailbox_init(uint32_t cpu, uint64_t MBOX_FIFO_START_ADDR,
 		  uint64_t mbox_fifo_start_addr_phy);
-uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data);
+int xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data);
+bool visp_mbox_instance_is_down(struct rpu_dev *rpu, uint32_t instance_id,
+				uint32_t port);
 // extern int handle_frameout_buffer(void *Enque_Buff_L, struct visp_dev
 // *isp_dev); int (* exported_func1)(void *,struct visp_dev *isp_dev);
 typedef struct payload_user_template {
@@ -209,6 +226,23 @@ struct rpu_dev {
 	u32 seq_mismatch_count;
 	/* Set via sysfs "wdt_test"; when true, WDT_TEST is sent after INIT_FIRMWARE sync. */
 	bool wdt_test_enabled;
+	/*
+	 * APU-owned per-(ISP slot, port) cookie state for waited-command
+	 * response correlation (contract §4/§6). Only one waited command is
+	 * outstanding per port, so one expected cookie per slot suffices.
+	 */
+	u32 cookie_next[MAX_NO_ISP][MAX_PORTS];
+	u32 cmd_ack_cookie[MAX_NO_ISP][MAX_PORTS];
+	bool cmd_ack_pending[MAX_NO_ISP][MAX_PORTS];
+	u32 data_cookie[MAX_NO_ISP][MAX_PORTS];
+	bool data_pending[MAX_NO_ISP][MAX_PORTS];
+	/* Expected ENQ echo cookie + active-waiter flag per [ISP slot][port][path][buffer]. */
+	u32 enq_ack_cookie[MAX_NO_ISP][MAX_PORTS][MEDIA_ISP_CHN_MAX]
+			  [MEDIA_ISP_BUF_FRAME_MAX];
+	bool enq_ack_pending[MAX_NO_ISP][MAX_PORTS][MEDIA_ISP_CHN_MAX]
+			    [MEDIA_ISP_BUF_FRAME_MAX];
+	/* Per-(ISP slot, port) SAFE-STATE flag set when the retry budget is spent. */
+	bool instance_down[MAX_NO_ISP][MAX_PORTS];
 };
 
 /*

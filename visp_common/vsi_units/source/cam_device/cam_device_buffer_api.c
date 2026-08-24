@@ -71,9 +71,6 @@ extern uint32_t cookie;
 #include <linux/timekeeping.h>
 #include <linux/workqueue.h>
 
-#define ENQ_TIMEOUT_RETRY_MAX 2
-#define ENQ_TIMEOUT_RETRY_DELAY_US 2000
-
 static bool visp_is_mimo(const struct visp_dev *isp_dev)
 {
 	if (!isp_dev)
@@ -492,7 +489,6 @@ static int visp_send_enq_cmd(struct visp_dev *isp_dev,
 {
 	RESULT result = RET_SUCCESS;
 	uint8_t *p_data = NULL;
-	int retry;
 	int port;
 	payload_packet_enq packet = {0};
 	media_isp_chn_attr *isp_chns;
@@ -541,25 +537,11 @@ static int visp_send_enq_cmd(struct visp_dev *isp_dev,
 	if (packet.payload_size > MAX_ITEM)
 		result = RET_OUTOFRANGE;
 
-	for (retry = 0; retry <= ENQ_TIMEOUT_RETRY_MAX; retry++) {
-		result = xlnx_send_mbox_acked_cmd(isp_dev,
-						  APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
-		    packet.payload_size + payload_extra_size, isp_dev->isp_rpu,
-		    MBOX_CORE_APU);
-
-		if (result == RET_SUCCESS)
-			break;
-
-		/* Retry only on ACK timeout; keep other failures unchanged. */
-		if (result != -ETIMEDOUT || retry == ENQ_TIMEOUT_RETRY_MAX)
-			break;
-
-		/* Stream can turn off between retries; stop retrying stale ENQ. */
-		if (!visp_enq_stream_on(isp_dev, port, buf_id))
-			return RET_SUCCESS;
-
-		udelay(ENQ_TIMEOUT_RETRY_DELAY_US);
-	}
+	/* Transport-level retry is handled once inside xlnx_send_mbox_acked_cmd(). */
+	result = xlnx_send_mbox_acked_cmd(isp_dev,
+					  APU_2_RPU_MB_CMD_ENQUE_BUFFER, &packet,
+					  packet.payload_size + payload_extra_size,
+					  isp_dev->isp_rpu, MBOX_CORE_APU);
 
 	if (result != RET_SUCCESS)
 		result = RET_FAILURE;

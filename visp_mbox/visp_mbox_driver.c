@@ -679,7 +679,7 @@ static void visp_mbox_reserved_memory_exit(void)
 	}
 }
 
-uint8_t xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
+int xlnx_mbox_apu_wait_for_data(struct visp_dev *isp_dev, void *data)
 {
 	struct rpu_dev *rpu = NULL;
 	mbox_post_msg *msg;
@@ -773,11 +773,55 @@ ERROR:
 }
 EXPORT_SYMBOL(xlnx_mbox_apu_wait_for_data);
 
+/* Declare a waited instance DOWN (retry budget spent) or recovered (UP),
+ * logging the transition once (contract §8 SAFE STATE). Upper layers can act
+ * on the flag; the mailbox itself keeps returning the error to the caller.
+ */
+static void visp_mbox_mark_instance_state(struct rpu_dev *rpu, u32 instance_id,
+					  u32 port, bool down)
+{
+	u32 isp_slot = visp_mbox_isp_slot(instance_id);
+
+	if (isp_slot >= MAX_NO_ISP || port >= MAX_PORTS)
+		return;
+	if (down == READ_ONCE(rpu->instance_down[isp_slot][port]))
+		return;
+
+	WRITE_ONCE(rpu->instance_down[isp_slot][port], down);
+	if (down)
+		dev_err(rpu->dev,
+			"SAFE STATE: instance %u (isp=%u port=%u) declared DOWN after retry budget exhausted\n",
+			instance_id, isp_slot, port);
+	else
+		dev_info(rpu->dev,
+			 "instance %u (isp=%u port=%u) recovered (UP)\n",
+			 instance_id, isp_slot, port);
+}
+
+/*
+ * Report whether a waited instance is currently in SAFE STATE (contract §8),
+ * so upper layers can stop issuing work to a path whose retry budget is spent
+ * instead of rediscovering the failure one timeout at a time.
+ */
+bool visp_mbox_instance_is_down(struct rpu_dev *rpu, uint32_t instance_id,
+				uint32_t port)
+{
+	u32 isp_slot = visp_mbox_isp_slot(instance_id);
+
+	if (!rpu || isp_slot >= MAX_NO_ISP || port >= MAX_PORTS)
+		return false;
+
+	return READ_ONCE(rpu->instance_down[isp_slot][port]);
+}
+EXPORT_SYMBOL(visp_mbox_instance_is_down);
+
 static int __xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 				     void *data, uint32_t size, uint8_t dest_cpu,
 				     uint8_t src_cpu)
 {
 	int result;
+	int attempt;
+	int max_attempts;
 	struct rpu_dev *rpu;
 	uint32_t flag = 0;
 	uint32_t instance_id;
@@ -824,25 +868,90 @@ static int __xlnx_send_mbox_data_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 		}
 		mutex_unlock(&isp_dev->data_fifo_lock[port]);
 	}
-	reinit_completion(&isp_dev->apu_wait_for_data[port]);
 
-	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
-					src_cpu);
-	if (result != 0) {
-		dev_err(rpu->dev,
-			"%s: Mailbox Send message failed at line %d\n",
-			__func__, __LINE__);
-		goto unlock_and_exit;
+	/*
+	 * APU owns a per-(instance, port) cookie for the data response too
+	 * (contract §4/§6). Allocate once so the retry reuses it, and record it
+	 * as the expected echo for this port's data waiter.
+	 */
+	if (visp_mbox_integrity_active()) {
+		uint32_t isp_slot = visp_mbox_isp_slot(instance_id);
+
+		if (isp_slot < MAX_NO_ISP) {
+			u32 ck;
+
+			/*
+			 * The cookie_next bump is a read-modify-write; serialize
+			 * it under write_lock so concurrent callers on the same
+			 * (slot, port) can't be handed the same cookie.
+			 */
+			mutex_lock(&rpu->write_lock);
+			ck = rpu->cookie_next[isp_slot][port];
+			do {
+				ck++;
+			} while (ck == 0 || ck == MBOX_COOKIE_NOT_USED);
+			rpu->cookie_next[isp_slot][port] = ck;
+			WRITE_ONCE(rpu->data_cookie[isp_slot][port], ck);
+			WRITE_ONCE(rpu->data_pending[isp_slot][port], true);
+			pkt->cookie = ck;
+			mutex_unlock(&rpu->write_lock);
+		}
 	}
 
-	result = mbox_send_message(rpu->tx_chan, NULL);
-	if (result < 0) {
-		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
-			__func__, __LINE__);
-		goto unlock_and_exit;
+	/*
+	 * Single transport-level retry on data-response timeout, mirroring the
+	 * acked-command path so a lost request/response gets one resend. As
+	 * there, the resend is only safe because the RPU dedups the replay
+	 * against the cookie allocated above; without integrity active there is
+	 * no cookie to dedup against, so fall back to a single attempt rather
+	 * than risk the RPU executing the command twice.
+	 */
+	max_attempts = visp_mbox_integrity_active() ? 2 : 1;
+	for (attempt = 0; attempt < max_attempts; attempt++) {
+		reinit_completion(&isp_dev->apu_wait_for_data[port]);
+
+		result = visp_mbox_send_command(cmd, data, size, flag,
+						rpu->core_id, src_cpu);
+		if (result != 0) {
+			dev_err(rpu->dev,
+				"%s: Mailbox Send message failed at line %d\n",
+				__func__, __LINE__);
+			goto unlock_and_exit;
+		}
+
+		result = mbox_send_message(rpu->tx_chan, NULL);
+		if (result < 0) {
+			dev_err(rpu->dev,
+				"%s: mbox_send_message failed at line %d\n",
+				__func__, __LINE__);
+			goto unlock_and_exit;
+		}
+
+		result = xlnx_mbox_apu_wait_for_data(isp_dev, pkt->payload);
+		/* Only a response timeout is retried; other results are final. */
+		if (result != -ETIMEDOUT)
+			break;
+
+		if (attempt + 1 < max_attempts)
+			dev_warn_ratelimited(rpu->dev,
+					     "%s: data response timeout (port=%u), resending\n",
+					     __func__, port);
 	}
 
-	result = xlnx_mbox_apu_wait_for_data(isp_dev, pkt->payload);
+	/* Waiter no longer active: drop any late/orphan data echo (§6). */
+	if (visp_mbox_integrity_active()) {
+		uint32_t isp_slot = visp_mbox_isp_slot(instance_id);
+
+		if (isp_slot < MAX_NO_ISP)
+			WRITE_ONCE(rpu->data_pending[isp_slot][port], false);
+	}
+
+	/* Contract §8: declare the instance DOWN once the retry budget is spent. */
+	if (result == -ETIMEDOUT)
+		visp_mbox_mark_instance_state(rpu, instance_id, port, true);
+	else if (result >= 0)
+		visp_mbox_mark_instance_state(rpu, instance_id, port, false);
+
 	if (result) {
 		dev_err(rpu->dev, "%s: Failed to get buffer data\n", __func__);
 		goto unlock_and_exit;
@@ -885,6 +994,7 @@ static int __xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_
 					    uint8_t src_cpu)
 {
 	int result;
+	int attempt;
 	struct rpu_dev *rpu;
 	uint32_t flag = 0;
 
@@ -894,22 +1004,33 @@ static int __xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_
 	}
 	rpu = isp_dev->rpu;
 
-	/* write_lock now held internally by write_mboxcmd() with reduced scope */
-	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
-					src_cpu);
-	if (result != 0) {
-		dev_err(rpu->dev,
-			"%s: Mailbox Send message failed at line %d\n",
-			__func__, __LINE__);
-		return result;
-	}
+	/*
+	 * No ACK to wait on, so the single retry only covers a transient
+	 * enqueue failure (e.g. TX FIFO momentarily full); nothing is
+	 * duplicated because a failed enqueue put nothing on the FIFO.
+	 */
+	for (attempt = 0; attempt < 2; attempt++) {
+		/* write_lock held internally by write_mboxcmd() with reduced scope */
+		result = visp_mbox_send_command(cmd, data, size, flag,
+						rpu->core_id, src_cpu);
+		if (result != 0) {
+			dev_err(rpu->dev,
+				"%s: Mailbox Send message failed at line %d\n",
+				__func__, __LINE__);
+			if (attempt + 1 < 2)
+				continue;
+			return result;
+		}
 
-	/* IPI trigger - mailbox framework handles synchronization */
-	result = mbox_send_message(rpu->tx_chan, NULL);
-	if (result < 0) {
-		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
-			__func__, __LINE__);
-		return result;
+		/* IPI trigger - mailbox framework handles synchronization */
+		result = mbox_send_message(rpu->tx_chan, NULL);
+		if (result < 0) {
+			dev_err(rpu->dev,
+				"%s: mbox_send_message failed at line %d\n",
+				__func__, __LINE__);
+			return result;
+		}
+		break;
 	}
 	return 0; // Success
 }
@@ -939,11 +1060,35 @@ int xlnx_send_mbox_without_ack_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 }
 EXPORT_SYMBOL(xlnx_send_mbox_without_ack_cmd);
 
+/* * ENQ-only re-check of the stream state, mirroring the cam_device buffer
+ * path's visp_enq_stream_on(): the ENQ retry loop below used to live there
+ * and re-tested this between attempts before resending. Centralising the
+ * retry here dropped that guard, letting a stale ENQ resend into an
+ * already-torn-down stream; restore it locally since this transport layer
+ * has no other visibility into stream state.
+ */
+static bool mbox_enq_stream_on(struct visp_dev *isp_dev, uint32_t port,
+			       uint32_t path_idx)
+{
+	int pad_index;
+
+	if (path_idx >= MEDIA_ISP_CHN_MAX)
+		return true;
+
+	pad_index = (port * MEDIA_ISP_PORT_PAD_COUNT) + path_idx + 1;
+	if (pad_index < 0 || pad_index >= (VISP_PORT_PAD_NR * MAX_PORTS))
+		return false;
+
+	return isp_dev->streamon[pad_index] != 0;
+}
+
 static int __xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 				      void *data, uint32_t size, uint8_t dest_cpu,
 				      uint8_t src_cpu)
 {
 	int result;
+	int attempt;
+	int max_attempts;
 	struct rpu_dev *rpu;
 	uint32_t flag = 0;
 	uint32_t instance_id, port;
@@ -1015,8 +1160,6 @@ static int __xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 				buffer_index, instance_id, path_idx);
 		}
 #endif
-		reinit_completion(&isp_dev->apu_wait_for_enq_ack[port]
-				  [path_idx][buffer_index]);
 	} else {
 #ifdef DEBUG_MBOX_SANITY_CHECKS
 		/* Sanity check: Drain stale completion and message */
@@ -1035,31 +1178,140 @@ static int __xlnx_send_mbox_acked_cmd(struct visp_dev *isp_dev, mb_cmd_id_e cmd,
 			mutex_unlock(&isp_dev->cmd_ack_fifo_lock[port]);
 		}
 #endif
-		reinit_completion(&isp_dev->apu_wait_for_cmd_ack[port]);
 	}
 
-	/* write_lock now held internally by write_mboxcmd() with reduced scope */
-	result = visp_mbox_send_command(cmd, data, size, flag, rpu->core_id,
-					src_cpu);
-	if (result != 0) {
-		dev_err(rpu->dev,
-			"%s: Mailbox Send message failed at line %d\n",
-			__func__, __LINE__);
-		return result;
+	/*
+	 * APU owns a per-(instance, port) cookie for waited-command correlation
+	 * (contract §4). Allocated once here so the single retry below reuses the
+	 * same cookie; recorded as the expected echo for this port's waiter. ENQ
+	 * keeps its port/path/buffer correlation and is left untouched.
+	 */
+	if (visp_mbox_integrity_active() &&
+	    cmd != APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+		uint32_t isp_slot = visp_mbox_isp_slot(instance_id);
+
+		if (isp_slot < MAX_NO_ISP) {
+			u32 ck;
+
+			/*
+			 * The cookie_next bump is a read-modify-write; serialize
+			 * it under write_lock so concurrent callers on the same
+			 * (slot, port) can't be handed the same cookie.
+			 */
+			mutex_lock(&rpu->write_lock);
+			ck = rpu->cookie_next[isp_slot][port];
+			do {
+				ck++;
+			} while (ck == 0 || ck == MBOX_COOKIE_NOT_USED);
+			rpu->cookie_next[isp_slot][port] = ck;
+			WRITE_ONCE(rpu->cmd_ack_cookie[isp_slot][port], ck);
+			WRITE_ONCE(rpu->cmd_ack_pending[isp_slot][port], true);
+			((payload_packet *)data)->cookie = ck;
+			mutex_unlock(&rpu->write_lock);
+		}
+	} else if (visp_mbox_integrity_active() &&
+		   cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER) {
+		/*
+		 * ENQ owns its per-context cookie; record it plus the active
+		 * flag for the queued buffer slot so the ACK can be correlated
+		 * on receive (§6).
+		 */
+		uint32_t isp_slot = visp_mbox_isp_slot(instance_id);
+
+		if (isp_slot < MAX_NO_ISP) {
+			WRITE_ONCE(rpu->enq_ack_cookie[isp_slot][port][path_idx]
+				   [buffer_index],
+				   ((payload_packet *)data)->cookie);
+			WRITE_ONCE(rpu->enq_ack_pending[isp_slot][port][path_idx]
+				   [buffer_index], true);
+		}
 	}
 
-	/* IPI trigger - mailbox framework handles synchronization */
-	result = mbox_send_message(rpu->tx_chan, NULL);
-	if (result < 0) {
-		dev_err(rpu->dev, "%s: mbox_send_message failed at line %d\n",
-			__func__, __LINE__);
-		return result;
+	/*
+	 * Single transport-level retry on ACK timeout. The per-ENQ retry loop
+	 * that used to live in the cam_device buffer path was moved here so
+	 * every acked command gets one resend before it is reported failed.
+	 * The resend is only safe because the RPU dedups the replay against the
+	 * cookie recorded above (contract §4/§6). Without integrity active
+	 * there is no cookie to dedup against, so a retry here would risk the
+	 * RPU executing the command twice; fall back to a single attempt.
+	 */
+	max_attempts = visp_mbox_integrity_active() ? 2 : 1;
+	for (attempt = 0; attempt < max_attempts; attempt++) {
+		/*
+		 * A stream-off between attempts means the sensor/ISP path this
+		 * ENQ targeted is already torn down; stop retrying rather than
+		 * resend into it (mirrors the deleted cam_device buffer guard).
+		 */
+		if (attempt > 0 && cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER &&
+		    !mbox_enq_stream_on(isp_dev, port, path_idx))
+			return RET_SUCCESS;
+
+		if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER)
+			reinit_completion(&isp_dev->apu_wait_for_enq_ack[port]
+					  [path_idx][buffer_index]);
+		else
+			reinit_completion(&isp_dev->apu_wait_for_cmd_ack[port]);
+
+		/* write_lock held internally by write_mboxcmd() with reduced scope */
+		result = visp_mbox_send_command(cmd, data, size, flag,
+						rpu->core_id, src_cpu);
+		if (result != 0) {
+			dev_err(rpu->dev,
+				"%s: Mailbox Send message failed at line %d\n",
+				__func__, __LINE__);
+			return result;
+		}
+
+		/* IPI trigger - mailbox framework handles synchronization */
+		result = mbox_send_message(rpu->tx_chan, NULL);
+		if (result < 0) {
+			dev_err(rpu->dev,
+				"%s: mbox_send_message failed at line %d\n",
+				__func__, __LINE__);
+			return result;
+		}
+
+		/* Wait for ACK outside the lock */
+		result = xlnx_mbox_apu_wait_for_ack(isp_dev, instance_id,
+						    path_idx, buffer_index, cmd);
+		/* Only an ACK timeout is retried; every other result is final. */
+		if (result != -ETIMEDOUT)
+			break;
+
+		if (attempt + 1 < max_attempts) {
+			usleep_range(2000, 2500);
+			dev_warn_ratelimited(rpu->dev,
+					     "%s: ACK timeout cmd=%d (instance_id=%u), resending\n",
+					     __func__, cmd, instance_id);
+		}
 	}
 
-	/* RPU lock released - TX mailbox operation complete */
+	/*
+	 * The waiter is no longer active once we return here, so clear the
+	 * pending flag: a late/orphan echo (contract §6) must be dropped rather
+	 * than complete a future command's waiter. On success the RX path has
+	 * already cleared it; this covers the timeout/error case.
+	 */
+	if (visp_mbox_integrity_active()) {
+		uint32_t isp_slot = visp_mbox_isp_slot(instance_id);
 
-	/* Wait for ACK outside the lock */
-	result = xlnx_mbox_apu_wait_for_ack(isp_dev, instance_id, path_idx, buffer_index, cmd);
+		if (isp_slot < MAX_NO_ISP) {
+			if (cmd == APU_2_RPU_MB_CMD_ENQUE_BUFFER)
+				WRITE_ONCE(rpu->enq_ack_pending[isp_slot][port]
+					   [path_idx][buffer_index], false);
+			else
+				WRITE_ONCE(rpu->cmd_ack_pending[isp_slot][port],
+					   false);
+		}
+	}
+
+	/* Contract §8: declare the instance DOWN once the retry budget is spent. */
+	if (result == -ETIMEDOUT)
+		visp_mbox_mark_instance_state(rpu, instance_id, port, true);
+	else if (result >= 0)
+		visp_mbox_mark_instance_state(rpu, instance_id, port, false);
+
 	if (result < 0) {
 		if (result == -ENODEV) {
 			dev_warn(rpu->dev,
@@ -1288,7 +1540,8 @@ int visp_mbox_send_init_firmware(struct rpu_dev *rpu)
 		return -ENOMEM;
 
 	pkt->type = CMD;
-	pkt->cookie = 0;
+	/* Fire-and-forget: bypass RPU cookie dedup so it isn't replayed. */
+	pkt->cookie = MBOX_COOKIE_NOT_USED;
 	uint32_t instance_id = 0;
 
 	memcpy(pkt->payload, &instance_id, sizeof(instance_id));
