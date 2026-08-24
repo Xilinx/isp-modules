@@ -61,11 +61,7 @@
 #include "visp_video_event.h"
 #include "visp_mimo_driver.h"
 #include "visp_event.h"
-struct visp_subdev_dma_buf {
-	uint64_t pa;
-	int size;
-};
-
+#include "visp_common.h"
 typedef struct cam_device_context_s {
 	uint32_t isp_hw_id;
 	uint32_t isp_vt_id;
@@ -145,7 +141,8 @@ int visp_subdev_post_event(struct visp_mimo_device *visp_vdev,
 	return 0;
 }
 
-int visp_l_calib_event(struct visp_mimo_device *device, int pad, int event)
+int visp_video_l_calib_event(struct visp_mimo_device *device, int pad,
+			     int event)
 {
 
 	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
@@ -219,7 +216,7 @@ int visp_s_ctrl_event(struct visp_dev *isp_dev, int pad,
 		      struct v4l2_ctrl *ctrl)
 {
 	struct visp_mimo_device *device =
-		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+		(struct visp_mimo_device *)visp_dev_extended_get_mimo_device(isp_dev);
 	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
 	int ret;
 	struct visp_ctrl *isp_ctrl;
@@ -272,7 +269,7 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 		      struct v4l2_ctrl *ctrl)
 {
 	struct visp_mimo_device *device =
-		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+		(struct visp_mimo_device *)visp_dev_extended_get_mimo_device(isp_dev);
 	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
 	int ret = 0;
 	struct visp_ctrl *isp_ctrl;
@@ -345,7 +342,7 @@ int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad,
 int visp_l_fusa_event(struct visp_dev *isp_dev, int pad)
 {
 	struct visp_mimo_device *device =
-		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+		(struct visp_mimo_device *)visp_dev_extended_get_mimo_device(isp_dev);
 	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
 	int ret = 0;
 	int port = pad / MEDIA_ISP_PORT_PAD_COUNT;
@@ -395,7 +392,7 @@ int visp_l_fusa_event(struct visp_dev *isp_dev, int pad)
 int visp_stop_fusa_event(struct visp_dev *isp_dev, int pad)
 {
 	struct visp_mimo_device *device =
-		(struct visp_mimo_device *)ISP_DEV_EXTENDED_MIMO_VIDEO(isp_dev)->mimo_device;
+		(struct visp_mimo_device *)visp_dev_extended_get_mimo_device(isp_dev);
 	struct visp_event_pkg *event_pkg = device->event_shm.virt_addr;
 	int ret = 0;
 

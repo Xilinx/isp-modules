@@ -463,7 +463,8 @@ void visp_mimo_device_run(void *priv)
 		}
 
 		/* pad 1 is port 0 mp */
-		ret = visp_l_calib_event(device, 1, VISP_EVENT_LOAD_CALIB);
+		ret = visp_video_l_calib_event(device, 1,
+					       VISP_EVENT_LOAD_CALIB);
 		if (ret != 0) {
 			dev_err(device->isp_dev->dev, "LOAD_CALIB event failed: %d\n", ret);
 			goto destroy_instance;
@@ -489,7 +490,8 @@ void visp_mimo_device_run(void *priv)
 			}
 		}
 
-		ret = visp_l_calib_event(device, 1, VISP_EVENT_LOAD_JSON);
+		ret = visp_video_l_calib_event(device, 1,
+					       VISP_EVENT_LOAD_JSON);
 		if (ret != 0) {
 			dev_err(device->isp_dev->dev, "LOAD_JSON event failed: %d\n", ret);
 			if (strlen(device->isp_dev->isp_ports[port].fusa_json))
@@ -2600,7 +2602,7 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		return -EINVAL;
 	}
 
-	if (isp_dev->id < 0 && isp_dev->id > 6) {
+	if (isp_dev->id < 0 || isp_dev->id > 6) {
 		dev_err(&pdev->dev, "Invalid ISP id %d\n", isp_dev->id);
 		return -EINVAL;
 	}
@@ -2628,11 +2630,15 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 			isp_dev->num_streams);
 	}
 
-	/* Force num_streams = 1 for MIMO mode */
-	if (isp_dev->ss_mode_i0 && strcmp(isp_dev->ss_mode_i0, "mimo") == 0) {
-		isp_dev->num_streams = 1;
-		dev_info(&pdev->dev, "MIMO mode detected: forcing num_streams to 1\n");
+	if (strcmp(isp_dev->ss_mode_i0, "mimo")) {
+		dev_err(&pdev->dev, "Invalid MIMO io_mode: %s\n",
+			isp_dev->ss_mode_i0);
+		return -EINVAL;
 	}
+
+	isp_dev->num_streams = 1;
+	isp_dev->isp_mode = ISP_MODE_MIMO;
+	dev_info(&pdev->dev, "MIMO mode detected: forcing num_streams to 1\n");
 	dev_dbg(&pdev->dev, "xlnx,num_streams: %u\n", isp_dev->num_streams);
 
 	ret = of_property_read_u32(node, "xlnx,mem_inputs", &isp_dev->isp_mem);
@@ -2695,8 +2701,8 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 
 //
 
-int handle_frameout_buffer_mimo(struct visp_dev *isp_dev, int port,
-				struct mbox_post_msg *msg)
+static int handle_frameout_buffer_mimo(struct visp_dev *isp_dev, int port,
+				       struct mbox_post_msg *msg)
 {
 	unsigned long flags;
 
@@ -2824,19 +2830,20 @@ int visp_mimo_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto err_m2m;
 	}
-	/* Allocate extended structure */
-	device->isp_dev->extended_struct =
-	    devm_kzalloc(&pdev->dev, sizeof(struct visp_mimo_video_isp_dev_extended), GFP_KERNEL);
-	if (!device->isp_dev->extended_struct) {
-		ret = -ENOMEM;
+	/*
+	 * Allocate the extended structure via visp.ko's own helper: it must
+	 * be sized/laid out as struct visp_isp_dev_extended (visp.ko's
+	 * isp_device_destroy() etc. run against this isp_dev too, regardless
+	 * of isp_mode) and have its embedded device_create_lock mutex_init'd,
+	 * neither of which a private, undersized mirror struct here could do.
+	 * This also stashes the mimo_device back-pointer for event handling.
+	 */
+	ret = visp_dev_extended_alloc(device->isp_dev, &pdev->dev, device);
+	if (ret)
 		goto err_m2m;
-	}
 
 	for (int i = 0; i < VISP_INPUT_INSTANCES; i++)
 		device->isp_dev->instanceid_port_map[i] = ~0U;
-
-	/* Set back-pointer for event handling */
-	ISP_DEV_EXTENDED_MIMO_VIDEO(device->isp_dev)->mimo_device = device;
 
 	/* Initialize isp_dq_out_index to a safe default value */
 	device->isp_dev->isp_dq_out_index = 0;
@@ -2940,9 +2947,8 @@ int visp_mimo_probe(struct platform_device *pdev)
 		goto err_m2m;
 	}
 
-	/* Initialize V4L2 controls AFTER isp_dev is allocated */
+	/* Preserve the original MIMO-video V4L2 control interface. */
 	visp_ctrl_init(device->isp_dev);
-
 	device->subdev.ctrl_handler = &device->isp_dev->ctrl_handler;
 
 	ret = v4l2_device_register_subdev(&device->v4l2_dev, &device->subdev);
@@ -3035,7 +3041,7 @@ void visp_mimo_remove(struct platform_device *pdev)
 	if (!device)
 		return;
 
-	/* Cleanup V4L2 controls before unregistering subdev */
+	/* Cleanup V4L2 controls before unregistering the subdevice. */
 	if (device->isp_dev)
 		visp_ctrl_destroy(device->isp_dev);
 

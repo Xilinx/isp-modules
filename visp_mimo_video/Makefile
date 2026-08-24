@@ -14,7 +14,7 @@ $(TARGET)-objs += visp_video_event.o
 
 ccflags-y += -I$(PWD)/common/
 ccflags-y += -I$(PWD)/visp_mimo_video
-ccflags-y += -I$(PWD)/visp_mimo/
+ccflags-y += -I$(PWD)/visp/
 ccflags-y += -I$(PWD)/common/
 ccflags-y += -I$(PWD)/visp_mbox/
 ccflags-y += -I$(PWD)/visp_mbox/mailbox/

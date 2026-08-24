@@ -57,16 +57,6 @@
 
 #define VISP_VIDEO_DEAMON_EVENT (V4L2_EVENT_PRIVATE_START + 1000)
 
-#define VISP_GET_RPU_ID _IOWR('I', BASE_VIDIOC_PRIVATE + 3, struct isp_rpu)
-#define VISP_GET_EVENT_SHM_FD _IOR('I', BASE_VIDIOC_PRIVATE + 4, int32_t)
-#define VISP_EVENT_ACK _IOW('I', BASE_VIDIOC_PRIVATE + 5, uint32_t)
-
-struct isp_rpu {
-	uint32_t rpu;
-	uint32_t isp;
-	uint32_t io_mode;
-};
-
 enum visp_video_event_id {
 	VISP_VEVENT_CREATE_PIPELINE = 0,
 	VISP_VEVENT_DESTROY_PIPELINE,
@@ -102,7 +92,8 @@ struct visp_video_dma_buf {
 #include "visp_mimo_driver.h"
 int visp_video_create_pipeline_event(struct visp_mimo_device *visp_vdev);
 int visp_video_destroy_pipeline_event(struct visp_mimo_device *visp_vdev);
-int visp_l_calib_event(struct visp_mimo_device *isp_dev, int pad, int event);
+int visp_video_l_calib_event(struct visp_mimo_device *isp_dev, int pad,
+			     int event);
 
 int visp_g_ctrl_event(struct visp_dev *isp_dev, int pad, struct v4l2_ctrl *ctrl);
 
