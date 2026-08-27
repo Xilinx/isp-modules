@@ -2895,7 +2895,7 @@ int media_isp_calib_get_sensor_name(struct visp_dev *isp_dev, uint8_t port,
 
 	if (strlen(isp_port->sensor_info.name)) {
 		strscpy(sensor_name, isp_port->sensor_info.name,
-			sizeof(sensor_name));
+			MEDIA_ISP_CHAR_LENGTH_MAX);
 	} else {
 		dev_err(isp_dev->dev, "%s: get null string of sensor name",
 			__func__);
