@@ -13,6 +13,8 @@ obj-m += visp/
 obj-m += visp_video/
 obj-m += visp_mimo_video/
 obj-m += dummy_sensor/
+obj-m += max9296/
+obj-m += sensor/ox03f10/
 
 all:
 	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules
