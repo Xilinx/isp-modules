@@ -5657,7 +5657,9 @@ static void visp_register_fusa_irq(struct visp_dev *isp_dev,
  * ldscript already assumes this BIN sits at a fixed, predefined DDR
  * location - this driver's only job is to make sure the right bytes end
  * up there. Fixed, board-wide: no per-ISP-instance lookup, no mailbox
- * notification (RPU reads this autonomously), no runtime override.
+ * notification (RPU reads this autonomously), no runtime override - the
+ * filename (sensor_bin_fw_name below) is only configurable at insmod
+ * time via module param, not re-read or re-triggered afterward.
  *
  * request_firmware() needs a struct device, which does not exist yet at
  * module_init() time, so the flash happens from the first visp_probe()
@@ -5681,7 +5683,25 @@ static DECLARE_COMPLETION(sensor_bin_flash_attempt_done);
 
 #define SENSOR_BIN_DT_NODE_NAME "isp_sensor_bin"
 #define SENSOR_BIN_MEM_SIZE 0x1000
-#define SENSOR_BIN_FW_NAME "Fmcconfig.bin"
+
+/*
+ * Firmware-class filename for the sensor/design BIN, resolved once at
+ * insmod time (module_param values are set before module_init() runs,
+ * i.e. before any visp_probe() call), not re-read afterward - this is
+ * load-time configuration, not the runtime override the comment above
+ * deliberately excludes. Deliberately 0444 (read-only), not 0644 like
+ * align_bytes above: a charp module_param written via sysfs at
+ * runtime frees the old string on every write, and this code has no
+ * lock around its own reads of sensor_bin_fw_name, since none should
+ * be needed for a value fixed at load time - 0444 makes that actually
+ * true instead of merely intended, by removing the sysfs write path
+ * entirely rather than leaving a use-after-free race nobody expects
+ * to be exercised.
+ */
+static char *sensor_bin_fw_name = "Fmcconfig.bin";
+module_param(sensor_bin_fw_name, charp, 0444);
+MODULE_PARM_DESC(sensor_bin_fw_name,
+		 "Sensor/design BIN filename for request_firmware(), set at insmod time only (default: Fmcconfig.bin)");
 
 static int visp_map_sensor_bin_mem(struct device *dev)
 {
@@ -5750,16 +5770,16 @@ static int visp_flash_sensor_bin(struct device *dev)
 	const struct firmware *fw;
 	int ret;
 
-	ret = request_firmware(&fw, SENSOR_BIN_FW_NAME, dev);
+	ret = request_firmware(&fw, sensor_bin_fw_name, dev);
 	if (ret) {
 		dev_err(dev, "visp: failed to request sensor bin '%s': %d\n",
-			SENSOR_BIN_FW_NAME, ret);
+			sensor_bin_fw_name, ret);
 		return ret;
 	}
 
 	if (fw->size > sensor_bin_mem.size) {
 		dev_err(dev, "visp: sensor bin '%s' (%zu bytes) exceeds reserved region (%u bytes)\n",
-			SENSOR_BIN_FW_NAME, fw->size, sensor_bin_mem.size);
+			sensor_bin_fw_name, fw->size, sensor_bin_mem.size);
 		release_firmware(fw);
 		return -EFBIG;
 	}
@@ -5777,7 +5797,7 @@ static int visp_flash_sensor_bin(struct device *dev)
 	wmb();
 
 	dev_info(dev, "visp: flashed sensor bin '%s' (%zu bytes) to reserved memory\n",
-		 SENSOR_BIN_FW_NAME, fw->size);
+		 sensor_bin_fw_name, fw->size);
 	release_firmware(fw);
 	return 0;
 }
