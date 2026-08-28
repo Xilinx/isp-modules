@@ -5436,8 +5436,8 @@ static int visp_parse_params(struct visp_dev *isp_dev,
 		}
 	}
 
-	uint32_t num_mems = of_count_phandle_with_args(pdev->dev.of_node,
-						       "memory-region", NULL);
+	int num_mems = of_count_phandle_with_args(pdev->dev.of_node,
+						  "memory-region", NULL);
 	int i;
 
 	if (num_mems < 0) {
