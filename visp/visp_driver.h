@@ -338,6 +338,11 @@ static inline enum isp_mode get_isp_mode_from_str(const char *mode_str)
 		return ISP_MODE_LIMO;
 	else if (strcmp(mode_str, "lilo") == 0)
 		return ISP_MODE_LILO;
+	else if (strcmp(mode_str, "limxo") == 0)
+		/* LILO mixed mode (per-path live/memory routing) - see
+		 * xlnx,path_out_type handling in visp_parse_params().
+		 */
+		return ISP_MODE_LILO;
 	else if (strcmp(mode_str, "mimo") == 0)
 		return ISP_MODE_MIMO;
 

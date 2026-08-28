@@ -6314,6 +6314,18 @@ static const struct of_device_id visp_of_match[] = {
 		.compatible = "xlnx,visp-ss-lilo-1.0",
 		.data = (const void *)ISP_MODE_LILO,
 	},
+	{
+		/*
+		 * LILO mixed mode: the DT-generation tooling emits a
+		 * dedicated compatible/io_mode ("limxo") for instances
+		 * carrying "xlnx,path_out_type", instead of plain "lilo".
+		 * Maps to the same ISP_MODE_LILO - mixed-mode-specific
+		 * behavior is gated separately by per_path_out_type, not
+		 * by isp_mode itself.
+		 */
+		.compatible = "xlnx,visp-ss-limxo-1.0",
+		.data = (const void *)ISP_MODE_LILO,
+	},
 	{/* sentinel */},
 };
 
